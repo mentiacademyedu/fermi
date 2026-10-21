@@ -1,7 +1,10 @@
-//! Task registry for long-lived front ends (the dashboard and desktop app).
-//! Runs tasks on the engine, keeps every task's events, broadcasts updates
-//! to any number of clients, continues conversations, and keeps a history on
-//! disk (`~/.fermi/history/<id>.json`) so tasks survive restarts.
+//! Tasks and their shared history. Every front end on this PC (desktop app,
+//! `fermi ui`, the TUI and `fermi run`) writes its tasks to
+//! `~/.fermi/history/<id>.json` and picks up the others' changes, so a
+//! conversation started anywhere shows up everywhere.
+//!
+//! The [`Hub`] runs tasks for long-lived front ends and broadcasts updates to
+//! their clients; [`Recorder`] lets one-shot front ends write the same files.
 
 use crate::engine::{Engine, Task};
 use crate::events::Event;
@@ -10,14 +13,21 @@ use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::{Duration, Instant, SystemTime};
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::AbortHandle;
 
 /// How many past tasks are loaded at startup (older ones stay on disk).
 const HISTORY_LIMIT: usize = 500;
+/// A running task re-saves at least this often, so others know it's alive.
+pub const HEARTBEAT: Duration = Duration::from_secs(5);
+/// A "running" task whose file hasn't been touched this long was interrupted
+/// (its program closed or crashed).
+const STALE_SECS: u64 = 20;
+/// While a task runs, its file is rewritten at most this often.
+const SAVE_EVERY: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -50,6 +60,12 @@ pub struct TaskRec {
     pub ran_on: Option<RanOn>,
     #[serde(default)]
     pub session: Option<String>,
+    /// Last write (unix seconds); how other programs tell a live task from an abandoned one.
+    #[serde(default)]
+    pub updated: u64,
+    /// Which front end ran it: "desktop", "ui", "tui", "cli".
+    #[serde(default)]
+    pub via: Option<String>,
     pub events: Vec<Event>,
 }
 
@@ -61,41 +77,316 @@ pub struct RanOn {
 }
 
 impl TaskRec {
+    pub fn new(id: u64, task: &Task, via: &str) -> Self {
+        TaskRec {
+            id,
+            prompt: task.prompt.clone(),
+            profile: task.profile.clone(),
+            model: task.model.clone(),
+            account: task.account.clone(),
+            effort: task.effort.clone(),
+            permission: task.permission.clone(),
+            cwd: task.cwd.clone(),
+            status: TaskStatus::Running,
+            route: None,
+            started: now(),
+            ended: None,
+            ran_on: None,
+            session: None,
+            updated: now(),
+            via: Some(via.to_string()),
+            events: vec![Event::User { text: task.prompt.clone() }],
+        }
+    }
+
     /// Everything but the event log.
     pub fn summary(&self) -> Value {
         json!({
             "id": self.id, "prompt": self.prompt, "profile": self.profile, "model": self.model,
             "account": self.account, "effort": self.effort, "permission": self.permission, "cwd": self.cwd, "status": self.status,
-            "route": self.route, "started": self.started, "ended": self.ended,
+            "route": self.route, "started": self.started, "ended": self.ended, "via": self.via,
             "resumable": self.session.is_some() && self.ran_on.is_some(),
             "turns": self.events.iter().filter(|e| matches!(e, Event::User { .. })).count(),
         })
     }
+
+    /// Folds one event into the record. Returns true when the run finished.
+    pub fn apply(&mut self, ev: &Event) -> bool {
+        if self.status != TaskStatus::Running {
+            return false; // cancelled: drop late events
+        }
+        let mut finished = false;
+        match ev {
+            Event::Routed { profile, model, label, effort, account, .. } => {
+                let effort = effort.as_deref().map(|e| format!(" · {e}")).unwrap_or_default();
+                self.route = Some(format!("{label}{effort} @ {account}"));
+                self.ran_on = Some(RanOn { profile: profile.clone(), model: model.clone(), account: account.clone() });
+            }
+            Event::Session { id } => self.session = Some(id.clone()),
+            Event::Done { ok, .. } => {
+                self.status = if *ok { TaskStatus::Done } else { TaskStatus::Failed };
+                self.ended = Some(now());
+                finished = true;
+            }
+            _ => {}
+        }
+        // Session ids are bookkeeping, and streamed chunks are superseded by
+        // the finished `Text`: neither belongs in the saved history.
+        if !matches!(ev, Event::Session { .. } | Event::Delta { .. }) {
+            self.events.push(ev.clone());
+        }
+        finished
+    }
+
+    fn cancel(&mut self) {
+        if self.status == TaskStatus::Running {
+            self.status = TaskStatus::Cancelled;
+            self.ended = Some(now());
+        }
+    }
+
+    /// Running according to the file, but nobody has touched it in a while.
+    pub fn is_stale(&self, at: u64) -> bool {
+        self.status == TaskStatus::Running && at.saturating_sub(self.updated) > STALE_SECS
+    }
+
+    fn mark_interrupted(&mut self) {
+        self.status = TaskStatus::Cancelled;
+        self.ended.get_or_insert(self.updated.max(self.started));
+        self.events.push(Event::Log { line: "interrupted: the fermi window running this was closed".into() });
+    }
 }
+
+// ── the history folder ──────────────────────────────────────────────────────
+
+pub fn history_dir(home: &Path) -> PathBuf {
+    home.join("history")
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
+/// Unique across every program writing the folder: milliseconds plus a random
+/// part (and still a safe integer in JavaScript).
+pub fn new_task_id(dir: &Path) -> u64 {
+    loop {
+        let mut b = [0u8; 2];
+        let _ = getrandom::fill(&mut b);
+        let id = now_ms() * 1000 + u16::from_le_bytes(b) as u64 % 1000;
+        if !dir.join(format!("{id}.json")).exists() {
+            return id;
+        }
+    }
+}
+
+/// Atomic write; returns the file's new modification time.
+fn write_rec(dir: &Path, rec: &mut TaskRec) -> Option<SystemTime> {
+    rec.updated = now();
+    let bytes = serde_json::to_vec(rec).ok()?;
+    let path = dir.join(format!("{}.json", rec.id));
+    let tmp = dir.join(format!("{}.{}.tmp", rec.id, std::process::id()));
+    std::fs::write(&tmp, bytes).ok()?;
+    std::fs::rename(&tmp, &path).ok()?;
+    std::fs::metadata(&path).and_then(|m| m.modified()).ok()
+}
+
+/// For a task another program was running: if its file has gone quiet,
+/// re-checks the file and, when still quiet, marks it interrupted and saves.
+/// Returns the settled record when it changed.
+pub fn settle_if_stale(dir: &Path, id: u64) -> Option<TaskRec> {
+    let mut t = read_task(dir, id)?;
+    if !t.is_stale(now()) {
+        return None;
+    }
+    t.mark_interrupted();
+    write_rec(dir, &mut t);
+    Some(t)
+}
+
+pub fn read_task(dir: &Path, id: u64) -> Option<TaskRec> {
+    serde_json::from_slice(&std::fs::read(dir.join(format!("{id}.json"))).ok()?).ok()
+}
+
+fn task_id(path: &Path) -> Option<u64> {
+    if path.extension().is_some_and(|x| x == "json") {
+        path.file_stem()?.to_str()?.parse().ok()
+    } else {
+        None
+    }
+}
+
+/// The newest `limit` tasks, oldest first. Abandoned "running" tasks are
+/// marked interrupted (and saved that way).
+pub fn load_history(dir: &Path, limit: usize) -> Vec<TaskRec> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return vec![] };
+    let mut ids: Vec<u64> = entries.filter_map(|e| task_id(&e.ok()?.path())).collect();
+    ids.sort_unstable();
+    let skip = ids.len().saturating_sub(limit);
+    let at = now();
+    ids[skip..]
+        .iter()
+        .filter_map(|id| read_task(dir, *id))
+        .map(|mut t| {
+            if t.is_stale(at) {
+                t.mark_interrupted();
+                write_rec(dir, &mut t);
+            }
+            t
+        })
+        .collect()
+}
+
+/// Spots history files other programs created, changed or deleted.
+#[derive(Default)]
+pub struct Scanner {
+    seen: HashMap<u64, SystemTime>,
+}
+
+impl Scanner {
+    pub fn new(dir: &Path) -> Self {
+        let mut s = Scanner::default();
+        s.scan(dir); // everything present now counts as seen
+        s
+    }
+
+    /// Records our own write so it doesn't come back as someone else's change.
+    pub fn note(&mut self, id: u64, mtime: SystemTime) {
+        self.seen.insert(id, mtime);
+    }
+
+    /// Changed or new records (stale ones already marked interrupted) and
+    /// ids whose files disappeared.
+    pub fn scan(&mut self, dir: &Path) -> (Vec<TaskRec>, Vec<u64>) {
+        let Ok(entries) = std::fs::read_dir(dir) else { return (vec![], vec![]) };
+        let mut present = HashMap::new();
+        for e in entries.filter_map(|e| e.ok()) {
+            if let (Some(id), Ok(mtime)) = (task_id(&e.path()), e.metadata().and_then(|m| m.modified())) {
+                present.insert(id, mtime);
+            }
+        }
+        let at = now();
+        let mut changed = vec![];
+        for (id, mtime) in &present {
+            if self.seen.get(id) == Some(mtime) {
+                continue;
+            }
+            if let Some(mut t) = read_task(dir, *id) {
+                if t.is_stale(at) {
+                    t.mark_interrupted();
+                    if let Some(m) = write_rec(dir, &mut t) {
+                        self.seen.insert(*id, m);
+                        changed.push(t);
+                        continue;
+                    }
+                }
+                changed.push(t);
+            }
+            self.seen.insert(*id, *mtime);
+        }
+        let removed: Vec<u64> = self.seen.keys().filter(|id| !present.contains_key(id)).copied().collect();
+        for id in &removed {
+            self.seen.remove(id);
+        }
+        changed.sort_by_key(|t| t.id);
+        (changed, removed)
+    }
+}
+
+/// Writes one task's history from a front end that doesn't use the Hub
+/// (`fermi run`, the TUI). Dropping it while the task runs marks it cancelled.
+pub struct Recorder {
+    dir: PathBuf,
+    rec: TaskRec,
+    last_save: Instant,
+}
+
+impl Recorder {
+    pub fn start(home: &Path, task: &Task, via: &str) -> Self {
+        let dir = history_dir(home);
+        let _ = std::fs::create_dir_all(&dir);
+        let mut rec = TaskRec::new(new_task_id(&dir), task, via);
+        write_rec(&dir, &mut rec);
+        Recorder { dir, rec, last_save: Instant::now() }
+    }
+
+    pub fn id(&self) -> u64 {
+        self.rec.id
+    }
+
+    pub fn record(&mut self, ev: &Event) {
+        let finished = self.rec.apply(ev);
+        if finished || self.last_save.elapsed() >= SAVE_EVERY {
+            self.save();
+        }
+    }
+
+    /// Call every few seconds while waiting, so a long tool run isn't mistaken for a crash.
+    pub fn heartbeat(&mut self) {
+        if self.rec.status == TaskStatus::Running && self.last_save.elapsed() >= HEARTBEAT {
+            self.save();
+        }
+    }
+
+    fn save(&mut self) {
+        write_rec(&self.dir, &mut self.rec);
+        self.last_save = Instant::now();
+    }
+}
+
+impl Drop for Recorder {
+    fn drop(&mut self) {
+        if self.rec.status == TaskStatus::Running {
+            self.rec.cancel();
+            self.save();
+        } else {
+            // Make sure the final state is on disk even if the last save was throttled.
+            self.save();
+        }
+    }
+}
+
+// ── the hub ─────────────────────────────────────────────────────────────────
 
 pub struct Hub {
     engine: RwLock<Arc<Engine>>,
     tasks: Mutex<Vec<TaskRec>>,
+    /// Tasks this process is running.
     handles: Mutex<HashMap<u64, AbortHandle>>,
     bus: broadcast::Sender<Value>,
-    next: AtomicU64,
     dir: PathBuf,
+    via: String,
+    scanner: Mutex<Scanner>,
+    last_save: Mutex<HashMap<u64, Instant>>,
 }
 
 impl Hub {
-    pub fn new(engine: Arc<Engine>) -> Arc<Self> {
-        let dir = engine.home.join("history");
+    /// `via` names this front end in the history ("desktop", "ui").
+    pub fn new(engine: Arc<Engine>, via: &str) -> Arc<Self> {
+        let dir = history_dir(&engine.home);
         let _ = std::fs::create_dir_all(&dir);
-        let tasks = load_history(&dir);
-        let next = tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1;
-        Arc::new(Hub {
+        let tasks = load_history(&dir, HISTORY_LIMIT);
+        let hub = Arc::new(Hub {
             engine: RwLock::new(engine),
             tasks: Mutex::new(tasks),
             handles: Mutex::new(HashMap::new()),
             bus: broadcast::channel(4096).0,
-            next: AtomicU64::new(next),
+            scanner: Mutex::new(Scanner::new(&dir)),
             dir,
-        })
+            via: via.to_string(),
+            last_save: Mutex::new(HashMap::new()),
+        });
+        // Once a second: heartbeat our running tasks and pick up other programs' changes.
+        let weak = Arc::downgrade(&hub);
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(1));
+            loop {
+                tick.tick().await;
+                let Some(hub) = weak.upgrade() else { break };
+                hub.sync();
+            }
+        });
+        hub
     }
 
     pub fn engine(&self) -> Arc<Engine> {
@@ -140,34 +431,22 @@ impl Hub {
         self.tasks.lock().unwrap().iter().filter(|t| t.status == TaskStatus::Running).count()
     }
 
+    fn owns(&self, id: u64) -> bool {
+        self.handles.lock().unwrap().contains_key(&id)
+    }
+
     pub fn submit(self: &Arc<Self>, task: Task) -> u64 {
-        let id = self.next.fetch_add(1, Ordering::Relaxed);
-        let rec = TaskRec {
-            id,
-            prompt: task.prompt.clone(),
-            profile: task.profile.clone(),
-            model: task.model.clone(),
-            account: task.account.clone(),
-            effort: task.effort.clone(),
-            permission: task.permission.clone(),
-            cwd: task.cwd.clone(),
-            status: TaskStatus::Running,
-            route: None,
-            started: now(),
-            ended: None,
-            ran_on: None,
-            session: None,
-            events: vec![Event::User { text: task.prompt.clone() }],
-        };
+        let id = new_task_id(&self.dir);
+        let rec = TaskRec::new(id, &task, &self.via);
         self.publish(json!({ "kind": "task_new", "task": rec.summary() }));
         self.tasks.lock().unwrap().push(rec);
-        self.save(id);
         self.launch(id, task);
+        self.save(id);
         id
     }
 
     /// Continues a finished conversation in the same provider session, on the
-    /// same account and model it ran on.
+    /// same account and model it ran on (any front end may have started it).
     pub fn follow_up(self: &Arc<Self>, id: u64, prompt: &str) -> Result<()> {
         let task = {
             let mut tasks = self.tasks.lock().unwrap();
@@ -187,13 +466,14 @@ impl Hub {
             task.resume = Some(session);
             t.status = TaskStatus::Running;
             t.ended = None;
+            t.via = Some(self.via.clone());
             t.events.push(Event::User { text: prompt.to_string() });
             task
         };
         let summary = self.get(id).map(|t| t.summary());
         self.publish(json!({ "kind": "task_event", "id": id, "event": Event::User { text: prompt.to_string() }, "task": summary }));
-        self.save(id);
         self.launch(id, task);
+        self.save(id);
         Ok(())
     }
 
@@ -211,6 +491,7 @@ impl Hub {
                 hub.record(id, ev);
             }
             hub.handles.lock().unwrap().remove(&id);
+            hub.save(id); // final state, even if the last write was throttled
         });
     }
 
@@ -219,45 +500,95 @@ impl Hub {
             let mut tasks = self.tasks.lock().unwrap();
             let Some(t) = tasks.iter_mut().find(|t| t.id == id) else { return };
             if t.status != TaskStatus::Running {
-                return; // cancelled: drop late events
+                return;
             }
-            let mut finished = false;
-            match &ev {
-                Event::Routed { profile, model, label, effort, account, .. } => {
-                    let effort = effort.as_deref().map(|e| format!(" · {e}")).unwrap_or_default();
-                    t.route = Some(format!("{label}{effort} @ {account}"));
-                    t.ran_on = Some(RanOn { profile: profile.clone(), model: model.clone(), account: account.clone() });
-                }
-                Event::Session { id } => t.session = Some(id.clone()),
-                Event::Done { ok, .. } => {
-                    t.status = if *ok { TaskStatus::Done } else { TaskStatus::Failed };
-                    t.ended = Some(now());
-                    finished = true;
-                }
-                _ => {}
-            }
-            // Session ids are bookkeeping, and streamed chunks are superseded
-            // by the finished `Text`: neither belongs in the saved history.
-            if !matches!(ev, Event::Session { .. } | Event::Delta { .. }) {
-                t.events.push(ev.clone());
-            }
-            finished
+            t.apply(&ev)
         };
-        if finished {
+        let due = self.last_save.lock().unwrap().get(&id).is_none_or(|t| t.elapsed() >= SAVE_EVERY);
+        if finished || (due && !matches!(ev, Event::Delta { .. })) {
             self.save(id);
         }
         let summary = self.get(id).map(|t| t.summary());
         self.publish(json!({ "kind": "task_event", "id": id, "event": ev, "task": summary }));
     }
 
+    /// Heartbeats our running tasks, then folds in other programs' changes.
+    fn sync(&self) {
+        let owned: Vec<u64> = self.handles.lock().unwrap().keys().copied().collect();
+        for id in &owned {
+            let due = self.last_save.lock().unwrap().get(id).is_none_or(|t| t.elapsed() >= HEARTBEAT);
+            if due {
+                self.save(*id);
+            }
+        }
+        let (changed, removed) = self.scanner.lock().unwrap().scan(&self.dir);
+        for rec in changed {
+            if self.owns(rec.id) {
+                continue;
+            }
+            let summary = rec.summary();
+            {
+                let mut tasks = self.tasks.lock().unwrap();
+                match tasks.iter().position(|t| t.id == rec.id) {
+                    Some(i) => tasks[i] = rec,
+                    None => {
+                        let at = tasks.partition_point(|t| t.id < rec.id);
+                        tasks.insert(at, rec);
+                    }
+                }
+            }
+            self.publish(json!({ "kind": "task_sync", "task": summary }));
+        }
+        // Tasks other programs were running whose files went quiet: the
+        // program closed or crashed, so nobody will ever finish them.
+        let at = now();
+        let quiet: Vec<u64> = self
+            .tasks
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|t| t.is_stale(at) && !owned.contains(&t.id))
+            .map(|t| t.id)
+            .collect();
+        for id in quiet {
+            if let Some(rec) = settle_if_stale(&self.dir, id) {
+                if let Ok(m) = std::fs::metadata(self.dir.join(format!("{id}.json"))).and_then(|m| m.modified()) {
+                    self.scanner.lock().unwrap().note(id, m);
+                }
+                let summary = rec.summary();
+                if let Some(t) = self.tasks.lock().unwrap().iter_mut().find(|t| t.id == id) {
+                    *t = rec;
+                }
+                self.publish(json!({ "kind": "task_sync", "task": summary }));
+            } else if let Some(fresh) = read_task(&self.dir, id) {
+                // Not stale after all (our copy was old): take the file's version.
+                if let Some(t) = self.tasks.lock().unwrap().iter_mut().find(|t| t.id == id) {
+                    *t = fresh;
+                }
+            }
+        }
+        for id in removed {
+            if self.owns(id) {
+                continue;
+            }
+            let mut tasks = self.tasks.lock().unwrap();
+            if let Some(i) = tasks.iter().position(|t| t.id == id) {
+                tasks.remove(i);
+                drop(tasks);
+                self.publish(json!({ "kind": "task_deleted", "id": id }));
+            }
+        }
+    }
+
+    /// Stops a task this process runs. Tasks running in another fermi
+    /// window can only be stopped there.
     pub fn cancel(&self, id: u64) -> bool {
         let Some(h) = self.handles.lock().unwrap().remove(&id) else { return false };
         h.abort(); // drops the run future and with it the child process
         let summary = {
             let mut tasks = self.tasks.lock().unwrap();
             let Some(t) = tasks.iter_mut().find(|t| t.id == id) else { return false };
-            t.status = TaskStatus::Cancelled;
-            t.ended = Some(now());
+            t.cancel();
             t.summary()
         };
         self.save(id);
@@ -290,33 +621,81 @@ impl Hub {
     }
 
     fn save(&self, id: u64) {
-        let Some(t) = self.get(id) else { return };
-        let Ok(bytes) = serde_json::to_vec(&t) else { return };
-        let path = self.dir.join(format!("{id}.json"));
-        let tmp = path.with_extension("json.tmp");
-        if std::fs::write(&tmp, bytes).is_ok() {
-            let _ = std::fs::rename(&tmp, &path);
+        let Some(mut t) = self.get(id) else { return };
+        if let Some(mtime) = write_rec(&self.dir, &mut t) {
+            self.scanner.lock().unwrap().note(id, mtime);
         }
+        if let Some(cur) = self.tasks.lock().unwrap().iter_mut().find(|x| x.id == id) {
+            cur.updated = t.updated;
+        }
+        self.last_save.lock().unwrap().insert(id, Instant::now());
     }
 }
 
-/// The newest tasks on disk. Ones that were running when the app closed
-/// come back as cancelled.
-fn load_history(dir: &std::path::Path) -> Vec<TaskRec> {
-    let Ok(entries) = std::fs::read_dir(dir) else { return vec![] };
-    let mut tasks: Vec<TaskRec> = entries
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
-        .filter_map(|e| serde_json::from_slice::<TaskRec>(&std::fs::read(e.path()).ok()?).ok())
-        .collect();
-    tasks.sort_by_key(|t| t.id);
-    if tasks.len() > HISTORY_LIMIT {
-        tasks.drain(..tasks.len() - HISTORY_LIMIT);
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tmp_dir(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("fermi-hist-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
     }
-    for t in tasks.iter_mut().filter(|t| t.status == TaskStatus::Running) {
-        t.status = TaskStatus::Cancelled;
-        t.ended.get_or_insert(t.started);
-        t.events.push(Event::Log { line: "interrupted: fermi was closed while this ran".into() });
+
+    #[test]
+    fn ids_are_unique_and_ordered() {
+        let d = tmp_dir("ids");
+        let a = new_task_id(&d);
+        std::thread::sleep(Duration::from_millis(2));
+        let b = new_task_id(&d);
+        assert!(b > a);
+        assert!(b < (1u64 << 53), "ids must stay safe integers in JavaScript");
     }
-    tasks
+
+    #[test]
+    fn scanner_sees_other_writers_and_stale_tasks() {
+        let home = tmp_dir("scan");
+        let dir = history_dir(&home);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut scanner = Scanner::new(&dir);
+
+        // Another program starts and finishes a task.
+        let task = Task::new("hello", &home);
+        {
+            let mut rec = Recorder::start(&home, &task, "cli");
+            rec.record(&Event::Text { text: "hi".into() });
+            rec.record(&Event::Done { ok: true, summary: "ok".into() });
+        }
+        let (changed, removed) = scanner.scan(&dir);
+        assert_eq!(changed.len(), 1);
+        assert_eq!(changed[0].status, TaskStatus::Done);
+        assert_eq!(changed[0].via.as_deref(), Some("cli"));
+        assert!(removed.is_empty());
+        assert!(scanner.scan(&dir).0.is_empty(), "unchanged files aren't reported again");
+
+        // A "running" task nobody has touched for a while comes back interrupted.
+        let mut abandoned = TaskRec::new(new_task_id(&dir), &task, "ui");
+        abandoned.updated = now() - 60;
+        std::fs::write(dir.join(format!("{}.json", abandoned.id)), serde_json::to_vec(&abandoned).unwrap()).unwrap();
+        let (changed, _) = scanner.scan(&dir);
+        assert_eq!(changed[0].status, TaskStatus::Cancelled);
+        assert_eq!(read_task(&dir, abandoned.id).unwrap().status, TaskStatus::Cancelled, "saved back");
+
+        // Deleting a file is reported.
+        std::fs::remove_file(dir.join(format!("{}.json", abandoned.id))).unwrap();
+        assert_eq!(scanner.scan(&dir).1, vec![abandoned.id]);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn dropped_recorder_marks_cancelled() {
+        let home = tmp_dir("drop");
+        let id = {
+            let rec = Recorder::start(&home, &Task::new("x", &home), "tui");
+            rec.id()
+        };
+        assert_eq!(read_task(&history_dir(&home), id).unwrap().status, TaskStatus::Cancelled);
+        let _ = std::fs::remove_dir_all(&home);
+    }
 }

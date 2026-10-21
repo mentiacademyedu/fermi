@@ -52,6 +52,13 @@ enum Cmd {
     Route(Target),
     /// Run a task and stream its output
     Run(Target),
+    /// Recent tasks from every fermi window on this PC
+    History {
+        #[arg(short = 'n', long, default_value_t = 20)]
+        limit: usize,
+    },
+    /// Print one task's conversation
+    Show { id: u64 },
     /// Interactive terminal UI (default)
     Tui {
         #[arg(short, long)]
@@ -117,6 +124,8 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Status => setup::status(&*Engine::load()?).await,
         Cmd::Route(t) => route(t)?,
         Cmd::Run(t) => return run(t).await,
+        Cmd::History { limit } => history(limit)?,
+        Cmd::Show { id } => show(id)?,
         Cmd::Tui { profile } => {
             if !fermi_core::Config::path().exists() {
                 setup::init(false)?;
@@ -178,6 +187,8 @@ async fn run(t: Target) -> Result<ExitCode> {
     let color = std::io::stderr().is_terminal();
     let paint = |code: &str, s: String| if color { format!("\x1b[{code}m{s}\x1b[0m") } else { s };
 
+    // Saved to the shared history, so the desktop app and dashboard show it too.
+    let mut history = fermi_core::hub::Recorder::start(&engine.home, &task, "cli");
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let job = tokio::spawn({
         let engine = engine.clone();
@@ -187,7 +198,13 @@ async fn run(t: Target) -> Result<ExitCode> {
     let mut ok = false;
     // Text already printed live from deltas, so the finished message isn't repeated.
     let mut streamed = false;
-    while let Some(ev) = rx.recv().await {
+    let mut beat = tokio::time::interval(fermi_core::hub::HEARTBEAT);
+    loop {
+        let ev = tokio::select! {
+            ev = rx.recv() => match ev { Some(ev) => ev, None => break },
+            _ = beat.tick() => { history.heartbeat(); continue; }
+        };
+        history.record(&ev);
         if streamed && !matches!(ev, Event::Delta { .. } | Event::Text { .. }) {
             println!();
             streamed = false;
@@ -228,5 +245,53 @@ async fn run(t: Target) -> Result<ExitCode> {
         }
     }
     let _ = job.await;
+    eprintln!("{}", paint("2", format!("  saved as task {} (fermi show {})", history.id(), history.id())));
     Ok(if ok { ExitCode::SUCCESS } else { ExitCode::FAILURE })
+}
+
+/// `fermi history`: recent tasks from every front end on this PC.
+fn history(limit: usize) -> Result<()> {
+    let home = fermi_core::Config::home();
+    let tasks = fermi_core::hub::load_history(&fermi_core::hub::history_dir(&home), limit);
+    if tasks.is_empty() {
+        println!("no tasks yet");
+    }
+    let now = fermi_core::util::now();
+    for t in tasks.iter().rev() {
+        let glyph = match t.status {
+            fermi_core::hub::TaskStatus::Running => "◌",
+            fermi_core::hub::TaskStatus::Done => "✓",
+            fermi_core::hub::TaskStatus::Failed => "✗",
+            fermi_core::hub::TaskStatus::Cancelled => "⊘",
+        };
+        let title: String = t.prompt.lines().next().unwrap_or("").chars().take(70).collect();
+        println!(
+            "{glyph} {:<17} {:>6} ago  {:<8} {:<40}  {title}",
+            t.id,
+            fermi_core::util::fmt_dur(now.saturating_sub(t.started)),
+            t.via.as_deref().unwrap_or("-"),
+            t.route.as_deref().unwrap_or("-").chars().take(40).collect::<String>(),
+        );
+    }
+    Ok(())
+}
+
+/// `fermi show <id>`: one conversation, as text.
+fn show(id: u64) -> Result<()> {
+    let dir = fermi_core::hub::history_dir(&fermi_core::Config::home());
+    let t = fermi_core::hub::read_task(&dir, id).ok_or_else(|| anyhow::anyhow!("no task {id} (see `fermi history`)"))?;
+    println!("task {id} · {:?} · {} · {}", t.status, t.route.as_deref().unwrap_or("-"), t.cwd.display());
+    for ev in &t.events {
+        match ev {
+            Event::User { text } => println!("\n> {}\n", text.replace('\n', "\n> ")),
+            Event::Text { text } => println!("{text}\n"),
+            Event::Tool { name, detail } => println!("  · {name} {detail}"),
+            Event::Artifact { path } => println!("  ⇒ {path}"),
+            Event::Failover { account, reason } => println!("  ↷ {account}: {reason}"),
+            Event::Done { ok, summary } => println!("{} {summary}", if *ok { "✓" } else { "✗" }),
+            Event::Log { line } if line.starts_with("interrupted") => println!("  {line}"),
+            _ => {}
+        }
+    }
+    Ok(())
 }

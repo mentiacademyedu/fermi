@@ -830,7 +830,7 @@ function renderSide() {
     const limit = searching ? 50 : g.showAll ? 200 : 6;
     for (const t of g.tasks.slice(0, limit)) {
       const r = el("div", "task-row" + (t.id === S.sel && S.active === "chat" ? " sel" : ""));
-      r.title = titleOf(t);
+      r.title = titleOf(t) + (t.via ? `  ·  from fermi ${t.via}` : "");
       const secs = (t.ended || nowS()) - t.started;
       r.append(statusGlyph(t), el("span", "t", titleOf(t)), el("span", "time", fmtDur(Math.max(0, secs))));
       r.onclick = () => selectTask(t.id);
@@ -1090,7 +1090,7 @@ function renderChat() {
     return;
   }
   $("#convo-title").textContent = titleOf(t);
-  $("#convo-route").textContent = [t.route, relTo("", t.cwd)].filter(Boolean).join("   ·   ");
+  $("#convo-route").textContent = [t.route, relTo("", t.cwd), t.via ? `from fermi ${t.via}` : ""].filter(Boolean).join("   ·   ");
   $("#cancel").hidden = t.status !== "running";
   $("#delete-task").hidden = t.status === "running"; $("#delete-task").textContent = "Delete";
   const log = $("#log"); log.replaceChildren();
@@ -1272,7 +1272,13 @@ composerEl.ondrop = (e) => {
   const files = [...(e.dataTransfer?.files || [])];
   if (files.length) { e.preventDefault(); addAttachments(files); }
 };
-$("#cancel").onclick = async () => { if (S.sel != null) { try { await api(`/api/tasks/${S.sel}/cancel`, {}); } catch (e) { toast(e.message, true); } } };
+$("#cancel").onclick = async () => {
+  if (S.sel == null) return;
+  try {
+    const r = await api(`/api/tasks/${S.sel}/cancel`, {});
+    if (!r.ok) { const via = S.tasks.get(S.sel)?.via; toast(`This task runs in ${via ? "fermi " + via : "another fermi window"}; stop it there.`, true); }
+  } catch (e) { toast(e.message, true); }
+};
 $("#delete-task").onclick = confirmClick($("#delete-task"), "Click again to delete", async () => {
   if (S.sel == null) return;
   try { await api(`/api/tasks/${S.sel}/delete`, {}); } catch (e) { toast(e.message, true); }
@@ -2053,6 +2059,16 @@ function onMessage(m) {
       break;
     }
     case "task_update": S.tasks.set(m.task.id, m.task); if (m.task.id === S.sel) renderChat(); schedule("side", "status", "composer"); break;
+    // A task created or changed by another fermi window (desktop, ui, tui, cli).
+    case "task_sync": {
+      const id = m.task.id;
+      S.tasks.set(id, m.task);
+      if (S.logs.has(id)) { S.logs.delete(id); if (id === S.sel && S.active === "chat") selectTask(id); }
+      schedule("side", "status");
+      if (id === S.sel) schedule("composer");
+      if (m.task.status !== "running" && norm(m.task.cwd) === norm(S.ws)) { S.tree.clear(); schedule("files"); }
+      break;
+    }
     case "task_deleted": S.tasks.delete(m.id); S.logs.delete(m.id); if (S.sel === m.id) newTask(false); schedule("side", "status"); break;
     case "accounts": if (S.state) { S.state.accounts = m.accounts; schedule("status"); if (S.active === "settings") schedule("settings"); renderSplash(); } break;
     case "login_ok": toast(`✓ ${m.id} is logged in${m.email ? " as " + m.email : ""}`); break;

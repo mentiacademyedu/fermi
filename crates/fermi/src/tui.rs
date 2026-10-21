@@ -7,6 +7,7 @@ use fermi::setup;
 use fermi_core::auth::{self, AuthInfo};
 use fermi_core::state::AcctState;
 use fermi_core::util::{fmt_dur, now};
+use fermi_core::hub::{history_dir, load_history, Recorder, Scanner, TaskRec, TaskStatus, HEARTBEAT};
 use fermi_core::{Auth, Engine, Event, Provider, Task};
 use ratatui::crossterm::event::{
     self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event as Input, KeyCode,
@@ -161,7 +162,80 @@ struct TaskView {
     lines: Vec<(Kind, String)>,
     started: Instant,
     elapsed: Option<Duration>,
-    handle: JoinHandle<()>,
+    /// Set for tasks this TUI runs; tasks from other fermi windows have none.
+    handle: Option<JoinHandle<()>>,
+    /// Its id in the shared history.
+    hist: Option<u64>,
+}
+
+/// A conversation from the shared history, replayed into a view.
+fn view_from_rec(rec: &TaskRec) -> TaskView {
+    let ago = |ts: u64| Duration::from_secs(fermi_core::util::now().saturating_sub(ts));
+    let first = rec.prompt.lines().find(|l| !l.trim().is_empty() && !l.starts_with("[Attached file:")).unwrap_or("(attachments)");
+    let mut t = TaskView {
+        title: first.to_string(),
+        route: rec.route.clone().unwrap_or_else(|| "—".into()),
+        st: St::Running,
+        lines: vec![],
+        started: Instant::now().checked_sub(ago(rec.started)).unwrap_or_else(Instant::now),
+        elapsed: None,
+        handle: None,
+        hist: Some(rec.id),
+    };
+    if let Some(via) = rec.via.as_deref().filter(|v| *v != "tui") {
+        t.lines.push((Kind::Dim, format!("(from fermi {via})")));
+    }
+    for ev in &rec.events {
+        match ev {
+            Event::User { text } => {
+                t.lines.push((Kind::Text, String::new()));
+                t.lines.extend(text.lines().map(|l| (Kind::Meta, format!("> {l}"))));
+            }
+            ev => push_event(&mut t, ev.clone()),
+        }
+    }
+    t.st = match rec.status {
+        TaskStatus::Running => St::Running,
+        TaskStatus::Done => St::Done,
+        TaskStatus::Failed | TaskStatus::Cancelled => St::Failed,
+    };
+    if rec.status == TaskStatus::Cancelled && !t.lines.last().is_some_and(|(_, l)| l.contains("cancelled") || l.contains("interrupted")) {
+        t.lines.push((Kind::Bad, "✗ cancelled".into()));
+    }
+    t.elapsed = rec.ended.map(|e| Duration::from_secs(e.saturating_sub(rec.started)));
+    t
+}
+
+/// Renders one event into a task's lines.
+fn push_event(t: &mut TaskView, ev: Event) {
+    match ev {
+        Event::Routed { profile, label, effort, account, why, .. } => {
+            let effort = effort.map(|e| format!(" · {e}")).unwrap_or_default();
+            t.route = format!("{label}{effort} @ {account}");
+            t.lines.push((Kind::Meta, format!("▸ {label}{effort} @ {account}  [{profile}]  {why}")));
+        }
+        Event::User { .. } | Event::Session { .. } | Event::Delta { .. } => {}
+        Event::Text { text } => {
+            t.lines.extend(text.lines().map(|l| (Kind::Text, l.to_string())));
+            t.lines.push((Kind::Text, String::new()));
+        }
+        Event::Tool { name, detail } => t.lines.push((Kind::Tool, format!("· {name} {detail}"))),
+        Event::Limit { account, utilization, blocked, .. } => {
+            if blocked {
+                t.lines.push((Kind::Warn, format!("! {account} is rate limited")));
+            } else if let Some(u) = utilization.filter(|u| *u >= 0.8) {
+                t.lines.push((Kind::Warn, format!("! {account} at {:.0}% of its window", u * 100.0)));
+            }
+        }
+        Event::Failover { account, reason } => t.lines.push((Kind::Warn, format!("↷ {account}: {reason} — trying next"))),
+        Event::Artifact { path } => t.lines.push((Kind::Good, format!("⇒ {path}"))),
+        Event::Log { line } => t.lines.push((Kind::Dim, line)),
+        Event::Done { ok, summary } => {
+            t.st = if ok { St::Done } else { St::Failed };
+            t.elapsed = Some(t.started.elapsed());
+            t.lines.push((if ok { Kind::Good } else { Kind::Bad }, format!("{} {summary}", if ok { "✓" } else { "✗" })));
+        }
+    }
 }
 
 type EvTx = mpsc::UnboundedSender<(usize, Event)>;
@@ -173,6 +247,9 @@ struct App {
     /// None = pick the profile from the working directory.
     profile: Option<String>,
     tasks: Vec<TaskView>,
+    /// The shared history folder, and what's been seen of it.
+    hist_dir: PathBuf,
+    scanner: Scanner,
     sel_task: usize,
     sel_acct: usize,
     focus: Focus,
@@ -248,6 +325,7 @@ pub async fn run(engine: Arc<Engine>, profile: Option<String>) -> Result<()> {
         }
         if last_tick.elapsed() >= Duration::from_secs(1) {
             app.accts = app.engine.store.snapshot();
+            app.sync_history();
             last_tick = Instant::now();
             dirty = true;
         }
@@ -264,8 +342,8 @@ pub async fn run(engine: Arc<Engine>, profile: Option<String>) -> Result<()> {
         }
     };
     leave();
-    for t in &app.tasks {
-        t.handle.abort();
+    for h in app.tasks.iter().filter_map(|t| t.handle.as_ref()) {
+        h.abort();
     }
     res
 }
@@ -298,13 +376,18 @@ fn inside(r: Rect, x: u16, y: u16) -> bool {
 
 impl App {
     fn new(engine: Arc<Engine>, profile: Option<String>, cwd: PathBuf, probe_tx: ProbeTx) -> Self {
+        // Recent tasks from every fermi window on this PC.
+        let hist_dir = history_dir(&engine.home);
+        let tasks: Vec<TaskView> = load_history(&hist_dir, 100).iter().map(view_from_rec).collect();
         App {
             accts: engine.store.snapshot(),
             engine,
             cwd,
             profile,
-            tasks: vec![],
-            sel_task: 0,
+            sel_task: tasks.len().saturating_sub(1),
+            tasks,
+            scanner: Scanner::new(&hist_dir),
+            hist_dir,
             sel_acct: 0,
             focus: Focus::Input,
             modal: None,
@@ -691,19 +774,36 @@ impl App {
         task.prompt = rest.to_string();
 
         let id = self.tasks.len();
+        // Saved to the shared history so the desktop app and dashboard see it.
+        let mut history = Recorder::start(&self.engine.home, &task, "tui");
+        let hist = history.id();
         let (engine, tx) = (self.engine.clone(), ev_tx.clone());
+        // The run lives inside this future, so aborting it (cancel, quit)
+        // stops the agent; dropping the recorder then marks it cancelled.
         let handle = tokio::spawn(async move {
             let (t_tx, mut t_rx) = mpsc::unbounded_channel();
-            let fwd = tokio::spawn(async move {
-                while let Some(e) = t_rx.recv().await {
-                    if tx.send((id, e)).is_err() {
-                        break;
+            let run = engine.run(&task, &t_tx);
+            tokio::pin!(run);
+            let mut beat = tokio::time::interval(HEARTBEAT);
+            let mut finished = false;
+            loop {
+                tokio::select! {
+                    biased;
+                    Some(e) = t_rx.recv() => {
+                        history.record(&e);
+                        let _ = tx.send((id, e));
                     }
+                    _ = &mut run, if !finished => finished = true,
+                    _ = beat.tick() => history.heartbeat(),
                 }
-            });
-            let _ = engine.run(&task, &t_tx).await;
-            drop(t_tx);
-            let _ = fwd.await;
+                if finished {
+                    while let Ok(e) = t_rx.try_recv() {
+                        history.record(&e);
+                        let _ = tx.send((id, e));
+                    }
+                    break;
+                }
+            }
         });
         self.tasks.push(TaskView {
             title: rest.to_string(),
@@ -712,7 +812,8 @@ impl App {
             lines: vec![(Kind::Dim, format!("$ {raw}"))],
             started: Instant::now(),
             elapsed: None,
-            handle,
+            handle: Some(handle),
+            hist: Some(hist),
         });
         self.sel_task = id;
         self.scroll = 0;
@@ -720,12 +821,15 @@ impl App {
     }
 
     fn cancel(&mut self) {
-        if let Some(t) = self.tasks.get_mut(self.sel_task).filter(|t| t.st == St::Running) {
-            t.handle.abort(); // drops the child process (kill_on_drop)
-            t.st = St::Failed;
-            t.elapsed = Some(t.started.elapsed());
-            t.lines.push((Kind::Bad, "✗ cancelled".into()));
-        }
+        let Some(t) = self.tasks.get_mut(self.sel_task).filter(|t| t.st == St::Running) else { return };
+        let Some(h) = &t.handle else {
+            self.note = Some((Kind::Warn, "this task runs in another fermi window; stop it there".into()));
+            return;
+        };
+        h.abort(); // drops the child process (kill_on_drop)
+        t.st = St::Failed;
+        t.elapsed = Some(t.started.elapsed());
+        t.lines.push((Kind::Bad, "✗ cancelled".into()));
     }
 
     fn on_event(&mut self, id: usize, ev: Event) {
@@ -733,34 +837,37 @@ impl App {
         if t.st != St::Running {
             return; // cancelled
         }
-        match ev {
-            Event::Routed { profile, label, effort, account, why, .. } => {
-                let effort = effort.map(|e| format!(" · {e}")).unwrap_or_default();
-                t.route = format!("{label}{effort} @ {account}");
-                t.lines.push((Kind::Meta, format!("▸ {label}{effort} @ {account}  [{profile}]  {why}")));
-            }
-            Event::User { .. } | Event::Session { .. } | Event::Delta { .. } => {}
-            Event::Text { text } => {
-                t.lines.extend(text.lines().map(|l| (Kind::Text, l.to_string())));
-                t.lines.push((Kind::Text, String::new()));
-            }
-            Event::Tool { name, detail } => t.lines.push((Kind::Tool, format!("· {name} {detail}"))),
-            Event::Limit { account, utilization, blocked, .. } => {
-                if blocked {
-                    t.lines.push((Kind::Warn, format!("! {account} is rate limited")));
-                } else if let Some(u) = utilization.filter(|u| *u >= 0.8) {
-                    t.lines.push((Kind::Warn, format!("! {account} at {:.0}% of its window", u * 100.0)));
+        push_event(t, ev);
+    }
+
+    /// Picks up tasks other fermi windows created or changed.
+    fn sync_history(&mut self) -> bool {
+        let (changed, _) = self.scanner.scan(&self.hist_dir);
+        let mut any = false;
+        for rec in changed {
+            match self.tasks.iter().position(|t| t.hist == Some(rec.id)) {
+                Some(i) if self.tasks[i].handle.is_some() => {} // ours; already live
+                Some(i) => {
+                    self.tasks[i] = view_from_rec(&rec);
+                    any = true;
+                }
+                None => {
+                    self.tasks.push(view_from_rec(&rec));
+                    any = true;
                 }
             }
-            Event::Failover { account, reason } => t.lines.push((Kind::Warn, format!("↷ {account}: {reason} — trying next"))),
-            Event::Artifact { path } => t.lines.push((Kind::Good, format!("⇒ {path}"))),
-            Event::Log { line } => t.lines.push((Kind::Dim, line)),
-            Event::Done { ok, summary } => {
-                t.st = if ok { St::Done } else { St::Failed };
-                t.elapsed = Some(t.started.elapsed());
-                t.lines.push((if ok { Kind::Good } else { Kind::Bad }, format!("{} {summary}", if ok { "✓" } else { "✗" })));
+        }
+        // Tasks another window was running that went quiet (it closed).
+        for i in 0..self.tasks.len() {
+            let t = &self.tasks[i];
+            if let (St::Running, None, Some(id)) = (&t.st, &t.handle, t.hist) {
+                if let Some(rec) = fermi_core::hub::settle_if_stale(&self.hist_dir, id) {
+                    self.tasks[i] = view_from_rec(&rec);
+                    any = true;
+                }
             }
         }
+        any
     }
 
     // ── drawing ──────────────────────────────────────────────────────────

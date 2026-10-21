@@ -97,7 +97,9 @@ session, account and model), browse and edit workspace files, review what
 agents changed in a **Changes** panel (git status and diffs), open **terminals** in
 your workspaces (Ctrl+`; PowerShell on Windows, your `$SHELL` elsewhere), browse
 **trending GitHub repositories** and clone or analyze them with an editable prompt
-(read-only "Plan only" by default), keep a history across restarts
+(read-only "Plan only" by default), keep a history across restarts that every
+fermi window on the PC shares (desktop, `fermi ui`, the TUI and `fermi run`;
+see `fermi history` and `fermi show <id>`)
 (`~/.fermi/history`), edit profiles, see each account's login and usage,
 add or remove accounts, and log in
 (a terminal window opens for the provider's sign-in, and the page updates

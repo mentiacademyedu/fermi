@@ -112,7 +112,7 @@ impl Server {
 
 /// `fermi ui`: serve until Ctrl+C.
 pub async fn run(engine: Arc<Engine>, port: u16, open: bool) -> Result<()> {
-    let server = start(engine, port, std::env::current_dir()?).await?;
+    let server = start(engine, port, std::env::current_dir()?, "ui").await?;
     println!("fermi dashboard: {}", server.url);
     println!("(this link includes your access key; Ctrl+C stops the dashboard and its running tasks)");
     if open {
@@ -126,12 +126,13 @@ pub async fn run(engine: Arc<Engine>, port: u16, open: bool) -> Result<()> {
 }
 
 /// Binds 127.0.0.1 (`port` 0 = any free port) and builds the app. `cwd` is
-/// the default folder for tasks and for picking the profile.
-pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Server> {
+/// the default folder for tasks and for picking the profile; `via` names this
+/// front end in the shared history ("ui", "desktop").
+pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> Result<Server> {
     let listener = bind(port).await?;
     let port = listener.local_addr()?.port();
     let srv = Arc::new(Srv {
-        hub: Hub::new(engine),
+        hub: Hub::new(engine, via),
         token: new_token()?,
         port,
         cwd,

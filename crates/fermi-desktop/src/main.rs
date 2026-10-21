@@ -51,7 +51,7 @@ fn start_dashboard() -> anyhow::Result<(String, Arc<Hub>)> {
     let engine = Engine::load()?;
     // Started from the Start menu there is no meaningful working directory.
     let cwd = dirs::home_dir().unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
-    let server = tauri::async_runtime::block_on(fermi::server::start(engine, 0, cwd))?;
+    let server = tauri::async_runtime::block_on(fermi::server::start(engine, 0, cwd, "desktop"))?;
     let (url, hub) = (server.url.clone(), server.hub.clone());
     tauri::async_runtime::spawn(async move {
         let _ = server.serve(std::future::pending()).await;
