@@ -13,6 +13,51 @@ pub struct AuthInfo {
     pub plan: Option<String>,
 }
 
+/// The plan from Claude Code's account profile (`.claude.json` in the config
+/// dir, or `~/.claude.json` for the default login), e.g. "Max 5x".
+fn claude_plan(config_dir: Option<std::path::PathBuf>) -> Option<String> {
+    let path = match config_dir {
+        Some(dir) => dir.join(".claude.json"),
+        None => dirs::home_dir()?.join(".claude.json"),
+    };
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    let account = &v["oauthAccount"];
+    let org = account["organizationType"].as_str()?;
+    Some(plan_label(org, account["organizationRateLimitTier"].as_str().unwrap_or("")))
+}
+
+fn plan_label(org_type: &str, tier: &str) -> String {
+    let base = match org_type {
+        "claude_max" => "Max".to_string(),
+        "claude_pro" => "Pro".to_string(),
+        "claude_team" => "Team".to_string(),
+        "claude_enterprise" => "Enterprise".to_string(),
+        other => title_case(other.trim_start_matches("claude_")),
+    };
+    match ["20x", "5x"].iter().find(|m| tier.contains(&format!("max_{m}"))) {
+        Some(m) if base == "Max" => format!("Max {m}"),
+        _ => base,
+    }
+}
+
+fn title_case(s: &str) -> String {
+    let mut c = s.chars();
+    c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plan_label;
+
+    #[test]
+    fn plan_labels() {
+        assert_eq!(plan_label("claude_max", "default_claude_max_5x"), "Max 5x");
+        assert_eq!(plan_label("claude_max", "default_claude_max_20x"), "Max 20x");
+        assert_eq!(plan_label("claude_pro", ""), "Pro");
+        assert_eq!(plan_label("claude_team", "default_raven"), "Team");
+    }
+}
+
 pub async fn probe(cfg: &Config, a: &Account) -> AuthInfo {
     let fallback = AuthInfo { logged_in: a.credentials_present(), ..Default::default() };
     match (a.auth, a.provider) {
@@ -43,7 +88,10 @@ pub async fn probe(cfg: &Config, a: &Account) -> AuthInfo {
             let Ok(Ok(out)) = tokio::time::timeout(Duration::from_secs(20), cmd.output()).await else { return fallback };
             let Ok(v) = serde_json::from_slice::<serde_json::Value>(&out.stdout) else { return fallback };
             let s = |k: &str| v[k].as_str().map(str::to_string);
-            AuthInfo { logged_in: v["loggedIn"].as_bool().or(fallback.logged_in), email: s("email"), plan: s("subscriptionType") }
+            // The token's `subscriptionType` can disagree with the account
+            // (a Max account reported as "team"), so the account profile wins.
+            let plan = claude_plan(a.home_dir()).or_else(|| s("subscriptionType").map(|p| title_case(&p)));
+            AuthInfo { logged_in: v["loggedIn"].as_bool().or(fallback.logged_in), email: s("email"), plan }
         }
     }
 }
