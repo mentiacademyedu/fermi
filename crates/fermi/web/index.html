@@ -261,6 +261,28 @@ button:disabled { opacity: .45; cursor: default; }
 .hit .s { font: 11.5px var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .files-empty { color: var(--faint); text-align: center; padding: 30px 16px; font-size: 13px; }
 
+.ptabs { display: flex; gap: 4px; padding: 8px 10px 2px; }
+.ptabs button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; border: 0; background: transparent; padding: 6px; border-radius: 8px; color: var(--muted); font-size: 13px; }
+.ptabs button:hover { background: var(--hover); }
+.ptabs button.on { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
+.ptabs .count { font: 600 10.5px var(--mono); background: var(--accent-soft); color: var(--accent); border-radius: 9px; padding: 0 6px; }
+.pane { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.chg { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.chg:hover { background: var(--hover); }
+.chg.on { background: var(--sel); }
+.chg .s { font: 700 11.5px var(--mono); width: 14px; text-align: center; flex: none; }
+.s.M { color: var(--warn); } .s.A, .s.U { color: var(--ok); } .s.D, .s.C { color: var(--bad); } .s.R { color: var(--accent); }
+.chg .n { white-space: nowrap; }
+.chg .d { color: var(--faint); font-size: 12px; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; direction: rtl; }
+.diff-view { flex: 1; overflow: auto; font: 12.5px/1.5 var(--mono); background: var(--code-bg); padding: 6px 0 30px; }
+.dl { display: flex; white-space: pre; min-width: fit-content; }
+.dl .ln { width: 46px; flex: none; text-align: right; padding-right: 8px; color: var(--faint); user-select: none; }
+.dl .c { padding: 0 14px 0 6px; }
+.dl.add { background: color-mix(in srgb, var(--ok) 15%, transparent); }
+.dl.del { background: color-mix(in srgb, var(--bad) 15%, transparent); }
+.dl.hunk { color: var(--accent); background: var(--panel-2); margin-top: 6px; }
+.dl.meta { color: var(--faint); }
+
 /* ── status bar ────────────────────────────────────────────────────────── */
 .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 12px; border-top: 1px solid var(--line); background: var(--side); font-size: 12px; color: var(--muted); overflow: hidden; white-space: nowrap; }
 .status .acc { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -399,11 +421,13 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
         <span data-i="file"></span>
         <span class="crumb" id="file-path"></span>
         <span class="faint" id="file-info"></span>
+        <button class="small ghost" id="file-open" title="Open the file">Open file</button>
         <button class="small ghost" id="file-mention" title="Mention this file in the chat">@ Mention</button>
         <button class="small primary" id="file-save" title="Save (Ctrl+S)">Save</button>
       </div>
       <div class="editor" id="file-editor"><pre class="gutter" id="gutter"></pre><div class="code-wrap"><pre id="hl" aria-hidden="true"></pre><textarea id="code" spellcheck="false" wrap="off"></textarea></div></div>
       <div class="img-view" id="file-image"><img id="file-img" alt=""></div>
+      <div class="diff-view" id="file-diff"></div>
       <div class="file-msg" id="file-msg"></div>
     </section>
 
@@ -423,6 +447,18 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
 
   <!-- files -->
   <aside class="files">
+    <div class="ptabs">
+      <button id="ptab-files" class="on"><span data-i="folder"></span>Files</button>
+      <button id="ptab-changes"><span data-i="branch"></span>Changes<span class="count" id="changes-count" hidden></span></button>
+    </div>
+    <div class="pane" id="pane-changes" hidden>
+      <div class="files-head">
+        <span class="name" id="changes-branch">Changes</span>
+        <button class="icon-btn" id="changes-refresh" title="Refresh" data-i="refresh"></button>
+      </div>
+      <div class="tree" id="changes"></div>
+    </div>
+    <div class="pane" id="pane-files">
     <div class="files-head">
       <span class="name" id="files-name">Files</span>
       <button class="icon-btn" id="files-collapse" title="Collapse folders" data-i="collapse"></button>
@@ -432,6 +468,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
     <label class="find"><span data-i="filter"></span><input id="find" placeholder="Find files" autocomplete="off"></label>
     <div class="seg"><button id="find-names" class="on">Names</button><button id="find-contents">Contents</button></div>
     <div class="tree" id="tree"></div>
+    </div>
   </aside>
 
   <footer class="status" id="status"></footer>
@@ -528,6 +565,7 @@ const I = {
   filter: '<path d="M4 5h16M7 12h10M10 19h4"/>',
   refresh: '<path d="M20 11a8 8 0 0 0-14.7-4.4L3 9M4 13a8 8 0 0 0 14.7 4.4L21 15"/><path d="M3 4v5h5M21 20v-5h-5"/>',
   collapse: '<path d="m7 15 5-5 5 5"/>',
+  branch: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-4 5-12 7"/>',
 };
 const svg = (name) => `<svg viewBox="0 0 24 24">${I[name] || ""}</svg>`;
 const icon = (name, cls) => { const s = el("span", cls); s.innerHTML = svg(name); s.style.display = "inline-grid"; return s; };
@@ -694,7 +732,7 @@ function renderTabs() {
   const chatLabel = S.sel != null ? (S.tasks.get(S.sel)?.prompt || "Chat") : "New task";
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
-  for (const f of S.tabs.filter((t) => t.id !== "settings")) mk(f.id, f.name, IMG.test(f.name) ? "image" : "code", true, f.dirty);
+  for (const f of S.tabs.filter((t) => t.id !== "settings")) mk(f.id, f.name, f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code", true, f.dirty);
   bar.append(el("span", "spacer"));
   if (document.getElementById("app").classList.contains("no-files")) {
     const b = el("button", "icon-btn"); b.innerHTML = svg("panelRight"); b.title = "Show files"; b.onclick = toggleFiles; bar.append(b);
@@ -1116,13 +1154,18 @@ function setGutter(text) {
 function showFile(tab) {
   if (!tab) return;
   const w = currentWs();
-  $("#file-path").textContent = w ? relTo(w.path, tab.id) : tab.id;
+  const path = tab.path || tab.id;
+  $("#file-path").textContent = (w ? relTo(w.path, path) : path) + (tab.kind === "diff" ? "  (changes)" : "");
   $("#file-editor").hidden = tab.kind !== "text";
   $("#file-image").hidden = tab.kind !== "image";
-  $("#file-msg").hidden = tab.kind === "text" || tab.kind === "image";
+  $("#file-diff").hidden = tab.kind !== "diff";
+  $("#file-msg").hidden = ["text", "image", "diff"].includes(tab.kind);
   $("#file-save").hidden = tab.kind !== "text";
+  $("#file-open").hidden = tab.kind !== "diff" || tab.status === "D";
   $("#file-info").textContent = tab.size != null ? fmtSize(tab.size) : "";
-  if (tab.kind === "text") {
+  if (tab.kind === "diff") {
+    renderDiff(tab.diff);
+  } else if (tab.kind === "text") {
     const c = $("#code"); c.value = tab.text; setGutter(tab.text);
     c.scrollTop = tab.scroll || 0; $("#gutter").scrollTop = c.scrollTop;
     paintHL();
@@ -1135,6 +1178,79 @@ function showFile(tab) {
   }
 }
 const activeTab = () => S.tabs.find((t) => t.id === S.active);
+
+// ── changes (git) ───────────────────────────────────────────────────────────
+function setPane(p) {
+  S.pane = p; pref.set("pane", p);
+  $("#pane-files").hidden = p !== "files"; $("#pane-changes").hidden = p !== "changes";
+  $("#ptab-files").className = p === "files" ? "on" : ""; $("#ptab-changes").className = p === "changes" ? "on" : "";
+  if (p === "changes") loadChanges();
+}
+let changesTimer = null, changesSeq = 0;
+function loadChanges() {
+  clearTimeout(changesTimer);
+  changesTimer = setTimeout(async () => {
+    const w = currentWs(); const seq = ++changesSeq;
+    if (!w) { S.changes = null; renderChanges(); return; }
+    try { const st = await api(`/api/git/status?${q({ root: w.path })}`); if (seq === changesSeq) { S.changes = st; renderChanges(); } }
+    catch (e) { S.changes = { error: e.message }; renderChanges(); }
+  }, 150);
+}
+function renderChanges() {
+  const box = $("#changes"); box.replaceChildren();
+  const st = S.changes, n = st?.changes?.length || 0;
+  $("#changes-count").hidden = !n; $("#changes-count").textContent = n > 999 ? "999+" : String(n);
+  $("#changes-branch").textContent = st?.branch ? `⎇ ${st.branch}` : "Changes";
+  if (!currentWs()) { box.append(el("div", "files-empty", "Pick a workspace folder first.")); return; }
+  if (!st) { box.append(el("div", "files-empty", "Loading…")); return; }
+  if (st.error) { box.append(el("div", "files-empty", st.error)); return; }
+  if (!st.repo) { box.append(el("div", "files-empty", "This folder isn't a git repository.")); return; }
+  if (!n) { box.append(el("div", "files-empty", "No changes. The working tree is clean.")); return; }
+  const LABEL = { M: "modified", A: "added", D: "deleted", R: "renamed", U: "new file", C: "conflict" };
+  for (const c of st.changes) {
+    const row = el("div", "chg" + (S.active === "diff:" + c.path ? " on" : ""));
+    const s = el("span", "s " + c.status, c.status); s.title = LABEL[c.status] || c.status;
+    const slash = c.rel.lastIndexOf("/");
+    row.append(s, el("span", "n", c.rel.slice(slash + 1)), el("span", "d", slash > 0 ? c.rel.slice(0, slash) : ""));
+    row.title = `${c.rel} · ${LABEL[c.status] || c.status}${c.staged ? " (staged)" : ""}`;
+    row.onclick = () => openDiff(c);
+    box.append(row);
+  }
+}
+async function openDiff(c) {
+  const id = "diff:" + c.path, w = currentWs();
+  let tab = S.tabs.find((t) => t.id === id);
+  try {
+    const r = await api(`/api/git/diff?${q({ root: w.path, path: c.path })}`);
+    if (!tab) { tab = { id, path: c.path, name: baseName(c.rel), kind: "diff" }; S.tabs.push(tab); }
+    tab.diff = r.diff; tab.status = c.status;
+  } catch (e) { toast(e.message, true); return; }
+  activate(id); renderChanges();
+}
+function renderDiff(text) {
+  const box = $("#file-diff"); box.replaceChildren();
+  if (!text || !text.trim()) { box.append(el("div", "files-empty", "No differences.")); return; }
+  let oldNo = 0, newNo = 0;
+  const frag = document.createDocumentFragment();
+  for (const line of text.split("\n")) {
+    let cls = "", a = "", b = "";
+    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(line);
+    if (hunk) { oldNo = +hunk[1]; newNo = +hunk[2]; cls = "hunk"; }
+    else if (/^(diff |index |--- |\+\+\+ |new file|deleted file|similarity|rename |old mode|new mode|\\ No newline)/.test(line)) cls = "meta";
+    else if (line.startsWith("+")) { cls = "add"; b = newNo++; }
+    else if (line.startsWith("-")) { cls = "del"; a = oldNo++; }
+    else if (line.startsWith(" ")) { a = oldNo++; b = newNo++; }
+    const row = el("div", "dl " + cls);
+    row.append(el("span", "ln", String(a)), el("span", "ln", String(b)), el("span", "c", line));
+    frag.append(row);
+  }
+  box.append(frag);
+  box.scrollTop = 0;
+}
+$("#ptab-files").onclick = () => setPane("files");
+$("#ptab-changes").onclick = () => setPane("changes");
+$("#changes-refresh").onclick = loadChanges;
+$("#file-open").onclick = () => { const t = activeTab(); if (t?.path) openFile(t.path); };
 $("#code").oninput = () => {
   const tab = activeTab(); if (!tab) return;
   tab.text = $("#code").value; const was = tab.dirty; tab.dirty = tab.text !== tab.orig;
@@ -1399,7 +1515,10 @@ function renderStatus() {
   bar.append(live, el("span", "faint", `v${S.state.version}`));
 }
 
-const RENDER = { side: renderSide, tabs: renderTabs, composer: renderComposer, files: renderTree, status: renderStatus, settings: renderSettings };
+const RENDER = {
+  side: renderSide, tabs: renderTabs, composer: renderComposer, status: renderStatus, settings: renderSettings,
+  files: () => { renderTree(); loadChanges(); },
+};
 
 // ── panels ──────────────────────────────────────────────────────────────────
 function toggleSide() { const a = $("#app"); a.classList.toggle("no-side"); pref.set("noSide", a.classList.contains("no-side")); renderTabs(); }
@@ -1430,6 +1549,8 @@ function onMessage(m) {
       schedule("side", "status");
       if (m.id === S.sel) schedule("composer");
       if (m.event.type === "artifact") S.tree.clear(), schedule("files");
+      // A finished task may have changed files: refresh the tree and the changes.
+      if (m.event.type === "done" && norm(m.task?.cwd) === norm(S.ws)) { S.tree.clear(); schedule("files"); }
       break;
     }
     case "task_update": S.tasks.set(m.task.id, m.task); if (m.task.id === S.sel) renderChat(); schedule("side", "status", "composer"); break;
@@ -1457,6 +1578,8 @@ async function refresh() {
     }
     const params = new URLSearchParams(location.search);
     if (params.get("file") && !S.tabs.length) openFile(params.get("file"));
+    if (params.get("pane")) setPane(params.get("pane"));
+    if (params.get("diff") && !S.tabs.length) { const p = params.get("diff"); openDiff({ path: p, rel: relTo(currentWs()?.path, p), status: "M" }); }
     const linked = Number(params.get("task"));
     if (S.sel == null && S.tasks.has(linked)) { selectTask(linked); }
     else if (S.sel != null && S.tasks.has(S.sel)) { S.logs.delete(S.sel); selectTask(S.sel); }
@@ -1487,6 +1610,7 @@ $("#splash").onclick = () => { if (S.state) hideSplash(); };
 setInterval(() => { if ([...S.tasks.values()].some((t) => t.status === "running")) schedule("side"); schedule("status"); }, 1000);
 
 renderTabs();
+setPane(pref.get("pane", "files"));
 if (!token) $("#splash-status").textContent = "Open fermi from the app or with `fermi ui`. The link includes your access key.";
 else connect();
 </script>

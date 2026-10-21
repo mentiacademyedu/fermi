@@ -2,5 +2,6 @@
 //! the `fermi` CLI/TUI and the desktop app.
 
 pub mod files;
+pub mod git;
 pub mod server;
 pub mod setup;

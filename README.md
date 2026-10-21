@@ -93,7 +93,8 @@ fermi ui                    # the same dashboard in your browser
 
 Everything the TUI does, in the browser: run tasks in parallel with live
 output, **reply to a finished task to continue the conversation** (same
-session, account and model), keep a history across restarts
+session, account and model), browse and edit workspace files, review what
+agents changed in a **Changes** panel (git status and diffs), keep a history across restarts
 (`~/.fermi/history`), edit profiles, see each account's login and usage,
 add or remove accounts, and log in
 (a terminal window opens for the provider's sign-in, and the page updates

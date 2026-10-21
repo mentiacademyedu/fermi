@@ -161,6 +161,8 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         .route("/api/fs/raw", get(fs_raw))
         .route("/api/fs/write", post(fs_write))
         .route("/api/fs/search", get(fs_search))
+        .route("/api/git/status", get(git_status))
+        .route("/api/git/diff", get(git_diff))
         .route("/api/ws", get(ws))
         .route_layer(middleware::from_fn_with_state(srv.clone(), require_token))
         .route("/", get(index))
@@ -651,6 +653,43 @@ async fn fs_search(State(s): S, Query(q): Query<SearchQuery>) -> Response {
     let needle = q.q.trim().to_string();
     match tokio::task::spawn_blocking(move || files::search(&root, &needle, contents)).await {
         Ok(hits) => Json(hits).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct RootQuery {
+    root: String,
+}
+
+async fn git_status(State(s): S, Query(q): Query<RootQuery>) -> Response {
+    let root = match files::check(&s.workspaces(), &q.root) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    match tokio::task::spawn_blocking(move || crate::git::status(&root)).await {
+        Ok(Ok(st)) => Json(st).into_response(),
+        Ok(Err(e)) => fs_err(e),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct DiffQuery {
+    root: String,
+    path: String,
+}
+
+async fn git_diff(State(s): S, Query(q): Query<DiffQuery>) -> Response {
+    let roots = s.workspaces();
+    // The file may be deleted, so check it like a new path (its folder must exist inside a workspace).
+    let (root, file) = match files::check(&roots, &q.root).and_then(|r| Ok((r, files::check_new(&roots, &q.path)?))) {
+        Ok(x) => x,
+        Err(e) => return fs_err(e),
+    };
+    match tokio::task::spawn_blocking(move || crate::git::diff(&root, &file)).await {
+        Ok(Ok(text)) => Json(json!({ "diff": text })).into_response(),
+        Ok(Err(e)) => fs_err(e),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     }
 }
