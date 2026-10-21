@@ -95,7 +95,9 @@ Everything the TUI does, in the browser: run tasks in parallel with live
 output, **reply to a finished task to continue the conversation** (same
 session, account and model), browse and edit workspace files, review what
 agents changed in a **Changes** panel (git status and diffs), open **terminals** in
-your workspaces (Ctrl+`; PowerShell on Windows, your `$SHELL` elsewhere), keep a history across restarts
+your workspaces (Ctrl+`; PowerShell on Windows, your `$SHELL` elsewhere), browse
+**trending GitHub repositories** and clone or analyze them with an editable prompt
+(read-only "Plan only" by default), keep a history across restarts
 (`~/.fermi/history`), edit profiles, see each account's login and usage,
 add or remove accounts, and log in
 (a terminal window opens for the provider's sign-in, and the page updates

@@ -247,6 +247,25 @@ button:disabled { opacity: .45; cursor: default; }
 .p-meta { grid-column: 1 / 3; color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p-edit { color: var(--faint); font-size: 12px; }
 
+/* trending */
+.tr-controls { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+.tr-controls .seg { margin: 0; grid-template-columns: repeat(3, auto); }
+.tr-controls .seg button { padding: 4px 12px; white-space: nowrap; }
+.tr-controls select { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); }
+.tr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.repo { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 8px; }
+.repo:hover { border-color: var(--line-2); }
+.repo .top { display: flex; align-items: baseline; gap: 10px; }
+.repo .nm { font-weight: 600; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.repo .nm span { font-weight: 400; color: var(--muted); }
+.repo .gain { color: var(--ok); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.repo .desc { color: var(--muted); font-size: 13px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.9em; overflow-wrap: anywhere; }
+.repo .meta { display: flex; gap: 14px; color: var(--faint); font-size: 12.5px; align-items: center; font-variant-numeric: tabular-nums; }
+.lang-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; vertical-align: -1px; background: var(--faint); }
+.repo .acts { display: flex; gap: 6px; margin-top: auto; padding-top: 4px; align-items: center; }
+.repo .acts .state { color: var(--faint); font-size: 12px; margin-left: auto; }
+.an-prompt { min-height: 230px !important; font: 13.5px/1.5 var(--sans) !important; }
+
 /* usage */
 #usage-range { grid-template-columns: repeat(3, auto); margin: 0 0 14px; }
 #usage-range button { padding: 4px 12px; white-space: nowrap; }
@@ -412,6 +431,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
     </div>
     <button class="new-task" id="new-task"><span data-i="plusCircle"></span>New task</button>
     <label class="search"><span data-i="search"></span><input id="search" placeholder="Search tasks" autocomplete="off"></label>
+    <button class="side-link" id="open-trending" style="flex:none"><span data-i="trend"></span>Trending repos</button>
     <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder (opens a folder picker)" data-i="folderPlus"></button></div>
     <nav class="ws-list" id="ws-list"></nav>
     <div class="side-foot">
@@ -481,6 +501,22 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
       <div class="img-view" id="file-image"><img id="file-img" alt=""></div>
       <div class="diff-view" id="file-diff"></div>
       <div class="file-msg" id="file-msg"></div>
+    </section>
+
+    <section class="view" id="view-trending" hidden>
+      <div class="settings">
+        <section style="max-width:1100px">
+          <div class="sec-head">
+            <div><h2>Trending on GitHub</h2><p class="sub" id="tr-sub">Loading…</p></div>
+            <div class="tr-controls">
+              <div class="seg" id="tr-period"><button data-p="daily">Today</button><button data-p="weekly">This week</button><button data-p="monthly">This month</button></div>
+              <select id="tr-lang" title="Language"></select>
+              <button class="icon-btn" id="tr-refresh" title="Refresh" data-i="refresh"></button>
+            </div>
+          </div>
+          <div class="tr-grid" id="tr-grid"></div>
+        </section>
+      </div>
     </section>
 
     <section class="view" id="view-term" hidden>
@@ -603,6 +639,26 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
   </form>
 </dialog>
 
+<dialog id="dlg-analyze" class="wide">
+  <form id="an-form" method="dialog">
+    <div><h3 id="an-title">Analyze</h3><div class="muted" id="an-sub">fermi clones the repository (latest commit only) and runs this prompt in it as a new task you can follow up on.</div></div>
+    <label class="f">Prompt <textarea class="paths an-prompt" name="prompt" spellcheck="false"></textarea></label>
+    <label class="pick" style="justify-self:start"><input type="checkbox" name="save"> Use this as my default analysis prompt</label>
+    <div class="row">
+      <label class="f">Model <select name="model"></select></label>
+      <label class="f">Effort <select name="effort"></select></label>
+      <label class="f">What the agent may do <select name="perm"></select></label>
+    </div>
+    <div class="faint" style="font-size:12.5px">Trending repositories are other people's code. "Plan only" lets the agent read everything without running or changing anything.</div>
+    <div class="err" id="an-err"></div>
+    <div class="actions">
+      <button type="button" class="ghost push-left" id="an-reset">Reset prompt</button>
+      <button type="button" class="ghost" id="an-cancel">Cancel</button>
+      <button type="submit" class="primary" id="an-go">Clone &amp; analyze</button>
+    </div>
+  </form>
+</dialog>
+
 <div id="toast"></div>
 
 <script>
@@ -634,6 +690,10 @@ const I = {
   refresh: '<path d="M20 11a8 8 0 0 0-14.7-4.4L3 9M4 13a8 8 0 0 0 14.7 4.4L21 15"/><path d="M3 4v5h5M21 20v-5h-5"/>',
   collapse: '<path d="m7 15 5-5 5 5"/>',
   terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/>',
+  trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+  fork: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7M12 12v5"/>',
+  external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
   branch: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-4 5-12 7"/>',
 };
 const svg = (name) => `<svg viewBox="0 0 24 24">${I[name] || ""}</svg>`;
@@ -802,7 +862,8 @@ function renderTabs() {
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
-    mk(f.id, f.name, f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code", true, f.dirty);
+    const ic = f.kind === "trending" ? "trend" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
+    mk(f.id, f.name, ic, true, f.dirty);
   }
   const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
   bar.append(add, el("span", "spacer"));
@@ -813,12 +874,14 @@ function renderTabs() {
 function activate(id) {
   S.active = id;
   const tab = S.tabs.find((t) => t.id === id);
-  const isTerm = tab?.kind === "term";
+  const isTerm = tab?.kind === "term", isTrend = id === "trending";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
   $("#view-term").hidden = !isTerm;
-  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm;
+  $("#view-trending").hidden = !isTrend;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend;
   if (isTerm) showTerm(tab);
+  else if (isTrend) loadTrending();
   else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
@@ -1334,6 +1397,147 @@ function showFile(tab) {
   }
 }
 const activeTab = () => S.tabs.find((t) => t.id === S.active);
+
+// ── trending repositories ───────────────────────────────────────────────────
+const TR_LANGS = ["", "Python", "TypeScript", "JavaScript", "Rust", "Go", "Java", "C++", "C#", "C", "Swift", "Kotlin", "Ruby", "PHP", "Shell", "Zig", "Dart", "Lua"];
+S.tr = { period: pref.get("trPeriod", "daily"), lang: pref.get("trLang", ""), data: null, busy: new Map(), choose: false };
+const clones = pref.get("clones", {}); // "owner/name" -> local path
+const DEFAULT_ANALYZE = `Analyze the GitHub repository {repo} in this folder{desc}.
+
+Cover:
+1. What it does and who it's for
+2. How it's organized: main folders, entry points, core modules
+3. Key technologies and notable dependencies
+4. How to install, build and run it
+5. Code quality: tests, documentation, structure
+6. Anything worth knowing before using it: security concerns, license, how actively it's maintained
+
+Don't run any of its code or install anything. Point to specific files. Keep it concise.`;
+$("#tr-lang").replaceChildren(...TR_LANGS.map((l) => opt(l, l || "Any language")));
+function openTrending() {
+  if (!S.tabs.some((t) => t.id === "trending")) S.tabs.unshift({ id: "trending", name: "Trending", kind: "trending" });
+  activate("trending");
+}
+async function loadTrending(refresh = false) {
+  document.querySelectorAll("#tr-period button").forEach((b) => (b.className = b.dataset.p === S.tr.period ? "on" : ""));
+  $("#tr-lang").value = S.tr.lang;
+  const key = `${S.tr.period}|${S.tr.lang}`;
+  if (S.tr.key !== key || refresh || !S.tr.data) {
+    S.tr.key = key; S.tr.data = null; renderTrending();
+    try {
+      const d = await api(`/api/trending?${q({ period: S.tr.period, language: S.tr.lang, refresh: refresh ? "true" : "false" })}`);
+      if (S.tr.key === key) S.tr.data = d;
+    } catch (e) { S.tr.data = { error: e.message }; }
+  }
+  renderTrending();
+}
+const clonedPath = (r) => {
+  const p = clones[`${r.owner}/${r.name}`];
+  return p && workspaces().some((w) => norm(w.path) === norm(p)) ? p : null;
+};
+function renderTrending() {
+  const grid = $("#tr-grid"), d = S.tr.data; grid.replaceChildren();
+  const sub = $("#tr-sub"); sub.replaceChildren();
+  if (!d) { sub.textContent = "Loading…"; grid.append(el("div", "faint", "Loading trending repositories…")); return; }
+  if (d.error) { sub.textContent = ""; grid.append(el("div", "err", d.error)); return; }
+  sub.append(`From ${d.source} · clones go to ${d.clone_root || "a folder you pick on the first clone"} `);
+  const change = el("button", "linkish", "change"); change.style.color = "var(--accent)";
+  change.onclick = () => { S.tr.choose = true; toast("The next clone will ask where to put it."); };
+  if (d.clone_root) sub.append(change);
+  if (!d.repos.length) { grid.append(el("div", "faint", "Nothing trending for this filter.")); return; }
+  const label = { daily: "today", weekly: "this week", monthly: "this month" }[S.tr.period];
+  for (const r of d.repos) {
+    const key = `${r.owner}/${r.name}`, busy = S.tr.busy.get(key), local = clonedPath(r);
+    const card = el("div", "repo");
+    const top = el("div", "top"), nm = el("div", "nm");
+    nm.append(el("span", null, `${r.owner} / `), r.name); nm.title = key;
+    top.append(nm);
+    if (r.gained != null) top.append(el("span", "gain", `▲ ${r.gained.toLocaleString()} ${label}`));
+    card.append(top, el("div", "desc", r.description || "No description."));
+    const meta = el("div", "meta");
+    if (r.language) { const l = el("span"); const dot = el("span", "lang-dot"); if (r.color) dot.style.background = r.color; l.append(dot, r.language); meta.append(l); }
+    const stars = el("span"); stars.append(icon("star"), ` ${r.stars.toLocaleString()}`); stars.title = "stars";
+    const forks = el("span"); forks.append(icon("fork"), ` ${r.forks.toLocaleString()}`); forks.title = "forks";
+    meta.append(stars, forks);
+    card.append(meta);
+    const acts = el("div", "acts");
+    const an = el("button", "small primary", "Analyze"); an.disabled = !!busy; an.onclick = () => openAnalyze(r);
+    const cl = el("button", "small", local ? "Open" : "Clone"); cl.disabled = !!busy;
+    cl.title = local ? local : "Clone the latest commit and add it as a workspace";
+    cl.onclick = async () => {
+      if (local) { selectWs(local); newTask(); return; }
+      const path = await cloneRepo(r);
+      if (path) { toast(`Cloned ${key} to ${path}`); renderTrending(); }
+    };
+    const gh = el("button", "small ghost"); gh.append(icon("external"), " GitHub"); gh.title = r.url;
+    gh.onclick = () => api("/api/open-url", { url: r.url }).catch((e) => toast(e.message, true));
+    acts.append(an, cl, gh);
+    if (busy) acts.append(el("span", "state", busy));
+    card.append(acts); grid.append(card);
+  }
+}
+async function cloneRepo(r) {
+  const key = `${r.owner}/${r.name}`;
+  S.tr.busy.set(key, "Cloning…"); renderTrending();
+  try {
+    const res = await api("/api/repos/clone", { owner: r.owner, name: r.name, choose: S.tr.choose });
+    S.tr.choose = false;
+    if (res.cancelled) return null;
+    clones[key] = res.path; pref.set("clones", clones);
+    if (S.tr.data && !S.tr.data.clone_root) S.tr.data.clone_root = res.path.replace(/[\\/][^\\/]+$/, "");
+    return res.path;
+  } catch (e) { toast(e.message, true); return null; }
+  finally { S.tr.busy.delete(key); renderTrending(); }
+}
+let analyzing = null;
+function analyzePrompt(r) {
+  const tpl = pref.get("analyzePrompt", DEFAULT_ANALYZE);
+  return tpl.replaceAll("{repo}", `${r.owner}/${r.name}`).replaceAll("{desc}", r.description ? ` ("${r.description}")` : "");
+}
+function openAnalyze(r) {
+  analyzing = r;
+  const f = $("#an-form");
+  $("#an-title").textContent = `Analyze ${r.owner}/${r.name}`;
+  $("#an-go").textContent = clonedPath(r) ? "Analyze" : "Clone & analyze";
+  $("#an-err").textContent = "";
+  f.prompt.value = analyzePrompt(r); f.save.checked = false;
+  f.model.replaceChildren(...modelOptions()); f.model.value = "";
+  f.effort.replaceChildren(opt("", "Auto effort"), ...S.state.efforts.map((e) => opt(e, e)));
+  f.perm.replaceChildren(...["plan", "acceptEdits", "bypassPermissions", "default"].map((p) => opt(p, PERM_LONG[p])));
+  f.perm.value = "plan";
+  $("#dlg-analyze").showModal(); f.prompt.focus();
+}
+$("#an-cancel").onclick = () => $("#dlg-analyze").close();
+$("#an-reset").onclick = () => { if (analyzing) { pref.set("analyzePrompt", DEFAULT_ANALYZE); $("#an-form").prompt.value = analyzePrompt(analyzing); } };
+$("#an-form").onsubmit = async (e) => {
+  e.preventDefault();
+  const r = analyzing, f = $("#an-form");
+  const prompt = f.prompt.value.trim();
+  if (!r || !prompt) return;
+  if (f.save.checked) {
+    // Store it as a template: the repo name and description become placeholders again.
+    let tpl = prompt.replaceAll(`${r.owner}/${r.name}`, "{repo}");
+    if (r.description) tpl = tpl.replace(` ("${r.description}")`, "{desc}");
+    pref.set("analyzePrompt", tpl);
+  }
+  $("#an-go").disabled = true; $("#an-err").textContent = "";
+  try {
+    const path = clonedPath(r) || (await cloneRepo(r));
+    if (!path) return;
+    const res = await api("/api/tasks", { prompt, cwd: path, model: f.model.value, effort: f.effort.value, permission: f.perm.value });
+    $("#dlg-analyze").close();
+    selectWs(path);
+    S.tasks.set(res.id, { id: res.id, prompt, cwd: path, status: "running", started: nowS() });
+    S.logs.set(res.id, [{ type: "user", text: prompt }]);
+    S.expandedWs.add(norm(path)); pref.set("expandedWs", [...S.expandedWs]);
+    selectTask(res.id);
+  } catch (err) { $("#an-err").textContent = err.message; }
+  finally { $("#an-go").disabled = false; }
+};
+document.querySelectorAll("#tr-period button").forEach((b) => (b.onclick = () => { S.tr.period = b.dataset.p; pref.set("trPeriod", S.tr.period); loadTrending(); }));
+$("#tr-lang").onchange = () => { S.tr.lang = $("#tr-lang").value; pref.set("trLang", S.tr.lang); loadTrending(); };
+$("#tr-refresh").onclick = () => loadTrending(true);
+$("#open-trending").onclick = openTrending;
 
 // ── terminals ───────────────────────────────────────────────────────────────
 let termSeq = 0;
@@ -1870,6 +2074,7 @@ async function refresh() {
     if (params.get("file") && !S.tabs.length) openFile(params.get("file"));
     if (params.get("pane")) setPane(params.get("pane"));
     if (params.get("view") === "settings" && S.active !== "settings") openSettings();
+    if (params.get("view") === "trending" && S.active !== "trending") openTrending();
     if (params.get("term") && !S.tabs.some((t) => t.kind === "term")) newTerm();
     if (params.get("diff") && !S.tabs.length) { const p = params.get("diff"); openDiff({ path: p, rel: relTo(currentWs()?.path, p), status: "M" }); }
     const linked = Number(params.get("task"));

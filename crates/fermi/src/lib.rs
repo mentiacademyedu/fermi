@@ -6,3 +6,4 @@ pub mod git;
 pub mod server;
 pub mod setup;
 pub mod term;
+pub mod trending;

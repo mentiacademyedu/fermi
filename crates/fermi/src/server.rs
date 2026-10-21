@@ -40,6 +40,8 @@ struct Srv {
     probing: Mutex<HashSet<String>>,
     /// Folders the user added as workspaces (`~/.fermi/workspaces.json`).
     added: Mutex<Vec<PathBuf>>,
+    /// Trending results by (period, language), with the time fetched.
+    trending: Mutex<HashMap<String, (u64, Value)>>,
 }
 
 type S = State<Arc<Srv>>;
@@ -136,6 +138,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         auth: Mutex::new(HashMap::new()),
         probing: Mutex::new(HashSet::new()),
         added: Mutex::new(vec![]),
+        trending: Mutex::new(HashMap::new()),
     });
     let saved: Vec<String> =
         std::fs::read(srv.workspaces_file()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
@@ -166,6 +169,9 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         .route("/api/fs/search", get(fs_search))
         .route("/api/attachments", post(attach).layer(axum::extract::DefaultBodyLimit::max(25 * 1024 * 1024)))
         .route("/api/usage", get(usage))
+        .route("/api/trending", get(trending))
+        .route("/api/repos/clone", post(clone_repo))
+        .route("/api/open-url", post(open_url))
         .route("/api/git/status", get(git_status))
         .route("/api/git/diff", get(git_diff))
         .route("/api/ws", get(ws))
@@ -664,6 +670,106 @@ async fn fs_search(State(s): S, Query(q): Query<SearchQuery>) -> Response {
         Ok(hits) => Json(hits).into_response(),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     }
+}
+
+// ── trending repositories ───────────────────────────────────────────────────
+
+impl Srv {
+    fn clone_root_file(&self) -> PathBuf {
+        self.hub.engine().home.join("clone-root.txt")
+    }
+    /// Where clones go, once chosen.
+    fn clone_root(&self) -> Option<PathBuf> {
+        let s = std::fs::read_to_string(self.clone_root_file()).ok()?;
+        Some(PathBuf::from(s.trim())).filter(|p| p.is_dir())
+    }
+}
+
+#[derive(Deserialize)]
+struct TrendingQuery {
+    #[serde(default)]
+    period: Option<String>,
+    #[serde(default)]
+    language: Option<String>,
+    #[serde(default)]
+    refresh: Option<bool>,
+}
+
+async fn trending(State(s): S, Query(q): Query<TrendingQuery>) -> Response {
+    let period = crate::trending::period(q.period.as_deref().unwrap_or("daily"));
+    let language = q.language.filter(|l| !l.trim().is_empty());
+    let key = format!("{period}|{}", language.as_deref().unwrap_or(""));
+    let fresh = |t: u64| now().saturating_sub(t) < 20 * 60;
+    let cached = s.trending.lock().unwrap().get(&key).filter(|(t, _)| fresh(*t)).map(|(_, v)| v.clone());
+    let data = match cached.filter(|_| q.refresh != Some(true)) {
+        Some(v) => v,
+        None => match crate::trending::fetch(period, language.as_deref()).await {
+            Ok((repos, source)) => {
+                let v = json!({ "repos": repos, "source": source, "fetched": now() });
+                s.trending.lock().unwrap().insert(key, (now(), v.clone()));
+                v
+            }
+            Err(e) => return err(StatusCode::BAD_GATEWAY, format!("couldn't load trending repositories: {e:#}")),
+        },
+    };
+    let mut data = data;
+    data["clone_root"] = json!(s.clone_root());
+    Json(data).into_response()
+}
+
+#[derive(Deserialize)]
+struct CloneBody {
+    owner: String,
+    name: String,
+    /// Ask for the folder even if one was chosen before.
+    #[serde(default)]
+    choose: bool,
+}
+
+/// Shallow-clones a GitHub repository and adds it as a workspace. The first
+/// time (or when asked), the system folder picker chooses where clones go.
+async fn clone_repo(State(s): S, Json(b): Json<CloneBody>) -> Response {
+    let root = match s.clone_root().filter(|_| !b.choose) {
+        Some(r) => r,
+        None => {
+            let mut dialog = rfd::AsyncFileDialog::new().set_title("Choose where cloned repositories go");
+            if let Some(h) = dirs_home() {
+                dialog = dialog.set_directory(h);
+            }
+            let Some(picked) = dialog.pick_folder().await else { return Json(json!({ "cancelled": true })).into_response() };
+            let dir = picked.path().to_path_buf();
+            let _ = std::fs::write(s.clone_root_file(), dir.to_string_lossy().as_bytes());
+            dir
+        }
+    };
+    let (owner, name) = (b.owner.clone(), b.name.clone());
+    let res = tokio::task::spawn_blocking(move || crate::trending::clone(&owner, &name, &root)).await;
+    match res {
+        Ok(Ok(dest)) => match add_workspace(&s, &dest) {
+            Ok(dir) => Json(json!({ "path": dir })).into_response(),
+            Err(e) => fs_err(e),
+        },
+        Ok(Err(e)) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct UrlBody {
+    url: String,
+}
+
+/// Opens a GitHub page in the default browser (the desktop window can't
+/// navigate away from the app).
+async fn open_url(Json(b): Json<UrlBody>) -> Response {
+    let ok = b.url.starts_with("https://github.com/")
+        && b.url.len() < 300
+        && b.url.chars().all(|c| c.is_ascii_alphanumeric() || "/:._-?=&#%".contains(c));
+    if !ok {
+        return err(StatusCode::BAD_REQUEST, "only github.com links can be opened");
+    }
+    open_browser(&b.url);
+    Json(json!({ "ok": true })).into_response()
 }
 
 #[derive(Deserialize)]
