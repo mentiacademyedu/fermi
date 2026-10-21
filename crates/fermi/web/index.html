@@ -73,7 +73,6 @@ button:disabled { opacity: .45; cursor: default; }
 /* ── sidebar ───────────────────────────────────────────────────────────── */
 .side { background: var(--side); display: flex; flex-direction: column; min-height: 0; padding: 10px 10px 8px; gap: 8px; }
 .side-top { display: flex; align-items: center; gap: 8px; padding: 2px 4px 4px; }
-.logo-tile { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: #0e1014; color: #5cc8ff; font: 800 15px var(--sans); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
 .brand-name { font: 700 17px var(--sans); letter-spacing: -.01em; }
 .brand-name small { font: 600 9.5px var(--mono); letter-spacing: .08em; padding: 1px 5px; margin-left: 6px; border-radius: 4px; background: var(--text); color: var(--bg); vertical-align: 2px; }
 .side-top .icon-btn { margin-left: auto; }
@@ -124,7 +123,6 @@ button:disabled { opacity: .45; cursor: default; }
 .chat-scroll { flex: 1; overflow-y: auto; min-height: 0; }
 .hero { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px 24px; gap: 20px; }
 .hero-title { display: flex; align-items: center; gap: 14px; font: 600 30px var(--sans); letter-spacing: -.02em; }
-.hero-title .logo-tile { width: 44px; height: 44px; border-radius: 11px; font-size: 25px; }
 .badge { font: 500 11px var(--mono); color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 2px 7px; }
 .badge.plain { color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); }
 .hero-sub { color: var(--muted); margin-top: -10px; }
@@ -248,6 +246,35 @@ button:disabled { opacity: .45; cursor: default; }
 .p-name { font-weight: 600; display: flex; gap: 6px; align-items: center; }
 .p-meta { grid-column: 1 / 3; color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .p-edit { color: var(--faint); font-size: 12px; }
+
+/* usage */
+#usage-range { grid-template-columns: repeat(3, auto); margin: 0 0 14px; }
+#usage-range button { padding: 4px 12px; white-space: nowrap; }
+.usage-tables .utable { align-self: start; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.tile { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; background: var(--panel); }
+.tile .v { font: 600 22px var(--sans); letter-spacing: -.01em; }
+.tile .l { color: var(--muted); font-size: 12.5px; }
+.tile .s { color: var(--faint); font-size: 12px; margin-top: 2px; }
+.chart-card { border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px 8px; background: var(--panel); margin-bottom: 12px; position: relative; }
+.chart-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
+.chart svg { width: 100%; height: 190px; display: block; overflow: visible; stroke: none; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { fill: var(--faint); font: 11px var(--sans); }
+.chart .bar { fill: var(--accent); }
+.chart .hit { fill: transparent; cursor: default; }
+.chart .hit:hover + .bar, .chart .bar.on { fill: color-mix(in srgb, var(--accent) 75%, var(--text)); }
+.chart-tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 10px; font-size: 12px; box-shadow: var(--shadow); white-space: nowrap; z-index: 2; }
+.chart-tip b { display: block; font-size: 12.5px; margin-bottom: 2px; }
+.chart-empty { color: var(--faint); font-size: 13px; padding: 40px 0; text-align: center; }
+.usage-tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.utable { width: 100%; border-collapse: collapse; font-size: 13px; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--panel); }
+.utable th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.utable td { padding: 7px 10px; border-bottom: 1px solid var(--line); }
+.utable tr:last-child td { border-bottom: 0; }
+.utable td.n, .utable th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.share { display: inline-block; width: 60px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; vertical-align: middle; }
+.share i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
 
 /* ── files panel ───────────────────────────────────────────────────────── */
 .files { background: var(--side); display: flex; flex-direction: column; min-height: 0; }
@@ -380,7 +407,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
   <!-- sidebar -->
   <aside class="side">
     <div class="side-top">
-      <span class="logo-tile">F</span><span class="brand-name">fermi<small>HARNESS</small></span>
+      <span class="brand-name">fermi<small>HARNESS</small></span>
       <button class="icon-btn" id="hide-side" title="Hide sidebar (Ctrl+B)" data-i="panelLeft"></button>
     </div>
     <button class="new-task" id="new-task"><span data-i="plusCircle"></span>New task</button>
@@ -399,7 +426,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
     <section class="view" id="view-chat">
       <div class="chat-scroll" id="chat-scroll">
         <div class="hero" id="hero">
-          <div class="hero-title"><span class="logo-tile">F</span>What should we build?<span class="badge">Preview</span></div>
+          <div class="hero-title">What should we build?<span class="badge">Preview</span></div>
           <div class="hero-sub" id="hero-sub"></div>
           <div id="hero-slot" class="composer-wrap"></div>
         </div>
@@ -462,6 +489,18 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
 
     <section class="view" id="view-settings" hidden>
       <div class="settings">
+        <section>
+          <div class="sec-head">
+            <div><h2>Usage</h2><p class="sub">Every run, by account and model. Cost is the API-equivalent value Claude Code reports, not your subscription bill.</p></div>
+            <div class="seg" id="usage-range"><button data-d="7">7 days</button><button data-d="14" class="on">14 days</button><button data-d="30">30 days</button></div>
+          </div>
+          <div class="tiles" id="usage-tiles"></div>
+          <div class="chart-card">
+            <div class="chart-title">Tokens per day</div>
+            <div class="chart" id="usage-chart"></div>
+          </div>
+          <div class="usage-tables"><table class="utable" id="usage-accounts"></table><table class="utable" id="usage-models"></table></div>
+        </section>
         <section>
           <div class="sec-head"><div><h2>Accounts</h2><p class="sub">Each account has its own login. Tasks use the accounts of their profile.</p></div><button class="primary small" id="add-acct">+ Add account</button></div>
           <div class="cards" id="accounts"></div>
@@ -1498,7 +1537,101 @@ $("#ws-form").onsubmit = async (e) => {
 };
 
 // ── settings: accounts & profiles ───────────────────────────────────────────
-function renderSettings() { if (S.state) { renderAccounts(); renderProfiles(); } }
+function renderSettings() { if (S.state) { renderAccounts(); renderProfiles(); loadUsage(); } }
+
+// ── usage ───────────────────────────────────────────────────────────────────
+S.usageDays = pref.get("usageDays", 14);
+async function loadUsage() {
+  try { S.usage = (await api(`/api/usage?days=${S.usageDays}`)).rows; renderUsage(); }
+  catch (e) { $("#usage-chart").replaceChildren(el("div", "chart-empty", e.message)); }
+}
+const dayKey = (d) => d.toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
+const fmtCost = (c) => c >= 100 ? `$${c.toFixed(0)}` : `$${c.toFixed(2)}`;
+function renderUsage() {
+  const rows = S.usage || [];
+  document.querySelectorAll("#usage-range button").forEach((b) => (b.className = +b.dataset.d === S.usageDays ? "on" : ""));
+  const tok = (r) => (r.input_tokens || 0) + (r.output_tokens || 0);
+  const sum = (xs, f) => xs.reduce((a, x) => a + f(x), 0);
+  const ok = rows.filter((r) => r.status === "ok").length, limited = rows.filter((r) => r.status === "limited").length;
+  const tiles = [
+    [String(rows.length), "Runs", `${ok} ok · ${rows.length - ok - limited} failed · ${limited} limited`],
+    [fmtTok(sum(rows, tok)), "Tokens", `${fmtTok(sum(rows, (r) => r.input_tokens || 0))} in · ${fmtTok(sum(rows, (r) => r.output_tokens || 0))} out`],
+    [fmtCost(sum(rows, (r) => r.cost_usd || 0)), "API-equivalent cost", "as reported by Claude Code"],
+    [rows.length ? `${Math.round(sum(rows, (r) => r.secs || 0) / rows.length)}s` : "–", "Average run", "wall time per run"],
+  ];
+  $("#usage-tiles").replaceChildren(...tiles.map(([v, l, s]) => { const t = el("div", "tile"); t.append(el("div", "v", v), el("div", "l", l), el("div", "s", s)); return t; }));
+
+  // Daily buckets, oldest first, in local time.
+  const days = [];
+  for (let i = S.usageDays - 1; i >= 0; i--) { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - i); days.push({ key: dayKey(d), date: d, tokens: 0, runs: 0, cost: 0 }); }
+  const byKey = new Map(days.map((d) => [d.key, d]));
+  for (const r of rows) { const d = byKey.get(dayKey(new Date(r.ts * 1000))); if (d) { d.tokens += tok(r); d.runs++; d.cost += r.cost_usd || 0; } }
+  drawDaily(days);
+
+  const table = (id, title, keyOf, labelOf) => {
+    const groups = new Map();
+    for (const r of rows) { const k = keyOf(r); const g = groups.get(k) || { runs: 0, tokens: 0, cost: 0 }; g.runs++; g.tokens += tok(r); g.cost += r.cost_usd || 0; groups.set(k, g); }
+    const total = sum([...groups.values()], (g) => g.tokens) || 1;
+    const t = $(id); t.replaceChildren();
+    const head = el("tr"); for (const [h, n] of [[title], ["Runs", 1], ["Tokens", 1], ["Cost", 1], ["Share"]]) { const th = el("th", n ? "n" : "", h); head.append(th); }
+    t.append(head);
+    if (!groups.size) { const tr = el("tr"); const td = el("td", "faint", "No runs in this period."); td.colSpan = 5; tr.append(td); t.append(tr); return; }
+    for (const [k, g] of [...groups].sort((a, b) => b[1].tokens - a[1].tokens)) {
+      const tr = el("tr");
+      const bar = el("span", "share"); const fill = el("i"); fill.style.width = `${Math.max(2, Math.round((g.tokens / total) * 100))}%`; bar.append(fill);
+      const share = el("td"); share.append(bar, document.createTextNode(` ${Math.round((g.tokens / total) * 100)}%`));
+      tr.append(el("td", null, labelOf(k)), el("td", "n", String(g.runs)), el("td", "n", fmtTok(g.tokens)), el("td", "n", fmtCost(g.cost)), share);
+      t.append(tr);
+    }
+  };
+  table("#usage-accounts", "Account", (r) => r.account, (k) => k);
+  table("#usage-models", "Model", (r) => r.model, (k) => S.state?.models.find((m) => m.id === k)?.label || k);
+}
+function drawDaily(days) {
+  const box = $("#usage-chart"); box.replaceChildren();
+  const max = Math.max(...days.map((d) => d.tokens));
+  if (!max) { box.append(el("div", "chart-empty", "No runs in this period.")); return; }
+  const NS = "http://www.w3.org/2000/svg";
+  const mk = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); return n; };
+  const W = box.clientWidth || 800, H = 190, L = 44, B = 22, T = 6;
+  const plotW = W - L, plotH = H - B - T;
+  // A round top for the axis: 1, 2 or 5 times a power of ten.
+  const step = (() => { const raw = max / 3, p = 10 ** Math.floor(Math.log10(raw)); return [1, 2, 5, 10].map((m) => m * p).find((s) => s >= raw); })();
+  const top = Math.ceil(max / step) * step;
+  const svgEl = mk("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Tokens per day" });
+  for (let v = 0; v <= top; v += step) {
+    const y = T + plotH - (v / top) * plotH;
+    svgEl.append(mk("line", { class: "grid", x1: L, x2: W, y1: y, y2: y }));
+    const lab = mk("text", { class: "axis", x: L - 8, y: y + 4, "text-anchor": "end" });
+    lab.textContent = fmtTok(v).replace(/\.0(?=[kM])/, ""); svgEl.append(lab);
+  }
+  const slot = plotW / days.length, bw = Math.max(3, Math.min(36, slot - 2));
+  const every = Math.ceil(days.length / 8);
+  const tip = el("div", "chart-tip"); tip.hidden = true; box.append(tip);
+  days.forEach((d, i) => {
+    const x = L + i * slot + (slot - bw) / 2, h = (d.tokens / top) * plotH, y = T + plotH - h;
+    const hit = mk("rect", { class: "hit", x: L + i * slot, y: T, width: slot, height: plotH });
+    // Bar with a 4px rounded top, square on the baseline.
+    const r = Math.min(4, bw / 2, h);
+    const base = y + h;
+    const bar = mk("path", { class: "bar", d: h ? `M${x},${base} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${base} Z` : "" });
+    hit.onmouseenter = () => {
+      bar.classList.add("on"); tip.hidden = false;
+      tip.replaceChildren(el("b", null, d.date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })),
+        el("div", null, `${fmtTok(d.tokens)} tokens · ${d.runs} run${d.runs === 1 ? "" : "s"}`), el("div", "faint", d.cost ? fmtCost(d.cost) : ""));
+      const tx = Math.min(Math.max(x + bw / 2 - 70, 0), W - 150);
+      tip.style.left = `${tx + 14}px`; tip.style.top = `${Math.max(0, y - 54) + 30}px`;
+    };
+    hit.onmouseleave = () => { bar.classList.remove("on"); tip.hidden = true; };
+    svgEl.append(hit, bar);
+    if (i % every === 0 || i === days.length - 1) {
+      const lab = mk("text", { class: "axis", x: x + bw / 2, y: H - 6, "text-anchor": "middle" });
+      lab.textContent = d.date.toLocaleDateString(undefined, { month: "short", day: "numeric" }); svgEl.append(lab);
+    }
+  });
+  box.prepend(svgEl);
+}
+document.querySelectorAll("#usage-range button").forEach((b) => (b.onclick = () => { S.usageDays = +b.dataset.d; pref.set("usageDays", S.usageDays); loadUsage(); }));
 function renderAccounts() {
   const box = $("#accounts"); box.replaceChildren();
   const accts = S.state.accounts;
@@ -1736,6 +1869,7 @@ async function refresh() {
     const params = new URLSearchParams(location.search);
     if (params.get("file") && !S.tabs.length) openFile(params.get("file"));
     if (params.get("pane")) setPane(params.get("pane"));
+    if (params.get("view") === "settings" && S.active !== "settings") openSettings();
     if (params.get("term") && !S.tabs.some((t) => t.kind === "term")) newTerm();
     if (params.get("diff") && !S.tabs.length) { const p = params.get("diff"); openDiff({ path: p, rel: relTo(currentWs()?.path, p), status: "M" }); }
     const linked = Number(params.get("task"));

@@ -165,6 +165,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         .route("/api/fs/write", post(fs_write))
         .route("/api/fs/search", get(fs_search))
         .route("/api/attachments", post(attach).layer(axum::extract::DefaultBodyLimit::max(25 * 1024 * 1024)))
+        .route("/api/usage", get(usage))
         .route("/api/git/status", get(git_status))
         .route("/api/git/diff", get(git_diff))
         .route("/api/ws", get(ws))
@@ -663,6 +664,30 @@ async fn fs_search(State(s): S, Query(q): Query<SearchQuery>) -> Response {
         Ok(hits) => Json(hits).into_response(),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
     }
+}
+
+#[derive(Deserialize)]
+struct UsageQuery {
+    #[serde(default)]
+    days: Option<u64>,
+}
+
+/// Runs from `usage.jsonl` in the last `days` days. The page groups them by
+/// day in the viewer's time zone.
+async fn usage(State(s): S, Query(q): Query<UsageQuery>) -> Response {
+    let since = now().saturating_sub(q.days.unwrap_or(14).clamp(1, 365) * 86_400);
+    let path = s.hub.engine().home.join("usage.jsonl");
+    let rows = tokio::task::spawn_blocking(move || {
+        std::fs::read_to_string(path)
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .filter(|v| v["ts"].as_u64().unwrap_or(0) >= since)
+            .collect::<Vec<_>>()
+    })
+    .await
+    .unwrap_or_default();
+    Json(json!({ "since": since, "rows": rows })).into_response()
 }
 
 #[derive(Deserialize)]
