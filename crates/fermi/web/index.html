@@ -94,6 +94,11 @@ button:disabled { opacity: .45; cursor: default; }
 .ws-row .x { visibility: hidden; width: 22px; height: 22px; }
 .ws-row:hover .x { visibility: visible; }
 .ws-row svg { color: var(--accent); }
+.ws-row .ws-chev { width: 16px; height: 16px; display: inline-grid; place-items: center; margin-right: -4px; border-radius: 4px; }
+.ws-row .ws-chev svg { width: 12px; height: 12px; color: var(--faint); transition: transform .1s; }
+.ws-row .ws-chev.open svg { transform: rotate(90deg); }
+.ws-row .ws-chev:hover { background: var(--sel); }
+.ws-row .ws-chev.empty { visibility: hidden; }
 .task-row { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 8px; padding: 6px 8px 6px 28px; border-radius: 8px; cursor: pointer; color: var(--muted); }
 .task-row:hover { background: var(--hover); color: var(--text); }
 .task-row.sel { background: var(--sel); color: var(--text); }
@@ -177,7 +182,11 @@ button:disabled { opacity: .45; cursor: default; }
 .composer { border: 1px solid var(--line-2); border-radius: 18px; background: var(--panel); box-shadow: var(--shadow); padding: 12px 12px 10px 16px; }
 .composer:focus-within { border-color: var(--accent); }
 .composer textarea { width: 100%; border: 0; outline: none; resize: none; background: transparent; min-height: 52px; max-height: 40vh; padding: 2px 0 6px; font-size: 15px; line-height: 1.5; }
-.composer-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* One row: the dropdowns shrink (and clip) before the send button wraps. */
+.composer-bar { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; min-width: 0; }
+.composer-bar .chip { min-width: 0; flex-shrink: 1; }
+.composer-bar .chip select { min-width: 0; text-overflow: ellipsis; }
+.composer-bar .send, .composer-bar .round { flex-shrink: 0; }
 .composer-bar .spacer { flex: 1; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 0 4px 0 9px; height: 30px; border-radius: 8px; color: var(--muted); position: relative; }
 .chip:hover { background: var(--hover); color: var(--text); }
@@ -732,7 +741,8 @@ const pref = {
 const S = {
   state: null, tasks: new Map(), logs: new Map(), live: new Map(), sel: null, attach: [],
   ws: pref.get("ws", null), tabs: [], active: "chat",
-  tree: new Map(), open: new Set(pref.get("open", [])), findMode: "names", expandedWs: new Set(pref.get("expandedWs", [])),
+  // Workspaces list their conversations unless the user collapsed them.
+  tree: new Map(), open: new Set(pref.get("open", [])), findMode: "names", collapsedWs: new Set(pref.get("collapsedWs", [])),
 };
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -774,10 +784,13 @@ function schedule(...parts) {
 
 // ── workspaces & sidebar ────────────────────────────────────────────────────
 function workspaces() { return S.state?.workspaces || []; }
+function expandWs(path) {
+  if (S.collapsedWs.delete(norm(path))) pref.set("collapsedWs", [...S.collapsedWs]);
+}
 function currentWs() { return workspaces().find((w) => norm(w.path) === norm(S.ws)) || null; }
 function selectWs(path) {
   S.ws = path; pref.set("ws", path);
-  S.expandedWs.add(norm(path)); pref.set("expandedWs", [...S.expandedWs]);
+  expandWs(path);
   schedule("side", "composer", "files");
 }
 function taskGroups() {
@@ -811,8 +824,17 @@ function renderSide() {
   for (const g of groups) {
     if (searching && !g.tasks.length) continue;
     const key = norm(g.ws.path);
+    const open = searching || !S.collapsedWs.has(key) || g.tasks.some((t) => t.id === S.sel);
     const row = el("div", "ws-row" + (key === norm(S.ws) && S.sel == null && S.active === "chat" ? " sel" : ""));
-    row.append(icon("folder"), el("span", "name", g.ws.name));
+    // The arrow collapses or expands; the rest of the row picks the folder.
+    const chev = icon("chev", "ws-chev" + (open ? " open" : "") + (g.tasks.length ? "" : " empty"));
+    chev.title = open ? "Hide conversations" : "Show conversations";
+    chev.onclick = (e) => {
+      e.stopPropagation();
+      if (open) S.collapsedWs.add(key); else S.collapsedWs.delete(key);
+      pref.set("collapsedWs", [...S.collapsedWs]); renderSide();
+    };
+    row.append(chev, icon("folder"), el("span", "name", g.ws.name));
     if (g.tasks.length) row.append(el("span", "count", String(g.tasks.length)));
     if (g.ws.added) {
       const x = el("button", "icon-btn x"); x.innerHTML = svg("x"); x.title = "Remove from workspaces (files stay on disk)";
@@ -821,12 +843,11 @@ function renderSide() {
     }
     row.onclick = () => {
       if (!g.ws.virtual) selectWs(g.ws.path);
-      if (S.expandedWs.has(key) && S.sel == null) S.expandedWs.delete(key); else S.expandedWs.add(key);
-      pref.set("expandedWs", [...S.expandedWs]);
+      expandWs(g.ws.path);
       newTask(false);
     };
     box.append(row);
-    if (!(searching || S.expandedWs.has(key) || g.tasks.some((t) => t.id === S.sel))) continue;
+    if (!open) continue;
     const limit = searching ? 50 : g.showAll ? 200 : 6;
     for (const t of g.tasks.slice(0, limit)) {
       const r = el("div", "task-row" + (t.id === S.sel && S.active === "chat" ? " sel" : ""));
@@ -1207,7 +1228,7 @@ $("#composer").onsubmit = async (e) => {
       if (!S.tasks.has(r.id)) S.tasks.set(r.id, { id: r.id, prompt, cwd: w ? w.path : S.state.home, status: "running", started: nowS() });
       S.logs.set(r.id, S.logs.get(r.id) || [{ type: "user", text: prompt }]);
       S.sel = r.id;
-      if (w) { S.expandedWs.add(norm(w.path)); pref.set("expandedWs", [...S.expandedWs]); }
+      if (w) expandWs(w.path);
     }
     $("#prompt").value = ""; clearAttachments();
     renderChat(); schedule("side", "composer", "tabs");
@@ -1540,7 +1561,7 @@ $("#an-form").onsubmit = async (e) => {
     selectWs(path);
     S.tasks.set(res.id, { id: res.id, prompt, cwd: path, status: "running", started: nowS() });
     S.logs.set(res.id, [{ type: "user", text: prompt }]);
-    S.expandedWs.add(norm(path)); pref.set("expandedWs", [...S.expandedWs]);
+    expandWs(path);
     selectTask(res.id);
   } catch (err) { $("#an-err").textContent = err.message; }
   finally { $("#an-go").disabled = false; }
