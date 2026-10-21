@@ -155,6 +155,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         .route("/api/profiles/{name}/delete", post(delete_profile))
         .route("/api/workspaces", post(workspace_add))
         .route("/api/workspaces/remove", post(workspace_remove))
+        .route("/api/workspaces/pick", post(workspace_pick))
         .route("/api/fs/list", get(fs_list))
         .route("/api/fs/read", get(fs_read))
         .route("/api/fs/raw", get(fs_raw))
@@ -522,9 +523,14 @@ struct PathBody {
 }
 
 async fn workspace_add(State(s): S, Json(b): Json<PathBody>) -> Response {
-    let Some(dir) = files::canon(&expand(b.path.trim())).filter(|d| d.is_dir()) else {
-        return err(StatusCode::BAD_REQUEST, format!("folder not found: {}", b.path.trim()));
-    };
+    match add_workspace(&s, &expand(b.path.trim())) {
+        Ok(dir) => Json(json!({ "path": dir })).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+fn add_workspace(s: &Srv, path: &std::path::Path) -> Result<PathBuf> {
+    let Some(dir) = files::canon(path).filter(|d| d.is_dir()) else { bail!("folder not found: {}", path.display()) };
     {
         let mut added = s.added.lock().unwrap();
         if !added.contains(&dir) {
@@ -533,7 +539,28 @@ async fn workspace_add(State(s): S, Json(b): Json<PathBody>) -> Response {
     }
     s.save_added();
     s.hub.publish(json!({ "kind": "config" }));
-    Json(json!({ "path": dir })).into_response()
+    Ok(dir)
+}
+
+/// Opens the system's "select folder" dialog on this machine and adds the
+/// chosen folder. Only one dialog at a time.
+async fn workspace_pick(State(s): S) -> Response {
+    static OPEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if OPEN.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return err(StatusCode::CONFLICT, "a folder dialog is already open");
+    }
+    let start = s.workspaces().into_iter().next().or_else(dirs_home);
+    let mut dialog = rfd::AsyncFileDialog::new().set_title("Add a workspace folder");
+    if let Some(dir) = start.as_deref().and_then(|d| d.parent()) {
+        dialog = dialog.set_directory(dir);
+    }
+    let picked = dialog.pick_folder().await;
+    OPEN.store(false, std::sync::atomic::Ordering::SeqCst);
+    let Some(folder) = picked else { return Json(json!({ "cancelled": true })).into_response() };
+    match add_workspace(&s, folder.path()) {
+        Ok(dir) => Json(json!({ "path": dir })).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
 }
 
 async fn workspace_remove(State(s): S, Json(b): Json<PathBody>) -> Json<Value> {

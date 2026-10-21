@@ -68,8 +68,7 @@ button:disabled { opacity: .45; cursor: default; }
 /* ── sidebar ───────────────────────────────────────────────────────────── */
 .side { background: var(--side); display: flex; flex-direction: column; min-height: 0; padding: 10px 10px 8px; gap: 8px; }
 .side-top { display: flex; align-items: center; gap: 8px; padding: 2px 4px 4px; }
-.logo-tile { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: #0e1014; color: #5cc8ff; font: 700 13px var(--sans); letter-spacing: -.02em; position: relative; }
-.logo-tile::before { content: "100"; position: absolute; top: 2px; left: 3px; font-size: 5.5px; color: #8a93a3; font-weight: 500; }
+.logo-tile { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: #0e1014; color: #5cc8ff; font: 800 15px var(--sans); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
 .brand-name { font: 700 17px var(--sans); letter-spacing: -.01em; }
 .brand-name small { font: 600 9.5px var(--mono); letter-spacing: .08em; padding: 1px 5px; margin-left: 6px; border-radius: 4px; background: var(--text); color: var(--bg); vertical-align: 2px; }
 .side-top .icon-btn { margin-left: auto; }
@@ -120,8 +119,7 @@ button:disabled { opacity: .45; cursor: default; }
 .chat-scroll { flex: 1; overflow-y: auto; min-height: 0; }
 .hero { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px 24px; gap: 20px; }
 .hero-title { display: flex; align-items: center; gap: 14px; font: 600 30px var(--sans); letter-spacing: -.02em; }
-.hero-title .logo-tile { width: 44px; height: 44px; border-radius: 11px; font-size: 21px; }
-.hero-title .logo-tile::before { font-size: 8px; top: 3px; left: 5px; }
+.hero-title .logo-tile { width: 44px; height: 44px; border-radius: 11px; font-size: 25px; }
 .badge { font: 500 11px var(--mono); color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 2px 7px; }
 .badge.plain { color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); }
 .hero-sub { color: var(--muted); margin-top: -10px; }
@@ -310,12 +308,12 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
   <!-- sidebar -->
   <aside class="side">
     <div class="side-top">
-      <span class="logo-tile">Fm</span><span class="brand-name">fermi<small>HARNESS</small></span>
+      <span class="logo-tile">F</span><span class="brand-name">fermi<small>HARNESS</small></span>
       <button class="icon-btn" id="hide-side" title="Hide sidebar (Ctrl+B)" data-i="panelLeft"></button>
     </div>
     <button class="new-task" id="new-task"><span data-i="plusCircle"></span>New task</button>
     <label class="search"><span data-i="search"></span><input id="search" placeholder="Search tasks" autocomplete="off"></label>
-    <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder" data-i="folderPlus"></button></div>
+    <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder (opens a folder picker)" data-i="folderPlus"></button></div>
     <nav class="ws-list" id="ws-list"></nav>
     <div class="side-foot">
       <button class="side-link" id="open-settings"><span data-i="gear"></span>Settings</button>
@@ -329,7 +327,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
     <section class="view" id="view-chat">
       <div class="chat-scroll" id="chat-scroll">
         <div class="hero" id="hero">
-          <div class="hero-title"><span class="logo-tile">Fm</span>What should we build?<span class="badge">Preview</span></div>
+          <div class="hero-title"><span class="logo-tile">F</span>What should we build?<span class="badge">Preview</span></div>
           <div class="hero-sub" id="hero-sub"></div>
           <div id="hero-slot" class="composer-wrap"></div>
         </div>
@@ -455,7 +453,10 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
 <dialog id="dlg-ws">
   <form id="ws-form" method="dialog">
     <div><h3>Add a workspace</h3><div class="muted">A project folder. Its files show in the Files panel and tasks can run in it.</div></div>
-    <label class="f">Folder path <input type="text" name="path" placeholder="C:\code\my-project" required spellcheck="false"></label>
+    <div class="row" style="align-items:flex-end">
+      <label class="f" style="flex:4">Folder path <input type="text" name="path" placeholder="C:\code\my-project" required spellcheck="false"></label>
+      <button type="button" id="ws-browse" style="flex:0 0 auto; min-width:0">Browse…</button>
+    </div>
     <div class="err" id="ws-err"></div>
     <div class="actions"><button type="button" class="ghost" id="ws-cancel">Cancel</button><button type="submit" class="primary">Add</button></div>
   </form>
@@ -603,6 +604,8 @@ function renderSide() {
   const groups = taskGroups();
   if (!groups.length) {
     const e = el("div", "side-empty", "Add a project folder to get started.");
+    const b = el("button", "small", "Add folder"); b.onclick = pickFolder;
+    e.append(el("br"), el("br"), b);
     box.append(e);
   }
   for (const g of groups) {
@@ -816,7 +819,7 @@ function insertMention(path) {
   activate("chat"); p.focus();
 }
 $("#f-ws").onchange = () => {
-  if ($("#f-ws").value === "__add") { $("#f-ws").value = S.ws || ""; openWsDialog(); return; }
+  if ($("#f-ws").value === "__add") { $("#f-ws").value = S.ws || ""; pickFolder(); return; }
   selectWs($("#f-ws").value);
   renderChat();
 };
@@ -868,7 +871,7 @@ function renderTree() {
   $("#files-name").textContent = w ? w.name : "Files";
   if ($("#find").value.trim()) return; // results view owns the panel
   box.replaceChildren();
-  if (!w) { box.append(el("div", "files-empty", "Pick or add a workspace folder to browse its files.")); const b = el("button", "small", "Add folder"); b.onclick = openWsDialog; box.lastChild.append(el("br"), el("br"), b); return; }
+  if (!w) { box.append(el("div", "files-empty", "Pick or add a workspace folder to browse its files.")); const b = el("button", "small", "Add folder"); b.onclick = pickFolder; box.lastChild.append(el("br"), el("br"), b); return; }
   const walk = (dir, depth) => {
     const entries = S.tree.get(norm(dir));
     if (!entries) { loadDir(dir).then(() => schedule("files")); box.append(el("div", "files-empty", "Loading…")); return; }
@@ -1026,9 +1029,23 @@ $("#open-q").onkeydown = (e) => {
 };
 $("#open-form").onsubmit = (e) => e.preventDefault();
 
-// ── workspaces dialog ───────────────────────────────────────────────────────
-function openWsDialog() { $("#ws-form").reset(); $("#ws-err").textContent = ""; $("#dlg-ws").showModal(); $("#ws-form").path.focus(); }
-$("#add-ws").onclick = openWsDialog;
+// ── adding workspaces ───────────────────────────────────────────────────────
+// The system folder picker opens on this machine (the server runs locally);
+// typing a path is the fallback.
+let picking = false;
+async function pickFolder() {
+  if (picking) return;
+  picking = true;
+  try {
+    const r = await api("/api/workspaces/pick", {});
+    if (r.path) { $("#dlg-ws").open && $("#dlg-ws").close(); selectWs(r.path); newTask(false); toast(`Added ${baseName(r.path)}`); }
+  } catch (e) {
+    openWsDialog(); $("#ws-err").textContent = `${e.message}. Type the folder path instead.`;
+  } finally { picking = false; }
+}
+function openWsDialog() { $("#ws-form").reset(); $("#ws-err").textContent = ""; if (!$("#dlg-ws").open) $("#dlg-ws").showModal(); $("#ws-form").path.focus(); }
+$("#add-ws").onclick = pickFolder;
+$("#ws-browse").onclick = pickFolder;
 $("#ws-cancel").onclick = () => $("#dlg-ws").close();
 $("#ws-form").onsubmit = async (e) => {
   e.preventDefault();
