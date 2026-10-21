@@ -1,4 +1,4 @@
-# orch config
+# fermi config
 #
 # Profiles keep work and personal apart: a task only runs on the accounts of
 # its own profile, and failover never crosses profiles.
@@ -9,11 +9,11 @@ default_profile = "personal"
 # provider: "claude" | "openai"
 # auth:     "cli" = subscription login through the official CLI (claude / codex)
 #           "api" = API key read from `api_key_env`
-# home:     CLI config dir. Omit for ~/.orch/accounts/<id> (isolated login);
+# home:     CLI config dir. Omit for ~/.fermi/accounts/<id> (isolated login);
 #           "default" reuses the CLI's normal login (~/.claude, ~/.codex).
 #
-# Add more with:   orch account add <id> --provider claude --profile work
-# Then log in:     orch account login <id>
+# Add more with:   fermi account add <id> --provider claude --profile work
+# Then log in:     fermi account login <id>
 
 [[accounts]]
 id = "claude-personal"

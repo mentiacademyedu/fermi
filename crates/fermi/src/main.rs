@@ -3,13 +3,13 @@ mod tui;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use orch_core::{Engine, Event, Task};
+use fermi_core::{Engine, Event, Task};
 use std::io::{IsTerminal, Read};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser)]
-#[command(name = "orch", version, about = "Minimal multi-account, multi-provider agent harness")]
+#[command(name = "fermi", version, about = "Minimal multi-account, multi-provider agent harness")]
 struct Cli {
     #[command(subcommand)]
     cmd: Option<Cmd>,
@@ -35,7 +35,7 @@ struct Target {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Create ~/.orch/config.toml
+    /// Create ~/.fermi/config.toml
     Init {
         #[arg(long)]
         force: bool,
@@ -107,12 +107,12 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Route(t) => route(t)?,
         Cmd::Run(t) => return run(t).await,
         Cmd::Tui { profile } => {
-            if !orch_core::Config::path().exists() {
+            if !fermi_core::Config::path().exists() {
                 setup::init(false)?;
             }
             tui::run(Engine::load()?, profile).await?
         }
-        Cmd::Mcp { profile } => orch_core::mcp::serve(Engine::load()?, profile).await?,
+        Cmd::Mcp { profile } => fermi_core::mcp::serve(Engine::load()?, profile).await?,
     }
     Ok(ExitCode::SUCCESS)
 }

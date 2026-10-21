@@ -4,16 +4,16 @@
 
 use crate::setup;
 use anyhow::Result;
-use orch_core::auth::{self, AuthInfo};
-use orch_core::state::AcctState;
-use orch_core::util::{fmt_dur, now};
-use orch_core::{Auth, Engine, Event, Task};
+use fermi_core::auth::{self, AuthInfo};
+use fermi_core::state::AcctState;
+use fermi_core::util::{fmt_dur, now};
+use fermi_core::{Auth, Engine, Event, Task};
 use ratatui::crossterm::event::{
     self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event as Input, KeyCode,
     KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 use ratatui::crossterm::execute;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
@@ -178,6 +178,9 @@ struct App {
     probing: Vec<String>,
     note: Option<(Kind, String)>,
     probe_tx: ProbeTx,
+    /// Startup screen, shown while account logins are checked.
+    splash: bool,
+    opened: Instant,
     // Hit areas from the last draw, for mouse clicks.
     r_acc: Rect,
     r_tasks: Rect,
@@ -195,6 +198,7 @@ pub async fn run(engine: Arc<Engine>, profile: Option<String>) -> Result<()> {
     let mut term = enter();
     let mut dirty = true;
     let mut last_tick = Instant::now();
+    let mut last_frame = Instant::now();
     // Single-threaded input polling: nothing else reads the console, so the
     // TUI can hand the terminal to an interactive login and take it back.
     let res: Result<()> = loop {
@@ -241,6 +245,17 @@ pub async fn run(engine: Arc<Engine>, profile: Option<String>) -> Result<()> {
             last_tick = Instant::now();
             dirty = true;
         }
+        if app.splash {
+            let t = app.opened.elapsed();
+            if (app.probing.is_empty() && t >= Duration::from_millis(1200)) || t >= Duration::from_secs(4) {
+                app.splash = false;
+            }
+        }
+        // Animate spinners only while something is in flight.
+        if (app.splash || app.running() > 0) && last_frame.elapsed() >= Duration::from_millis(150) {
+            last_frame = Instant::now();
+            dirty = true;
+        }
     };
     leave();
     for t in &app.tasks {
@@ -262,12 +277,12 @@ fn leave() {
 
 /// Runs the provider's own interactive login in the plain terminal.
 fn login_flow(id: &str) {
-    println!("\n── orch · log in `{id}` ─────────────────────────────\n");
+    println!("\n── fermi · log in `{id}` ─────────────────────────────\n");
     println!("Follow the steps below (a browser window may open).\n");
     if let Err(e) = setup::login(id) {
         println!("\nlogin failed: {e:#}");
     }
-    println!("\npress Enter to go back to orch…");
+    println!("\npress Enter to go back to fermi…");
     let _ = std::io::stdin().read_line(&mut String::new());
 }
 
@@ -293,6 +308,8 @@ impl App {
             probing: vec![],
             note: None,
             probe_tx,
+            splash: true,
+            opened: Instant::now(),
             r_acc: Rect::default(),
             r_tasks: Rect::default(),
             r_out: Rect::default(),
@@ -355,6 +372,11 @@ impl App {
     fn on_input(&mut self, input: Input, ev_tx: &EvTx) -> Act {
         let is_press = matches!(&input, Input::Key(k) if k.kind == KeyEventKind::Press)
             || matches!(&input, Input::Mouse(m) if matches!(m.kind, MouseEventKind::Down(_)));
+        if self.splash {
+            // Any key or click skips the splash.
+            self.splash &= !is_press;
+            return Act::None;
+        }
         if is_press && !self.note.as_ref().is_some_and(|(_, n)| n.starts_with("checking login")) {
             self.note = None;
         }
@@ -404,7 +426,7 @@ impl App {
             Act::Login | Act::LoginButton => {
                 if self.engine.cfg.accounts.get(self.sel_acct).is_some_and(|a| a.auth == Auth::Api) {
                     let var = self.engine.cfg.accounts[self.sel_acct].api_key_env.clone().unwrap_or_default();
-                    self.note = Some((Kind::Warn, format!("API-key accounts don't log in: set {var} in your environment and restart orch")));
+                    self.note = Some((Kind::Warn, format!("API-key accounts don't log in: set {var} in your environment and restart fermi")));
                     return Act::None;
                 }
                 Act::Login
@@ -740,7 +762,37 @@ impl App {
         Block::bordered().border_style(style).title(title)
     }
 
+    fn draw_splash(&self, f: &mut Frame) {
+        let art: Vec<&str> = FERMI.lines().skip(1).collect();
+        let w = art.iter().map(|l| l.chars().count()).max().unwrap_or(0);
+        // Pad to equal width so centering keeps the drawing aligned.
+        let mut lines: Vec<Line> = art.iter().map(|l| Line::from(format!("{l:<w$}")).fg(Color::Cyan)).collect();
+        lines.push(Line::from(""));
+        lines.push(Line::from("F  E  R  M  I".bold()));
+        lines.push(Line::from("“Where is everybody?” · Enrico Fermi, 1901–1954".fg(Color::DarkGray).italic()));
+        lines.push(Line::from(""));
+        for a in &self.engine.cfg.accounts {
+            let text = match self.auth.get(&a.id) {
+                _ if self.probing.contains(&a.id) => format!("{} checking {}…", spin(self.opened), a.id),
+                Some(i) if i.logged_in == Some(false) => format!("○ {} · not logged in", a.id),
+                Some(i) => format!("✓ {} {}", a.id, i.email.as_deref().map(|e| format!("· {e}")).unwrap_or_default()),
+                None => format!("· {}", a.id),
+            };
+            lines.push(Line::from(text).fg(Color::DarkGray));
+        }
+        lines.push(Line::from(""));
+        lines.push(Line::from("press any key".fg(Color::DarkGray)));
+        let area = f.area();
+        let h = (lines.len() as u16).min(area.height);
+        let r = Rect::new(area.x, area.y + (area.height - h) / 2, area.width, h);
+        f.render_widget(Paragraph::new(lines).alignment(Alignment::Center), r);
+    }
+
     fn draw(&mut self, f: &mut Frame) {
+        if self.splash {
+            self.draw_splash(f);
+            return;
+        }
         let [top, main, input, foot] =
             Layout::vertical([Constraint::Length(1), Constraint::Min(6), Constraint::Length(3), Constraint::Length(1)]).areas(f.area());
         self.buttons.clear();
@@ -774,7 +826,7 @@ impl App {
 
     fn draw_header(&mut self, f: &mut Frame, area: Rect) {
         let left = Line::from(vec![
-            " orch ".bold().reversed(),
+            " fermi ".bold().reversed(),
             format!("  profile: {}  ·  {} running", self.profile_label(), self.running()).into(),
         ]);
         f.render_widget(left, area);
@@ -860,7 +912,7 @@ impl App {
             .enumerate()
             .map(|(i, tk)| {
                 let (glyph, color) = match tk.st {
-                    St::Running => ("◌", Color::Cyan),
+                    St::Running => (spin(tk.started), Color::Cyan),
                     St::Done => ("✓", Color::Green),
                     St::Failed => ("✗", Color::Red),
                 };
@@ -880,13 +932,28 @@ impl App {
         let block = Block::bordered().border_style(Style::new().fg(Color::DarkGray));
         match self.tasks.get(self.sel_task) {
             Some(tk) => {
-                let body = self.output_lines(tk, area.width.saturating_sub(2) as usize, area.height.saturating_sub(2) as usize);
+                let mut body = self.output_lines(tk, area.width.saturating_sub(2) as usize, area.height.saturating_sub(2) as usize);
+                let waiting = tk.st == St::Running && !tk.lines.iter().any(|(k, _)| matches!(k, Kind::Text | Kind::Tool));
+                if waiting {
+                    body.push(Line::from(""));
+                    for (i, art) in FERMI_MINI.iter().enumerate() {
+                        let side = match i {
+                            1 => format!("   {} thinking…", spin(tk.started)),
+                            2 => format!("   {}", tk.route),
+                            _ => String::new(),
+                        };
+                        body.push(Line::from(vec![
+                            Span::styled(format!("{art:<12}"), Style::new().fg(Color::Cyan)),
+                            Span::styled(side, Kind::Dim.style()),
+                        ]));
+                    }
+                }
                 f.render_widget(Paragraph::new(body).block(block.title(format!(" {} ", tk.route))), area);
             }
             None => {
                 let d = Kind::Dim.style();
                 let lines = vec![
-                    Line::from("Welcome to orch.".bold()),
+                    Line::from("Welcome to fermi.".bold()),
                     Line::from(""),
                     Line::from("1. Type a task in the box at the bottom and press Enter."),
                     Line::from("2. Run more tasks while others work. They run in parallel."),
@@ -953,6 +1020,35 @@ impl App {
         let start = end.saturating_sub(height);
         rows[start..end].iter().map(|(k, s)| Line::from(Span::styled(s.clone(), k.style()))).collect()
     }
+}
+
+/// Enrico Fermi, 1901–1954.
+const FERMI: &str = r#"
+            ,;;;;;;;;;;;;;;,
+         ,;;;;;;;;;;;;;;;;;;;;,
+        ;;;;;''''      ''''';;;;
+       ;;;;'                 ';;;
+       ;;;'   ____      ____   ';;
+       ;;    '----'    '----'   ;;
+      (;;    -(o)-      -(o)-   ;;)
+       ;;          /             ;
+        ;         /__,          ;
+         ;      ._____.        ;
+          '.     '---'       .'
+            '-.___________.-'
+               __|       |__
+          _.-''  \  \ /  /  ''-._
+         /        \  V  /        \
+        /    |     \ | /     |    \
+"#;
+
+/// Small Fermi shown while a task has no output yet.
+const FERMI_MINI: [&str; 4] = ["  ,;;;;;;,", " ;' o  o ';", " ;   __   ;", "  '-....-'"];
+
+const SPINNER: [&str; 4] = ["◐", "◓", "◑", "◒"];
+
+fn spin(started: Instant) -> &'static str {
+    SPINNER[(started.elapsed().as_millis() / 150) as usize % SPINNER.len()]
 }
 
 fn centered(f: &Frame, w: u16, h: u16) -> Rect {
@@ -1048,8 +1144,8 @@ fn wrap(s: &str, width: usize) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use orch_core::config::Config;
-    use orch_core::state::Store;
+    use fermi_core::config::Config;
+    use fermi_core::state::Store;
     use ratatui::backend::TestBackend;
     use ratatui::crossterm::event::{KeyEventState, MouseEvent};
     use ratatui::Terminal;
@@ -1073,7 +1169,7 @@ mod tests {
 
     fn app() -> (App, EvTx) {
         let cfg = Config::parse(CFG).unwrap();
-        let home = std::env::temp_dir().join(format!("orch-tui-test-{}", std::process::id()));
+        let home = std::env::temp_dir().join(format!("fermi-tui-test-{}", std::process::id()));
         let engine = Arc::new(Engine { catalog: cfg.catalog(), store: Store::open(&home), cfg, home, depth: 0 });
         let (probe_tx, _) = mpsc::unbounded_channel();
         let (ev_tx, _) = mpsc::unbounded_channel();
@@ -1101,11 +1197,16 @@ mod tests {
     #[test]
     fn screens() {
         let (mut a, tx) = app();
+        let splash = render(&mut a);
+        println!("{splash}\n");
+        assert!(splash.contains("F  E  R  M  I") && splash.contains("me@example.com"));
+        assert!(key(&mut a, &tx, KeyCode::Char('x')) == Act::None && !a.splash);
+
         let main = render(&mut a);
         println!("{main}\n");
         assert!(main.contains("me@example.com · pro"));
         assert!(main.contains("not logged in"));
-        assert!(main.contains("Welcome to orch"));
+        assert!(main.contains("Welcome to fermi"));
 
         // Tab into accounts, move to the second, log in.
         key(&mut a, &tx, KeyCode::Tab);

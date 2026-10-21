@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/orch-core", "crates/orch"]
+members = ["crates/fermi-core", "crates/fermi"]
 
 [workspace.package]
 version = "0.1.0"

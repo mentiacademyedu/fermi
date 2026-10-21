@@ -1,8 +1,8 @@
 //! `init`, `account add/login`, `status`.
 
 use anyhow::{bail, Context, Result};
-use orch_core::util::{fmt_dur, fmt_tokens, now, resolve_bin};
-use orch_core::{Auth, Config, Engine, Provider};
+use fermi_core::util::{fmt_dur, fmt_tokens, now, resolve_bin};
+use fermi_core::{Auth, Config, Engine, Provider};
 use toml_edit::{value, Array, ArrayOfTables, DocumentMut, Item, Table};
 
 const TEMPLATE: &str = include_str!("../config.example.toml");
@@ -16,9 +16,9 @@ pub fn init(force: bool) -> Result<()> {
     std::fs::write(&path, TEMPLATE)?;
     println!("wrote {}", path.display());
     println!("It starts with one account using your existing `claude` login. To add more:");
-    println!("  orch account add claude-work --provider claude --profile work");
-    println!("  orch account login claude-work");
-    println!("  orch status");
+    println!("  fermi account add claude-work --provider claude --profile work");
+    println!("  fermi account login claude-work");
+    println!("  fermi status");
     if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
         println!("\npress enter to continue…");
         let _ = std::io::stdin().read_line(&mut String::new());
@@ -34,7 +34,7 @@ pub fn add_account(id: &str, provider: &str, key_env: Option<&str>, home: Option
     }
     let provider = Provider::parse(provider).with_context(|| format!("unknown provider `{provider}` (claude | openai)"))?;
     let path = Config::path();
-    let text = std::fs::read_to_string(&path).with_context(|| format!("reading {} (run `orch init`)", path.display()))?;
+    let text = std::fs::read_to_string(&path).with_context(|| format!("reading {} (run `fermi init`)", path.display()))?;
     let mut doc: DocumentMut = text.parse()?;
 
     let mut t = Table::new();
@@ -77,7 +77,7 @@ pub fn add_account(id: &str, provider: &str, key_env: Option<&str>, home: Option
     std::fs::write(&path, out)?;
     Ok(match key_env {
         Some(k) => format!("added `{id}` ({}); it reads its key from {k}", provider.as_str()),
-        None => format!("added `{id}` ({}); log in with: orch account login {id}", provider.as_str()),
+        None => format!("added `{id}` ({}); log in with: fermi account login {id}", provider.as_str()),
     })
 }
 
@@ -124,7 +124,7 @@ pub async fn status(engine: &Engine) {
         .iter()
         .map(|a| {
             let (cfg, a) = (engine.cfg.clone(), a.clone());
-            tokio::spawn(async move { orch_core::auth::probe(&cfg, &a).await })
+            tokio::spawn(async move { fermi_core::auth::probe(&cfg, &a).await })
         })
         .collect();
     let mut who = vec![];

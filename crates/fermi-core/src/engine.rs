@@ -60,7 +60,7 @@ impl Engine {
     pub fn load() -> Result<Arc<Self>> {
         let cfg = Config::load()?;
         let home = Config::home();
-        let depth = std::env::var("ORCH_DEPTH").ok().and_then(|d| d.parse().ok()).unwrap_or(0);
+        let depth = std::env::var("FERMI_DEPTH").ok().and_then(|d| d.parse().ok()).unwrap_or(0);
         Ok(Arc::new(Engine { catalog: cfg.catalog(), store: Store::open(&home), cfg, home, depth }))
     }
 
@@ -217,7 +217,7 @@ impl Engine {
                     None if a.credentials_present() == Some(false) && a.auth == crate::config::Auth::Api => {
                         format!("{} not set", a.api_key_env.as_deref().unwrap_or("key env"))
                     }
-                    None if a.credentials_present() == Some(false) => format!("not logged in (orch account login {})", a.id),
+                    None if a.credentials_present() == Some(false) => format!("not logged in (fermi account login {})", a.id),
                     None => "unavailable".into(),
                 };
                 format!("{} {why}", a.id)

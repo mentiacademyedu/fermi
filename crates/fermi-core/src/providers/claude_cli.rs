@@ -30,7 +30,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     }
     args.extend(ctx.profile.claude_args.iter().cloned());
 
-    let mut envs = vec![("ORCH_DEPTH".to_string(), (e.depth + 1).to_string())];
+    let mut envs = vec![("FERMI_DEPTH".to_string(), (e.depth + 1).to_string())];
     if let Some(home) = ctx.account.home_dir() {
         std::fs::create_dir_all(&home)?;
         envs.push(("CLAUDE_CONFIG_DIR".into(), home.display().to_string()));

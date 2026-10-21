@@ -25,7 +25,7 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>) -> Result<
     args.extend(ctx.profile.codex_args.iter().cloned());
     args.push("-".into()); // prompt from stdin
 
-    let mut envs = vec![("ORCH_DEPTH".to_string(), (e.depth + 1).to_string())];
+    let mut envs = vec![("FERMI_DEPTH".to_string(), (e.depth + 1).to_string())];
     if let Some(home) = ctx.account.home_dir() {
         std::fs::create_dir_all(&home)?;
         envs.push(("CODEX_HOME".into(), home.display().to_string()));

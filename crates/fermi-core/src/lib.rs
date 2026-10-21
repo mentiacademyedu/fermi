@@ -1,4 +1,4 @@
-//! orch-core: routing, account pool and provider adapters.
+//! fermi-core: routing, account pool and provider adapters.
 //!
 //! Every front end (CLI, TUI, the future web dashboard) drives the same
 //! [`Engine`] and consumes the same [`Event`] stream.

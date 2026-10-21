@@ -1,5 +1,5 @@
 //! The bridge that lets a Claude session use the profile's other providers.
-//! `orch mcp --profile <name>` is a minimal stdio MCP server; every Claude
+//! `fermi mcp --profile <name>` is a minimal stdio MCP server; every Claude
 //! task at depth 0 gets it attached, and its tool calls go back through the
 //! engine (same profile, same accounts, same failover).
 
@@ -40,7 +40,7 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
         return Ok(None);
     }
     let exe = std::env::current_exe()?;
-    let cfg = json!({ "mcpServers": { "orch": {
+    let cfg = json!({ "mcpServers": { "fermi": {
         "type": "stdio",
         "command": exe.display().to_string(),
         "args": ["mcp", "--profile", profile.name],
@@ -54,16 +54,16 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
     }
 
     let mut tools = vec![];
-    let mut prompt = format!("You are running inside the orch harness, profile {}.", profile.name);
+    let mut prompt = format!("You are running inside the fermi harness, profile {}.", profile.name);
     if !image.is_empty() {
-        tools.push("mcp__orch__generate_image");
-        prompt += " For any image creation request call the orch generate_image tool, which uses an OpenAI image model and saves a file.";
+        tools.push("mcp__fermi__generate_image");
+        prompt += " For any image creation request call the fermi generate_image tool, which uses an OpenAI image model and saves a file.";
     }
     if !text.is_empty() {
-        tools.push("mcp__orch__ask_model");
+        tools.push("mcp__fermi__ask_model");
         let ids: Vec<_> = text.iter().map(|m| m.id.as_str()).collect();
         prompt += &format!(
-            " You can delegate a self-contained subtask to another provider with the orch ask_model tool (models: {}) when it is better suited or a second opinion helps.",
+            " You can delegate a self-contained subtask to another provider with the fermi ask_model tool (models: {}) when it is better suited or a second opinion helps.",
             ids.join(", ")
         );
     }
@@ -146,7 +146,7 @@ pub async fn serve(engine: Arc<Engine>, profile_name: String) -> Result<()> {
                 let _ = out_tx.send(reply(json!({
                     "protocolVersion": version,
                     "capabilities": { "tools": {} },
-                    "serverInfo": { "name": "orch", "version": env!("CARGO_PKG_VERSION") }
+                    "serverInfo": { "name": "fermi", "version": env!("CARGO_PKG_VERSION") }
                 })));
             }
             "ping" => {

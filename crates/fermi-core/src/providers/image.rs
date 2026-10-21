@@ -15,7 +15,7 @@ fn out_path(ctx: &RunCtx<'_>) -> PathBuf {
     match &ctx.task.out {
         Some(p) if p.is_absolute() => p.clone(),
         Some(p) => ctx.task.cwd.join(p),
-        None => ctx.task.cwd.join(format!("orch-image-{}.png", now())),
+        None => ctx.task.cwd.join(format!("fermi-image-{}.png", now())),
     }
 }
 

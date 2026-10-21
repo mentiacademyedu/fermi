@@ -1,5 +1,5 @@
 [package]
-name = "orch-core"
+name = "fermi-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

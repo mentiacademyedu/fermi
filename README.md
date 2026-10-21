@@ -1,8 +1,12 @@
-# orch
+# fermi
 
 A minimal, fast harness that runs coding/AI tasks across several providers
 (Claude, OpenAI) and several accounts per provider: one harness instead of
 separate terminals or machines for work and personal accounts.
+
+Named after Enrico Fermi, who was famous for quick, good-enough estimates
+from first principles. That's the job of the router here too: a fast,
+cheap guess at the right model for each task.
 
 - **Profiles** group accounts. `work` = company Claude Team + company OpenAI,
   `personal` = your own Pro + Plus. A task only ever runs on its profile's
@@ -13,11 +17,11 @@ separate terminals or machines for work and personal accounts.
   `pinned` (switch only between the models you chose), `single` (one model).
 - **Failover inside the profile**: when an account hits its usage limit or
   isn't logged in, the task moves to the next account in that profile.
-- **Cross-provider delegation**: Claude sessions get an `orch` MCP server with
+- **Cross-provider delegation**: Claude sessions get an `fermi` MCP server with
   `generate_image` (OpenAI image model) and `ask_model` (other providers), so
   Claude can hand off image creation or get a second opinion.
 - **Live usage**: each Claude account's rate-limit window usage is read from
-  the CLI stream and shown in `orch status` and the TUI.
+  the CLI stream and shown in `fermi status` and the TUI.
 
 Subscription accounts run through the **official CLIs** (`claude`, `codex`)
 in headless mode, each with its own config dir (`CLAUDE_CONFIG_DIR`,
@@ -26,10 +30,10 @@ in headless mode, each with its own config dir (`CLAUDE_CONFIG_DIR`,
 ## Install
 
 ```sh
-cargo install --path crates/orch   # puts `orch` in ~/.cargo/bin (on PATH); ~5 MB, no runtime deps
+cargo install --path crates/fermi   # puts `fermi` in ~/.cargo/bin (on PATH); ~5 MB, no runtime deps
 ```
 
-Running `orch` the first time creates `~/.orch/config.toml` and opens the TUI.
+Running `fermi` the first time creates `~/.fermi/config.toml` and opens the TUI.
 
 Needs `claude` (Claude Code) and/or `codex` (Codex CLI) on PATH for
 subscription accounts.
@@ -37,14 +41,14 @@ subscription accounts.
 ## Quick start
 
 ```sh
-orch init                                            # ~/.orch/config.toml, uses your current claude login
-orch account add claude-work --provider claude --profile work
-orch account login claude-work                       # logs in inside its own isolated config dir
-orch account add openai-key --provider openai --api-key-env OPENAI_API_KEY --profile personal
-orch status
+fermi init                                            # ~/.fermi/config.toml, uses your current claude login
+fermi account add claude-work --provider claude --profile work
+fermi account login claude-work                       # logs in inside its own isolated config dir
+fermi account add openai-key --provider openai --api-key-env OPENAI_API_KEY --profile personal
+fermi status
 ```
 
-Bind folders to profiles in `~/.orch/config.toml`:
+Bind folders to profiles in `~/.fermi/config.toml`:
 
 ```toml
 [[profiles]]
@@ -58,11 +62,11 @@ models = ["claude:opus", "claude:sonnet"]
 ## Use
 
 ```sh
-orch                       # TUI: run several tasks at once, watch accounts live
-orch run "fix the flaky login test"
-orch run -p work -m claude:opus "plan the billing migration"
-orch run -a claude-work "..."   # force one account (no failover)
-orch route "draw a logo for the landing page"   # dry run: which model/account
+fermi                       # TUI: run several tasks at once, watch accounts live
+fermi run "fix the flaky login test"
+fermi run -p work -m claude:opus "plan the billing migration"
+fermi run -a claude-work "..."   # force one account (no failover)
+fermi route "draw a logo for the landing page"   # dry run: which model/account
 ```
 
 In the TUI, prefix a task with `@profile`, `m=provider:model` or `a=account`.
@@ -81,14 +85,14 @@ to tier 2.
 ## Layout
 
 ```
-crates/orch-core   engine, router, account state, provider adapters, MCP bridge
+crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   config.rs        accounts, profiles, folder → profile resolution
   router.rs        task classification + candidate ordering
   engine.rs        run loop: route → pick account → run → failover
-  state.rs         per-account usage (~/.orch/state.json) + usage.jsonl log
+  state.rs         per-account usage (~/.fermi/state.json) + usage.jsonl log
   providers/       claude_cli, codex_cli, api (Anthropic/OpenAI), image
-  mcp.rs           `orch mcp` stdio server attached to Claude sessions
-crates/orch        CLI + TUI (thin clients over the engine's Event stream)
+  mcp.rs           `fermi mcp` stdio server attached to Claude sessions
+crates/fermi        CLI + TUI (thin clients over the engine's Event stream)
 ```
 
 Every front end consumes the same serializable `Event` stream, so the planned
@@ -96,7 +100,7 @@ web dashboard is another client of the engine, not a rewrite.
 
 ## Roadmap
 
-- `orchd` daemon with a local HTTP/WebSocket API + web dashboard
+- `fermid` daemon with a local HTTP/WebSocket API + web dashboard
 - Gemini (Gemini CLI + API)
 - Bridge for Codex sessions (so GPT can delegate to Claude)
 - Streaming for API-key text tasks

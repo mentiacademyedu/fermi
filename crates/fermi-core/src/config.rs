@@ -44,7 +44,7 @@ pub struct Account {
     pub provider: Provider,
     #[serde(default)]
     pub auth: Auth,
-    /// CLI config dir. Unset = `~/.orch/accounts/<id>`; `"default"` = the CLI's own home.
+    /// CLI config dir. Unset = `~/.fermi/accounts/<id>`; `"default"` = the CLI's own home.
     #[serde(default)]
     pub home: Option<String>,
     /// Env var holding the API key (auth = "api").
@@ -143,9 +143,9 @@ pub struct Config {
 
 impl Config {
     pub fn home() -> PathBuf {
-        match std::env::var_os("ORCH_HOME") {
+        match std::env::var_os("FERMI_HOME") {
             Some(h) => PathBuf::from(h),
-            None => dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".orch"),
+            None => dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".fermi"),
         }
     }
 
@@ -156,7 +156,7 @@ impl Config {
     pub fn load() -> Result<Self> {
         let p = Self::path();
         let text = std::fs::read_to_string(&p)
-            .with_context(|| format!("reading {} (run `orch init` first)", p.display()))?;
+            .with_context(|| format!("reading {} (run `fermi init` first)", p.display()))?;
         Self::parse(&text).with_context(|| format!("in {}", p.display()))
     }
 
