@@ -25,8 +25,11 @@ use std::time::Duration;
 use tokio::sync::broadcast::error::RecvError;
 
 const INDEX: &str = include_str!("../web/index.html");
-const CSP: &str = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; \
-                   connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'";
+const XTERM_JS: &str = include_str!("../web/vendor/xterm.js");
+const XTERM_CSS: &str = include_str!("../web/vendor/xterm.css");
+const XTERM_FIT: &str = include_str!("../web/vendor/addon-fit.js");
+const CSP: &str = "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; \
+                   connect-src 'self'; img-src 'self' data:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'none'";
 
 struct Srv {
     hub: Arc<Hub>,
@@ -164,8 +167,12 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         .route("/api/git/status", get(git_status))
         .route("/api/git/diff", get(git_diff))
         .route("/api/ws", get(ws))
+        .route("/api/term", get(term))
         .route_layer(middleware::from_fn_with_state(srv.clone(), require_token))
         .route("/", get(index))
+        .route("/vendor/xterm.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], XTERM_JS) }))
+        .route("/vendor/addon-fit.js", get(|| async { ([(header::CONTENT_TYPE, "text/javascript")], XTERM_FIT) }))
+        .route("/vendor/xterm.css", get(|| async { ([(header::CONTENT_TYPE, "text/css")], XTERM_CSS) }))
         .layer(middleware::from_fn_with_state(srv.clone(), check_host))
         .with_state(srv.clone());
 
@@ -761,6 +768,87 @@ fn open_login_window(cfg: &fermi_core::Config, acct: &fermi_core::Account) -> Re
         }
     }
     Ok(())
+}
+
+#[derive(Deserialize)]
+struct TermQuery {
+    cwd: String,
+    #[serde(default)]
+    cols: Option<u16>,
+    #[serde(default)]
+    rows: Option<u16>,
+}
+
+/// A shell in a workspace folder (or the home folder), bridged to this socket.
+async fn term(State(s): S, Query(q): Query<TermQuery>, up: WebSocketUpgrade) -> Response {
+    let mut roots = s.workspaces();
+    roots.extend(dirs_home());
+    let cwd = match files::check(&roots, &q.cwd) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    let (cols, rows) = (q.cols.unwrap_or(100), q.rows.unwrap_or(30));
+    up.on_upgrade(move |sock| term_loop(sock, cwd, cols, rows))
+}
+
+async fn term_loop(mut sock: WebSocket, cwd: PathBuf, cols: u16, rows: u16) {
+    let pty = match tokio::task::spawn_blocking(move || crate::term::spawn(&cwd, cols, rows)).await {
+        Ok(Ok(p)) => p,
+        Ok(Err(e)) => {
+            let _ = sock.send(Message::Text(format!("\r\n[fermi] {e:#}\r\n").into())).await;
+            return;
+        }
+        Err(_) => return,
+    };
+    let crate::term::Pty { master, mut child, mut reader, mut writer } = pty;
+    // Shell output arrives on a blocking reader; a thread forwards it.
+    let (out_tx, mut out_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(64);
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 16 * 1024];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    if out_tx.blocking_send(buf[..n].to_vec()).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    use std::io::Write;
+    loop {
+        tokio::select! {
+            out = out_rx.recv() => match out {
+                Some(bytes) => {
+                    if sock.send(Message::Binary(bytes.into())).await.is_err() {
+                        break;
+                    }
+                }
+                None => {
+                    let _ = sock.send(Message::Text("\r\n[process exited]\r\n".into())).await;
+                    break;
+                }
+            },
+            incoming = sock.recv() => match incoming {
+                // {"data": "..."} keystrokes, {"resize": [cols, rows]}
+                Some(Ok(Message::Text(t))) => {
+                    let Ok(v) = serde_json::from_str::<Value>(&t) else { continue };
+                    if let Some(d) = v["data"].as_str() {
+                        let _ = writer.write_all(d.as_bytes()).and_then(|_| writer.flush());
+                    } else if let (Some(c), Some(r)) = (v["resize"][0].as_u64(), v["resize"][1].as_u64()) {
+                        let _ = master.resize(crate::term::size(c as u16, r as u16));
+                    }
+                }
+                Some(Ok(Message::Binary(b))) => {
+                    let _ = writer.write_all(&b).and_then(|_| writer.flush());
+                }
+                Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+                _ => {}
+            },
+        }
+    }
+    let _ = child.kill();
 }
 
 async fn ws(State(s): S, up: WebSocketUpgrade) -> Response {

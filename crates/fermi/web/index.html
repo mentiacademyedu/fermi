@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fermi</title>
+<link rel="stylesheet" href="/vendor/xterm.css">
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
 <style>
 :root {
   --bg: #f7f7f8; --side: #f1f1f3; --panel: #ffffff; --panel-2: #f4f4f6; --hover: #e9e9ed; --sel: #e4e4ea;
@@ -283,6 +286,13 @@ button:disabled { opacity: .45; cursor: default; }
 .dl.hunk { color: var(--accent); background: var(--panel-2); margin-top: 6px; }
 .dl.meta { color: var(--faint); }
 
+/* terminals */
+.term-host { flex: 1; position: relative; background: var(--code-bg); min-height: 0; }
+.term { position: absolute; inset: 0; padding: 8px 4px 4px 12px; }
+.term .xterm { height: 100%; }
+.term .xterm-viewport { background: transparent !important; }
+.tab-add { width: 28px; height: 28px; margin-left: 2px; }
+
 /* ── status bar ────────────────────────────────────────────────────────── */
 .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 12px; border-top: 1px solid var(--line); background: var(--side); font-size: 12px; color: var(--muted); overflow: hidden; white-space: nowrap; }
 .status .acc { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
@@ -431,6 +441,10 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
       <div class="file-msg" id="file-msg"></div>
     </section>
 
+    <section class="view" id="view-term" hidden>
+      <div class="term-host" id="term-host"></div>
+    </section>
+
     <section class="view" id="view-settings" hidden>
       <div class="settings">
         <section>
@@ -565,6 +579,7 @@ const I = {
   filter: '<path d="M4 5h16M7 12h10M10 19h4"/>',
   refresh: '<path d="M20 11a8 8 0 0 0-14.7-4.4L3 9M4 13a8 8 0 0 0 14.7 4.4L21 15"/><path d="M3 4v5h5M21 20v-5h-5"/>',
   collapse: '<path d="m7 15 5-5 5 5"/>',
+  terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/>',
   branch: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-4 5-12 7"/>',
 };
 const svg = (name) => `<svg viewBox="0 0 24 24">${I[name] || ""}</svg>`;
@@ -732,18 +747,25 @@ function renderTabs() {
   const chatLabel = S.sel != null ? (S.tasks.get(S.sel)?.prompt || "Chat") : "New task";
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
-  for (const f of S.tabs.filter((t) => t.id !== "settings")) mk(f.id, f.name, f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code", true, f.dirty);
-  bar.append(el("span", "spacer"));
+  for (const f of S.tabs.filter((t) => t.id !== "settings")) {
+    mk(f.id, f.name, f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code", true, f.dirty);
+  }
+  const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
+  bar.append(add, el("span", "spacer"));
   if (document.getElementById("app").classList.contains("no-files")) {
     const b = el("button", "icon-btn"); b.innerHTML = svg("panelRight"); b.title = "Show files"; b.onclick = toggleFiles; bar.append(b);
   }
 }
 function activate(id) {
   S.active = id;
+  const tab = S.tabs.find((t) => t.id === id);
+  const isTerm = tab?.kind === "term";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
-  $("#view-file").hidden = id === "chat" || id === "settings";
-  if (id !== "chat" && id !== "settings") showFile(S.tabs.find((t) => t.id === id));
+  $("#view-term").hidden = !isTerm;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm;
+  if (isTerm) showTerm(tab);
+  else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
   if (id === "chat") setTimeout(() => $("#prompt").focus(), 0);
@@ -751,6 +773,7 @@ function activate(id) {
 function closeTab(id) {
   const t = S.tabs.find((x) => x.id === id);
   if (t?.dirty && !confirm(`${t.name} has unsaved changes. Close anyway?`)) return;
+  if (t?.kind === "term") { t.ws?.close(); t.term?.dispose(); t.box?.remove(); t.observer?.disconnect(); }
   S.tabs = S.tabs.filter((x) => x.id !== id);
   if (S.active === id) activate(S.tabs.length ? S.tabs[S.tabs.length - 1].id : "chat"); else renderTabs();
 }
@@ -1179,6 +1202,43 @@ function showFile(tab) {
 }
 const activeTab = () => S.tabs.find((t) => t.id === S.active);
 
+// ── terminals ───────────────────────────────────────────────────────────────
+let termSeq = 0;
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function newTerm() {
+  if (!window.Terminal || !window.FitAddon) { toast("The terminal didn't load. Reload the window.", true); return; }
+  const w = currentWs();
+  const cwd = w ? w.path : (S.state?.home || S.state?.cwd);
+  const box = el("div", "term"); $("#term-host").append(box);
+  const tab = { id: `term:${++termSeq}`, kind: "term", name: `${w ? w.name : "home"} · terminal`, cwd, box };
+  S.tabs.push(tab);
+  // Show the box before xterm measures it: opening into a hidden element draws nothing.
+  activate(tab.id);
+  const term = new Terminal({
+    fontFamily: cssVar("--mono") || "Consolas, monospace", fontSize: 13, lineHeight: 1.2, cursorBlink: true, scrollback: 5000,
+    theme: { background: cssVar("--code-bg"), foreground: cssVar("--text"), cursor: cssVar("--accent"), selectionBackground: cssVar("--sel") },
+  });
+  const fit = new FitAddon.FitAddon(); term.loadAddon(fit);
+  term.open(box);
+  Object.assign(tab, { term, fit });
+  try { fit.fit(); } catch (_) {}
+  term.focus();
+  const ws = new WebSocket(`ws://${location.host}/api/term?${q({ t: token, cwd, cols: term.cols, rows: term.rows })}`);
+  ws.binaryType = "arraybuffer";
+  ws.onmessage = (e) => term.write(typeof e.data === "string" ? e.data : new Uint8Array(e.data));
+  ws.onclose = () => term.write("\r\n\x1b[2m[session ended]\x1b[0m\r\n");
+  term.onData((d) => { if (ws.readyState === 1) ws.send(JSON.stringify({ data: d })); });
+  term.onResize(({ cols, rows }) => { if (ws.readyState === 1) ws.send(JSON.stringify({ resize: [cols, rows] })); });
+  tab.ws = ws;
+  // Refit when the panel changes size (window, sidebars).
+  tab.observer = new ResizeObserver(() => { if (!box.hidden) { try { fit.fit(); } catch (_) {} } });
+  tab.observer.observe(box);
+}
+function showTerm(tab) {
+  for (const t of S.tabs) if (t.kind === "term") t.box.hidden = t !== tab;
+  requestAnimationFrame(() => { if (!tab.term) return; try { tab.fit.fit(); } catch (_) {} tab.term.focus(); });
+}
+
 // ── changes (git) ───────────────────────────────────────────────────────────
 function setPane(p) {
   S.pane = p; pref.set("pane", p);
@@ -1529,6 +1589,9 @@ if (pref.get("noSide", false)) $("#app").classList.add("no-side");
 if (pref.get("noFiles", false)) $("#app").classList.add("no-files");
 document.addEventListener("keydown", (e) => {
   const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key === "`") { e.preventDefault(); newTerm(); return; }
+  // Inside a terminal, keys belong to the shell.
+  if (document.activeElement?.closest?.(".xterm")) return;
   if (mod && e.key.toLowerCase() === "s" && S.active !== "chat" && S.active !== "settings") { e.preventDefault(); saveActive(); }
   if (mod && e.key.toLowerCase() === "p") { e.preventDefault(); openQuick(S.active === "chat" ? "mention" : "open"); }
   if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); toggleSide(); }
@@ -1579,6 +1642,7 @@ async function refresh() {
     const params = new URLSearchParams(location.search);
     if (params.get("file") && !S.tabs.length) openFile(params.get("file"));
     if (params.get("pane")) setPane(params.get("pane"));
+    if (params.get("term") && !S.tabs.some((t) => t.kind === "term")) newTerm();
     if (params.get("diff") && !S.tabs.length) { const p = params.get("diff"); openDiff({ path: p, rel: relTo(currentWs()?.path, p), status: "M" }); }
     const linked = Number(params.get("task"));
     if (S.sel == null && S.tasks.has(linked)) { selectTask(linked); }
