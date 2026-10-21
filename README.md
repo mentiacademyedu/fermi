@@ -26,8 +26,10 @@ in headless mode, each with its own config dir (`CLAUDE_CONFIG_DIR`,
 ## Install
 
 ```sh
-cargo build --release      # target/release/orch(.exe), ~5 MB, no runtime deps
+cargo install --path crates/orch   # puts `orch` in ~/.cargo/bin (on PATH); ~5 MB, no runtime deps
 ```
+
+Running `orch` the first time creates `~/.orch/config.toml` and opens the TUI.
 
 Needs `claude` (Claude Code) and/or `codex` (Codex CLI) on PATH for
 subscription accounts.

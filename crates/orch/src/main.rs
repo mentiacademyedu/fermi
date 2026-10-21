@@ -106,7 +106,12 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Status => setup::status(&*Engine::load()?),
         Cmd::Route(t) => route(t)?,
         Cmd::Run(t) => return run(t).await,
-        Cmd::Tui { profile } => tui::run(Engine::load()?, profile).await?,
+        Cmd::Tui { profile } => {
+            if !orch_core::Config::path().exists() {
+                setup::init(false)?;
+            }
+            tui::run(Engine::load()?, profile).await?
+        }
         Cmd::Mcp { profile } => orch_core::mcp::serve(Engine::load()?, profile).await?,
     }
     Ok(ExitCode::SUCCESS)

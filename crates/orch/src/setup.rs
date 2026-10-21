@@ -15,10 +15,14 @@ pub fn init(force: bool) -> Result<()> {
     std::fs::create_dir_all(Config::home())?;
     std::fs::write(&path, TEMPLATE)?;
     println!("wrote {}", path.display());
-    println!("It starts with one account using your existing `claude` login. Next:");
+    println!("It starts with one account using your existing `claude` login. To add more:");
     println!("  orch account add claude-work --provider claude --profile work");
     println!("  orch account login claude-work");
     println!("  orch status");
+    if std::io::IsTerminal::is_terminal(&std::io::stdin()) {
+        println!("\npress enter to continue…");
+        let _ = std::io::stdin().read_line(&mut String::new());
+    }
     Ok(())
 }
 
