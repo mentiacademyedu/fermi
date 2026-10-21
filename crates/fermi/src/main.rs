@@ -1,3 +1,4 @@
+mod server;
 mod setup;
 mod tui;
 
@@ -54,6 +55,14 @@ enum Cmd {
         #[arg(short, long)]
         profile: Option<String>,
     },
+    /// Web dashboard in your browser
+    Ui {
+        #[arg(long, default_value_t = 7878)]
+        port: u16,
+        /// Don't open the browser
+        #[arg(long)]
+        no_open: bool,
+    },
     /// MCP bridge server (started by Claude sessions)
     #[command(hide = true)]
     Mcp {
@@ -81,7 +90,12 @@ enum AccountCmd {
         profile: Option<String>,
     },
     /// Log in to a CLI account in its own isolated config dir
-    Login { id: String },
+    Login {
+        id: String,
+        /// Wait for Enter at the end (used when the dashboard opens a login window)
+        #[arg(long, hide = true)]
+        pause: bool,
+    },
 }
 
 #[tokio::main]
@@ -102,7 +116,18 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Account(AccountCmd::Add { id, provider, api_key_env, home, profile }) => {
             println!("{}", setup::add_account(&id, &provider, api_key_env.as_deref(), home.as_deref(), profile.as_deref())?)
         }
-        Cmd::Account(AccountCmd::Login { id }) => setup::login(&id)?,
+        Cmd::Account(AccountCmd::Login { id, pause }) => {
+            let r = setup::login(&id);
+            if pause {
+                match &r {
+                    Ok(()) => println!("\ndone. You can close this window and go back to the dashboard."),
+                    Err(e) => println!("\nlogin failed: {e:#}"),
+                }
+                println!("press Enter to close…");
+                let _ = std::io::stdin().read_line(&mut String::new());
+            }
+            r?
+        }
         Cmd::Status => setup::status(&*Engine::load()?).await,
         Cmd::Route(t) => route(t)?,
         Cmd::Run(t) => return run(t).await,
@@ -111,6 +136,12 @@ async fn real_main() -> Result<ExitCode> {
                 setup::init(false)?;
             }
             tui::run(Engine::load()?, profile).await?
+        }
+        Cmd::Ui { port, no_open } => {
+            if !fermi_core::Config::path().exists() {
+                setup::init(false)?;
+            }
+            server::run(Engine::load()?, port, !no_open).await?
         }
         Cmd::Mcp { profile } => fermi_core::mcp::serve(Engine::load()?, profile).await?,
     }

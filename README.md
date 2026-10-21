@@ -71,6 +71,19 @@ fermi route "draw a logo for the landing page"   # dry run: which model/account
 
 In the TUI, prefix a task with `@profile`, `m=provider:model` or `a=account`.
 
+## Dashboard
+
+```sh
+fermi ui                    # opens the web dashboard in your browser
+```
+
+Everything the TUI does, in the browser: run tasks in parallel with live
+output, see each account's login and usage, add accounts, and log in
+(a terminal window opens for the provider's sign-in, and the page updates
+once it's done). It's served by the same binary on `127.0.0.1` only. Every
+request needs the access key in the link `fermi ui` prints, and requests from
+other sites are refused. Ctrl+C stops it and its running tasks.
+
 ## Models
 
 Built in: `claude:fable` (premium, never auto-picked), `claude:opus`,
@@ -92,16 +105,18 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   state.rs         per-account usage (~/.fermi/state.json) + usage.jsonl log
   providers/       claude_cli, codex_cli, api (Anthropic/OpenAI), image
   mcp.rs           `fermi mcp` stdio server attached to Claude sessions
-crates/fermi        CLI + TUI (thin clients over the engine's Event stream)
+  hub.rs           task registry + broadcast for long-lived front ends
+crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
+  server.rs        `fermi ui`: local HTTP + WebSocket API
+  web/index.html   the dashboard (single file, no build step, embedded in the binary)
 ```
 
-Every front end consumes the same serializable `Event` stream, so the planned
-web dashboard is another client of the engine, not a rewrite.
+Every front end consumes the same serializable `Event` stream.
 
 ## Roadmap
 
-- `fermid` daemon with a local HTTP/WebSocket API + web dashboard
 - Gemini (Gemini CLI + API)
+- Profile editing (folders, mode, models) from the TUI and dashboard
 - Bridge for Codex sessions (so GPT can delegate to Claude)
 - Streaming for API-key text tasks
 

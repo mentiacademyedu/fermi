@@ -5,7 +5,7 @@ use crate::util::resolve_bin;
 use std::process::Stdio;
 use std::time::Duration;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct AuthInfo {
     /// None = couldn't tell.
     pub logged_in: Option<bool>,

@@ -7,6 +7,7 @@ pub mod auth;
 pub mod config;
 pub mod engine;
 pub mod events;
+pub mod hub;
 pub mod mcp;
 pub mod models;
 pub mod providers;

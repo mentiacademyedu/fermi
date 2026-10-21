@@ -16,3 +16,6 @@ tokio.workspace = true
 clap = { version = "4", features = ["derive"] }
 ratatui = "0.29"
 toml_edit = "0.22"
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio", "ws"] }
+getrandom = "0.3"
+serde.workspace = true
