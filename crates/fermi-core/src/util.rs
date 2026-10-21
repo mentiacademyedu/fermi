@@ -8,6 +8,16 @@ pub fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
+/// Random v4 UUID (session ids for the CLIs).
+pub fn uuid_v4() -> String {
+    let mut b = [0u8; 16];
+    getrandom::fill(&mut b).expect("OS random source");
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
+}
+
 /// Expands a leading `~` to the home directory.
 pub fn expand(p: &str) -> PathBuf {
     if let Some(rest) = p.strip_prefix("~") {

@@ -9,13 +9,17 @@ use anyhow::Result;
 pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>) -> Result<RunResult> {
     let e = ctx.engine;
     let bin = resolve_bin("codex", e.cfg.bins.codex.as_deref())?;
-    let mut args: Vec<String> = vec![
-        "exec".into(),
-        "--json".into(),
-        "--skip-git-repo-check".into(),
-        "-C".into(),
-        ctx.task.cwd.display().to_string(),
-    ];
+    // `exec resume <id>` continues a thread; it runs in the process's working
+    // directory and has no --cd/--sandbox flags, so those go through config.
+    let resume = ctx.task.resume.as_deref();
+    let mut args: Vec<String> = vec!["exec".into()];
+    if resume.is_some() {
+        args.push("resume".into());
+    }
+    args.extend(["--json".into(), "--skip-git-repo-check".into()]);
+    if resume.is_none() {
+        args.extend(["-C".into(), ctx.task.cwd.display().to_string()]);
+    }
     if let Some(m) = model {
         args.extend(["-m".into(), m.to_string()]);
     }
@@ -25,9 +29,15 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>) -> Result<
         args.extend(["--config".into(), format!("model_reasoning_effort={e}")]);
     }
     if let Some(s) = &ctx.profile.codex_sandbox {
-        args.extend(["--sandbox".into(), s.clone()]);
+        match resume {
+            Some(_) => args.extend(["--config".into(), format!("sandbox_mode={s}")]),
+            None => args.extend(["--sandbox".into(), s.clone()]),
+        }
     }
     args.extend(ctx.profile.codex_args.iter().cloned());
+    if let Some(id) = resume {
+        args.push(id.to_string());
+    }
     args.push("-".into()); // prompt from stdin
 
     let mut envs = vec![("FERMI_DEPTH".to_string(), (e.depth + 1).to_string())];
@@ -41,6 +51,11 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>) -> Result<
 
     while let Some(v) = p.next_json().await? {
         match v["type"].as_str().unwrap_or_default() {
+            "thread.started" => {
+                if let Some(id) = v["thread_id"].as_str() {
+                    emit(ctx.tx, Event::Session { id: id.to_string() });
+                }
+            }
             "item.completed" => {
                 let item = &v["item"];
                 let s = |k: &str| item[k].as_str().unwrap_or_default().to_string();

@@ -25,11 +25,23 @@ pub struct Task {
     pub effort: Option<String>,
     /// Output file for image tasks.
     pub out: Option<PathBuf>,
+    /// Continue this provider session (a follow-up). Needs `model` and
+    /// `account` set to the ones the session lives on.
+    pub resume: Option<String>,
 }
 
 impl Task {
     pub fn new(prompt: impl Into<String>, cwd: impl Into<PathBuf>) -> Self {
-        Task { prompt: prompt.into(), cwd: cwd.into(), profile: None, model: None, account: None, effort: None, out: None }
+        Task {
+            prompt: prompt.into(),
+            cwd: cwd.into(),
+            profile: None,
+            model: None,
+            account: None,
+            effort: None,
+            out: None,
+            resume: None,
+        }
     }
 }
 
@@ -69,6 +81,9 @@ impl Engine {
     pub fn plan(&self, task: &Task) -> Result<Plan> {
         if let Some(e) = task.effort.as_deref().filter(|e| !crate::models::EFFORTS.contains(e)) {
             bail!("unknown effort `{e}` (use {})", crate::models::EFFORTS.join(", "));
+        }
+        if task.resume.is_some() && (task.model.is_none() || task.account.is_none()) {
+            bail!("a follow-up must name the model and account its session lives on");
         }
         let profile = self.cfg.resolve_profile(task.profile.as_deref(), &task.cwd)?;
         let need = router::classify(&task.prompt);
@@ -152,7 +167,11 @@ impl Engine {
                     label: model.name().to_string(),
                     effort: task.effort.clone().or_else(|| profile.effort.clone()),
                     account: acct.id.clone(),
-                    why: if task.model.is_some() { "chosen".into() } else { plan.need.why.clone() },
+                    why: match (&task.resume, &task.model) {
+                        (Some(_), _) => "continuing the conversation".into(),
+                        (None, Some(_)) => "chosen".into(),
+                        (None, None) => plan.need.why.clone(),
+                    },
                 });
 
                 let started = Instant::now();

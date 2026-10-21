@@ -94,6 +94,8 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         .route("/api/tasks", post(create_task))
         .route("/api/tasks/{id}", get(task))
         .route("/api/tasks/{id}/cancel", post(cancel))
+        .route("/api/tasks/{id}/reply", post(reply))
+        .route("/api/tasks/{id}/delete", post(delete_task))
         .route("/api/accounts", post(add_account))
         .route("/api/accounts/probe", post(probe))
         .route("/api/accounts/{id}/login", post(login))
@@ -354,13 +356,43 @@ async fn create_task(State(s): S, Json(b): Json<NewTask>) -> Response {
 
 async fn task(State(s): S, Path(id): Path<u64>) -> Response {
     match s.hub.get(id) {
-        Some(t) => Json(t).into_response(),
+        // The full record plus the derived fields the list view gets.
+        Some(t) => {
+            let mut v = serde_json::to_value(&t).unwrap_or_default();
+            if let (Some(obj), Value::Object(extra)) = (v.as_object_mut(), t.summary()) {
+                obj.extend(extra);
+            }
+            Json(v).into_response()
+        }
         None => err(StatusCode::NOT_FOUND, "no such task"),
     }
 }
 
 async fn cancel(State(s): S, Path(id): Path<u64>) -> Json<Value> {
     Json(json!({ "ok": s.hub.cancel(id) }))
+}
+
+#[derive(Deserialize)]
+struct Reply {
+    prompt: String,
+}
+
+async fn reply(State(s): S, Path(id): Path<u64>, Json(b): Json<Reply>) -> Response {
+    let prompt = b.prompt.trim();
+    if prompt.is_empty() {
+        return err(StatusCode::BAD_REQUEST, "write a reply first");
+    }
+    match s.hub.follow_up(id, prompt) {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+async fn delete_task(State(s): S, Path(id): Path<u64>) -> Response {
+    match s.hub.delete(id) {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
 }
 
 #[derive(Deserialize)]

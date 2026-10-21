@@ -115,6 +115,11 @@ select, input[type=text] { padding: 7px 9px; border-radius: 8px; border: 1px sol
 #log { flex: 1; overflow: auto; padding: 14px 18px 30px; font: 13px/1.55 var(--mono); }
 .ev { white-space: pre-wrap; overflow-wrap: anywhere; }
 .ev.text { font-family: var(--sans); font-size: 14px; line-height: 1.6; margin: 6px 0 10px; }
+.ev.user { font-family: var(--sans); font-size: 14px; line-height: 1.55; background: color-mix(in srgb, var(--accent) 9%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 12px; padding: 9px 13px; margin: 18px 0 10px; max-width: 88%; }
+.ev.user:first-child { margin-top: 0; }
+#reply { display: flex; gap: 10px; align-items: flex-end; padding: 12px 18px; border-top: 1px solid var(--line); background: var(--panel); }
+#reply-text { flex: 1; min-height: 46px; max-height: 30vh; resize: vertical; padding: 10px 12px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--bg); }
+#reply-text:focus { outline: none; border-color: var(--accent); }
 .ev.meta { color: var(--meta); }
 .ev.tool { color: var(--tool); }
 .ev.warn { color: var(--warn); }
@@ -235,8 +240,13 @@ dialog label.f input, dialog label.f select { width: 100%; }
           <div id="out-route" class="muted"></div>
           <div class="spacer"></div>
           <button id="cancel" class="small danger" hidden>Cancel task</button>
+          <button id="delete-task" class="small ghost" hidden>Delete</button>
         </div>
         <div id="log"></div>
+        <form id="reply" hidden autocomplete="off">
+          <textarea id="reply-text" placeholder="Reply to continue this conversation…  (Ctrl+Enter)"></textarea>
+          <button type="submit" class="primary" id="reply-send">Reply</button>
+        </form>
       </section>
     </main>
   </div>
@@ -542,7 +552,8 @@ function renderTasks() {
     row.onclick = () => select(t.id);
     const secs = (t.ended || nowS()) - t.started;
     row.append(statusIcon(t), el("div", "t-title", t.prompt), el("div", "t-time", fmtDur(Math.max(0, secs))));
-    row.append(el("div", "t-route", t.route || (t.status === "running" ? "routing…" : "")));
+    const route = t.route || (t.status === "running" ? "routing…" : "");
+    row.append(el("div", "t-route", t.turns > 1 ? `${route} · ${t.turns} turns` : route));
     box.append(row);
   }
   const n = list.filter((t) => t.status === "running").length;
@@ -562,6 +573,7 @@ const summaryOf = (t) => { const { events, ...rest } = t; return rest; };
 // ── output log ─────────────────────────────────────────────────────────────
 function evNode(ev) {
   switch (ev.type) {
+    case "user": return el("div", "ev user", ev.text);
     case "routed": return el("div", "ev meta", `▸ ${ev.label || ev.model}${ev.effort ? " · effort " + ev.effort : ""} @ ${ev.account}   [${ev.profile}]   ${ev.why}`);
     case "text": return el("div", "ev text", ev.text);
     case "tool": return el("div", "ev tool", `· ${ev.name} ${ev.detail}`);
@@ -589,11 +601,19 @@ function renderLog() {
   if (!t) { renderWelcome(); return; }
   $("#out-title").textContent = t.prompt;
   $("#out-route").textContent = t.route || "";
-  $("#cancel").hidden = t.status !== "running";
+  syncTaskControls(t);
   for (const ev of S.logs.get(t.id) || []) { const n = evNode(ev); if (n) box.append(n); }
   if (t.status === "cancelled") box.append(el("div", "ev bad", "⊘ cancelled"));
   syncWaiting(t);
   box.scrollTop = box.scrollHeight;
+}
+// Cancel while running; Reply and Delete once it has finished.
+function syncTaskControls(t) {
+  const running = t.status === "running";
+  $("#cancel").hidden = !running;
+  $("#delete-task").hidden = running;
+  $("#delete-task").textContent = "Delete";
+  $("#reply").hidden = running || !t.resumable;
 }
 function syncWaiting(t) {
   const box = $("#log");
@@ -604,7 +624,8 @@ function syncWaiting(t) {
   if (busy && w) w.querySelector(".faint").textContent = t.route || "routing…";
 }
 function renderWelcome() {
-  $("#out-title").textContent = "Output"; $("#out-route").textContent = ""; $("#cancel").hidden = true;
+  $("#out-title").textContent = "Output"; $("#out-route").textContent = "";
+  $("#cancel").hidden = true; $("#delete-task").hidden = true; $("#reply").hidden = true;
   const w = el("div", "welcome");
   w.append(el("h3", null, "Welcome to fermi"));
   const ol = el("ol");
@@ -632,13 +653,17 @@ function onMessage(m) {
         const w = $("#waiting"); if (w) w.remove();
         const n = evNode(m.event); if (n) box.append(n);
         const t = S.tasks.get(m.id);
-        $("#out-route").textContent = t.route || ""; $("#cancel").hidden = t.status !== "running";
+        $("#out-route").textContent = t.route || ""; syncTaskControls(t);
         syncWaiting(t);
         if (stick) box.scrollTop = box.scrollHeight;
       }
       break;
     }
     case "task_update": S.tasks.set(m.task.id, m.task); renderTasks(); if (m.task.id === S.sel) renderLog(); break;
+    case "task_deleted":
+      S.tasks.delete(m.id); S.logs.delete(m.id);
+      if (S.sel === m.id) { S.sel = null; renderWelcome(); }
+      renderTasks(); break;
     case "accounts": if (S.state) { S.state.accounts = m.accounts; renderAccounts(); renderSplash(); } break;
     case "login_ok": toast(`✓ ${m.id} is logged in${m.email ? " as " + m.email : ""}`); break;
     case "config": case "resync": refresh(); break;
@@ -703,6 +728,20 @@ $("#composer").onsubmit = async (e) => {
   finally { $("#run").disabled = false; }
 };
 $("#prompt").onkeydown = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("#composer").requestSubmit(); } };
+$("#reply").onsubmit = async (e) => {
+  e.preventDefault();
+  const prompt = $("#reply-text").value.trim();
+  if (!prompt || S.sel == null) return;
+  $("#reply-send").disabled = true;
+  try { await api(`/api/tasks/${S.sel}/reply`, { prompt }); $("#reply-text").value = ""; }
+  catch (err) { toast(err.message, true); }
+  finally { $("#reply-send").disabled = false; }
+};
+$("#reply-text").onkeydown = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("#reply").requestSubmit(); } };
+$("#delete-task").onclick = confirmClick($("#delete-task"), "Click again to delete", async () => {
+  if (S.sel == null) return;
+  try { await api(`/api/tasks/${S.sel}/delete`, {}); } catch (e) { toast(e.message, true); }
+});
 $("#cancel").onclick = async () => { if (S.sel != null) { try { await api(`/api/tasks/${S.sel}/cancel`, {}); } catch (e) { toast(e.message, true); } } };
 
 const dlg = $("#dlg-add"), addForm = $("#add-form");

@@ -1,12 +1,13 @@
-//! Task registry for long-lived front ends (the dashboard server). Runs tasks
-//! on the engine, keeps every task's events, and broadcasts updates so any
-//! number of clients can follow along.
+//! Task registry for long-lived front ends (the dashboard and desktop app).
+//! Runs tasks on the engine, keeps every task's events, broadcasts updates
+//! to any number of clients, continues conversations, and keeps a history on
+//! disk (`~/.fermi/history/<id>.json`) so tasks survive restarts.
 
 use crate::engine::{Engine, Task};
 use crate::events::Event;
 use crate::util::now;
-use anyhow::Result;
-use serde::Serialize;
+use anyhow::{bail, Result};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -15,7 +16,10 @@ use std::sync::{Arc, Mutex, RwLock};
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::AbortHandle;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+/// How many past tasks are loaded at startup (older ones stay on disk).
+const HISTORY_LIMIT: usize = 500;
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
     Running,
@@ -24,9 +28,10 @@ pub enum TaskStatus {
     Cancelled,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskRec {
     pub id: u64,
+    /// The first prompt; the conversation's title.
     pub prompt: String,
     pub profile: Option<String>,
     pub model: Option<String>,
@@ -34,11 +39,23 @@ pub struct TaskRec {
     pub effort: Option<String>,
     pub cwd: PathBuf,
     pub status: TaskStatus,
-    /// `model @ account` once routed.
+    /// `Model · effort @ account` once routed.
     pub route: Option<String>,
     pub started: u64,
     pub ended: Option<u64>,
+    /// Where the latest turn ran, and its provider session (for follow-ups).
+    #[serde(default)]
+    pub ran_on: Option<RanOn>,
+    #[serde(default)]
+    pub session: Option<String>,
     pub events: Vec<Event>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RanOn {
+    pub profile: String,
+    pub model: String,
+    pub account: String,
 }
 
 impl TaskRec {
@@ -46,8 +63,10 @@ impl TaskRec {
     pub fn summary(&self) -> Value {
         json!({
             "id": self.id, "prompt": self.prompt, "profile": self.profile, "model": self.model,
-            "account": self.account, "effort": self.effort, "cwd": self.cwd, "status": self.status, "route": self.route,
-            "started": self.started, "ended": self.ended,
+            "account": self.account, "effort": self.effort, "cwd": self.cwd, "status": self.status,
+            "route": self.route, "started": self.started, "ended": self.ended,
+            "resumable": self.session.is_some() && self.ran_on.is_some(),
+            "turns": self.events.iter().filter(|e| matches!(e, Event::User { .. })).count(),
         })
     }
 }
@@ -58,16 +77,22 @@ pub struct Hub {
     handles: Mutex<HashMap<u64, AbortHandle>>,
     bus: broadcast::Sender<Value>,
     next: AtomicU64,
+    dir: PathBuf,
 }
 
 impl Hub {
     pub fn new(engine: Arc<Engine>) -> Arc<Self> {
+        let dir = engine.home.join("history");
+        let _ = std::fs::create_dir_all(&dir);
+        let tasks = load_history(&dir);
+        let next = tasks.iter().map(|t| t.id).max().unwrap_or(0) + 1;
         Arc::new(Hub {
             engine: RwLock::new(engine),
-            tasks: Mutex::new(vec![]),
+            tasks: Mutex::new(tasks),
             handles: Mutex::new(HashMap::new()),
             bus: broadcast::channel(4096).0,
-            next: AtomicU64::new(1),
+            next: AtomicU64::new(next),
+            dir,
         })
     }
 
@@ -116,11 +141,48 @@ impl Hub {
             route: None,
             started: now(),
             ended: None,
-            events: vec![],
+            ran_on: None,
+            session: None,
+            events: vec![Event::User { text: task.prompt.clone() }],
         };
         self.publish(json!({ "kind": "task_new", "task": rec.summary() }));
         self.tasks.lock().unwrap().push(rec);
+        self.save(id);
+        self.launch(id, task);
+        id
+    }
 
+    /// Continues a finished conversation in the same provider session, on the
+    /// same account and model it ran on.
+    pub fn follow_up(self: &Arc<Self>, id: u64, prompt: &str) -> Result<()> {
+        let task = {
+            let mut tasks = self.tasks.lock().unwrap();
+            let Some(t) = tasks.iter_mut().find(|t| t.id == id) else { bail!("no such task") };
+            if t.status == TaskStatus::Running {
+                bail!("this task is still running");
+            }
+            let (Some(session), Some(on)) = (t.session.clone(), t.ran_on.clone()) else {
+                bail!("this task can't be continued (it has no provider session)");
+            };
+            let mut task = Task::new(prompt, t.cwd.clone());
+            task.profile = Some(on.profile);
+            task.model = Some(on.model);
+            task.account = Some(on.account);
+            task.effort = t.effort.clone();
+            task.resume = Some(session);
+            t.status = TaskStatus::Running;
+            t.ended = None;
+            t.events.push(Event::User { text: prompt.to_string() });
+            task
+        };
+        let summary = self.get(id).map(|t| t.summary());
+        self.publish(json!({ "kind": "task_event", "id": id, "event": Event::User { text: prompt.to_string() }, "task": summary }));
+        self.save(id);
+        self.launch(id, task);
+        Ok(())
+    }
+
+    fn launch(self: &Arc<Self>, id: u64, task: Task) {
         let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
         let engine = self.engine();
         let runner = tokio::spawn(async move {
@@ -135,28 +197,38 @@ impl Hub {
             }
             hub.handles.lock().unwrap().remove(&id);
         });
-        id
     }
 
     fn record(&self, id: u64, ev: Event) {
-        {
+        let finished = {
             let mut tasks = self.tasks.lock().unwrap();
             let Some(t) = tasks.iter_mut().find(|t| t.id == id) else { return };
             if t.status != TaskStatus::Running {
                 return; // cancelled: drop late events
             }
+            let mut finished = false;
             match &ev {
-                Event::Routed { label, effort, account, .. } => {
+                Event::Routed { profile, model, label, effort, account, .. } => {
                     let effort = effort.as_deref().map(|e| format!(" · {e}")).unwrap_or_default();
                     t.route = Some(format!("{label}{effort} @ {account}"));
+                    t.ran_on = Some(RanOn { profile: profile.clone(), model: model.clone(), account: account.clone() });
                 }
+                Event::Session { id } => t.session = Some(id.clone()),
                 Event::Done { ok, .. } => {
                     t.status = if *ok { TaskStatus::Done } else { TaskStatus::Failed };
                     t.ended = Some(now());
+                    finished = true;
                 }
                 _ => {}
             }
-            t.events.push(ev.clone());
+            // Session ids are bookkeeping, not something to show.
+            if !matches!(ev, Event::Session { .. }) {
+                t.events.push(ev.clone());
+            }
+            finished
+        };
+        if finished {
+            self.save(id);
         }
         let summary = self.get(id).map(|t| t.summary());
         self.publish(json!({ "kind": "task_event", "id": id, "event": ev, "task": summary }));
@@ -172,6 +244,7 @@ impl Hub {
             t.ended = Some(now());
             t.summary()
         };
+        self.save(id);
         self.publish(json!({ "kind": "task_update", "task": summary }));
         true
     }
@@ -182,4 +255,52 @@ impl Hub {
             self.cancel(id);
         }
     }
+
+    /// Removes a finished task from the list and from disk.
+    pub fn delete(&self, id: u64) -> Result<()> {
+        {
+            let mut tasks = self.tasks.lock().unwrap();
+            match tasks.iter().position(|t| t.id == id) {
+                Some(i) if tasks[i].status == TaskStatus::Running => bail!("cancel the task before deleting it"),
+                Some(i) => {
+                    tasks.remove(i);
+                }
+                None => bail!("no such task"),
+            }
+        }
+        let _ = std::fs::remove_file(self.dir.join(format!("{id}.json")));
+        self.publish(json!({ "kind": "task_deleted", "id": id }));
+        Ok(())
+    }
+
+    fn save(&self, id: u64) {
+        let Some(t) = self.get(id) else { return };
+        let Ok(bytes) = serde_json::to_vec(&t) else { return };
+        let path = self.dir.join(format!("{id}.json"));
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, bytes).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}
+
+/// The newest tasks on disk. Ones that were running when the app closed
+/// come back as cancelled.
+fn load_history(dir: &std::path::Path) -> Vec<TaskRec> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return vec![] };
+    let mut tasks: Vec<TaskRec> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+        .filter_map(|e| serde_json::from_slice::<TaskRec>(&std::fs::read(e.path()).ok()?).ok())
+        .collect();
+    tasks.sort_by_key(|t| t.id);
+    if tasks.len() > HISTORY_LIMIT {
+        tasks.drain(..tasks.len() - HISTORY_LIMIT);
+    }
+    for t in tasks.iter_mut().filter(|t| t.status == TaskStatus::Running) {
+        t.status = TaskStatus::Cancelled;
+        t.ended.get_or_insert(t.started);
+        t.events.push(Event::Log { line: "interrupted: fermi was closed while this ran".into() });
+    }
+    tasks
 }

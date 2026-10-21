@@ -6,7 +6,7 @@ use super::proc::Proc;
 use super::{brief, classify_error, RunCtx, RunResult, Usage};
 use crate::config::Auth;
 use crate::events::{emit, Event};
-use crate::util::resolve_bin;
+use crate::util::{resolve_bin, uuid_v4};
 use anyhow::Result;
 
 /// Gemini's approval modes, derived from the profile's Claude permission mode
@@ -32,6 +32,14 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     ];
     if let Some(m) = &ctx.model.cli {
         args.extend(["--model".into(), m.clone()]);
+    }
+    match &ctx.task.resume {
+        Some(id) => args.extend(["--resume".into(), id.clone()]),
+        None => {
+            let id = uuid_v4();
+            args.extend(["--session-id".into(), id.clone()]);
+            emit(ctx.tx, Event::Session { id });
+        }
     }
     args.extend(ctx.profile.gemini_args.iter().cloned());
     // The prompt goes through stdin; -p switches to headless mode and is

@@ -92,7 +92,10 @@ fermi ui                    # the same dashboard in your browser
 ```
 
 Everything the TUI does, in the browser: run tasks in parallel with live
-output, see each account's login and usage, add accounts, and log in
+output, **reply to a finished task to continue the conversation** (same
+session, account and model), keep a history across restarts
+(`~/.fermi/history`), edit profiles, see each account's login and usage,
+add or remove accounts, and log in
 (a terminal window opens for the provider's sign-in, and the page updates
 once it's done). It's served by the same binary on `127.0.0.1` only. Every
 request needs the access key in the link `fermi ui` prints, and requests from

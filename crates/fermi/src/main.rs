@@ -191,6 +191,7 @@ async fn run(t: Target) -> Result<ExitCode> {
                 let effort = effort.map(|e| format!(" · effort {e}")).unwrap_or_default();
                 eprintln!("{}", paint("33", format!("▸ {label}{effort} @ {account}  [{profile}]  {why}")))
             }
+            Event::User { .. } | Event::Session { .. } => {}
             Event::Text { text } => println!("{text}"),
             Event::Tool { name, detail } => eprintln!("{}", paint("36", format!("  · {name} {detail}"))),
             Event::Limit { account, utilization, blocked, .. } => {

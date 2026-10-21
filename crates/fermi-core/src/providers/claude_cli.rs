@@ -5,7 +5,7 @@ use super::proc::Proc;
 use super::{brief, classify_error, RunCtx, RunResult, Usage};
 use crate::events::{emit, Event};
 use crate::mcp;
-use crate::util::resolve_bin;
+use crate::util::{resolve_bin, uuid_v4};
 use anyhow::Result;
 
 pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
@@ -17,6 +17,15 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     }
     if let Some(e) = ctx.effort() {
         args.extend(["--effort".into(), e.to_string()]);
+    }
+    // We choose the session id up front so a follow-up can `--resume` it.
+    match &ctx.task.resume {
+        Some(id) => args.extend(["--resume".into(), id.clone()]),
+        None => {
+            let id = uuid_v4();
+            args.extend(["--session-id".into(), id.clone()]);
+            emit(ctx.tx, Event::Session { id });
+        }
     }
     if let Some(pm) = &ctx.profile.permission_mode {
         args.extend(["--permission-mode".into(), pm.clone()]);

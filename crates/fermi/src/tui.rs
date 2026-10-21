@@ -739,6 +739,7 @@ impl App {
                 t.route = format!("{label}{effort} @ {account}");
                 t.lines.push((Kind::Meta, format!("▸ {label}{effort} @ {account}  [{profile}]  {why}")));
             }
+            Event::User { .. } | Event::Session { .. } => {}
             Event::Text { text } => {
                 t.lines.extend(text.lines().map(|l| (Kind::Text, l.to_string())));
                 t.lines.push((Kind::Text, String::new()));
