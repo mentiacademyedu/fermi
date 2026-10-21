@@ -19,6 +19,18 @@ fn out_path(ctx: &RunCtx<'_>) -> PathBuf {
     }
 }
 
+/// The most recently written image file in `dir`, if any.
+fn newest_image(dir: &std::path::Path) -> Option<PathBuf> {
+    std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.path().extension().and_then(|x| x.to_str()).is_some_and(|x| matches!(x.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "webp"))
+        })
+        .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())
+        .map(|e| e.path())
+}
+
 pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     if ctx.account.provider != Provider::Openai {
         bail!("image model `{}` needs an openai account", ctx.model.id);
@@ -51,15 +63,29 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
             )
         }
         Auth::Cli => {
+            // Codex's image tool keeps what it makes in
+            // `<CODEX_HOME>/generated_images/<session>/`; fermi copies it out,
+            // so Codex runs read-only and never needs to write files itself.
             let prompt = format!(
-                "Generate an image with your image generation tool and save it to `{}`. \
-                 Reply only with the saved path.\n\nImage description:\n{}",
-                out.display(),
+                "Generate exactly one image with your image generation tool from the description below. \
+                 Don't run commands or write files: the image is collected automatically. \
+                 Reply with one short sentence describing it.\n\nImage description:\n{}",
                 ctx.task.prompt
             );
-            let mut r = codex_cli::run(ctx, &prompt, ctx.model.cli.as_deref()).await?;
-            if matches!(r.status, super::Status::Ok) && !out.is_file() {
-                r = RunResult::failed(format!("codex finished but no image was written to {}", out.display()), false);
+            let mut r = codex_cli::run(ctx, &prompt, ctx.model.cli.as_deref(), Some("read-only")).await?;
+            if matches!(r.status, super::Status::Ok) {
+                let found = r.session.as_deref().and_then(|s| newest_image(&codex_cli::codex_home(ctx.account)?.join("generated_images").join(s)));
+                match found {
+                    Some(src) => {
+                        std::fs::copy(&src, &out)?;
+                    }
+                    None => {
+                        r = RunResult::failed(
+                            "Codex finished without generating an image (this ChatGPT plan may not include image generation)".into(),
+                            false,
+                        )
+                    }
+                }
             }
             r
         }

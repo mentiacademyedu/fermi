@@ -69,6 +69,11 @@ button:disabled { opacity: .45; cursor: default; }
 .app.no-files { grid-template-columns: 272px minmax(0, 1fr) 0; }
 .app.no-side.no-files { grid-template-columns: 0 minmax(0, 1fr) 0; }
 .app.no-side .side, .app.no-files .files { display: none; }
+/* Fixed cells: a hidden panel must not let the others shift into its column. */
+.side { grid-column: 1; grid-row: 1; }
+.center { grid-column: 2; grid-row: 1; }
+.files { grid-column: 3; grid-row: 1; }
+.status { grid-row: 2; }
 
 /* ── sidebar ───────────────────────────────────────────────────────────── */
 .side { background: var(--side); display: flex; flex-direction: column; min-height: 0; padding: 10px 10px 8px; gap: 8px; }

@@ -141,7 +141,7 @@ fn task_from(t: Target) -> Result<Task> {
     }
     anyhow::ensure!(!prompt.trim().is_empty(), "empty prompt");
     let cwd = match t.dir {
-        Some(d) => std::fs::canonicalize(d)?,
+        Some(d) => fermi::files::canon(&d).ok_or_else(|| anyhow::anyhow!("folder not found: {}", d.display()))?,
         None => std::env::current_dir()?,
     };
     let mut task = Task::new(prompt, cwd);

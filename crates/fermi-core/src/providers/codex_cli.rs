@@ -5,8 +5,31 @@ use super::{brief, classify_error, RunCtx, RunResult, Usage};
 use crate::events::{emit, Event};
 use crate::util::resolve_bin;
 use anyhow::Result;
+use std::path::PathBuf;
 
-pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>) -> Result<RunResult> {
+/// The Codex config dir this account uses (`CODEX_HOME`).
+pub fn codex_home(account: &crate::config::Account) -> Option<PathBuf> {
+    account
+        .home_dir()
+        .or_else(|| std::env::var_os("CODEX_HOME").map(PathBuf::from))
+        .or_else(|| dirs::home_dir().map(|h| h.join(".codex")))
+}
+
+/// On Windows, Codex only enforces write sandboxes through its own Windows
+/// sandbox; when that's not configured it silently runs read-only. Turn the
+/// unelevated one on unless the account's config already picks a mode.
+fn needs_windows_sandbox(account: &crate::config::Account, sandbox: Option<&str>) -> bool {
+    if !cfg!(windows) || !matches!(sandbox, Some("workspace-write")) {
+        return false;
+    }
+    let configured = codex_home(account)
+        .and_then(|h| std::fs::read_to_string(h.join("config.toml")).ok())
+        .is_some_and(|t| t.contains("[windows]"));
+    !configured
+}
+
+/// `sandbox` overrides the profile/task sandbox (image generation runs read-only).
+pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>, sandbox: Option<&str>) -> Result<RunResult> {
     let e = ctx.engine;
     let bin = resolve_bin("codex", e.cfg.bins.codex.as_deref())?;
     // `exec resume <id>` continues a thread; it runs in the process's working
@@ -28,11 +51,15 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>) -> Result<
         // and quotes would have to survive the npm .cmd shim on Windows.
         args.extend(["--config".into(), format!("model_reasoning_effort={e}")]);
     }
-    if let Some(s) = ctx.codex_sandbox() {
+    let sandbox = sandbox.or(ctx.codex_sandbox());
+    if let Some(s) = sandbox {
         match resume {
             Some(_) => args.extend(["--config".into(), format!("sandbox_mode={s}")]),
             None => args.extend(["--sandbox".into(), s.to_string()]),
         }
+    }
+    if needs_windows_sandbox(ctx.account, sandbox) {
+        args.extend(["--config".into(), "windows.sandbox=unelevated".into()]);
     }
     args.extend(ctx.profile.codex_args.iter().cloned());
     if let Some(id) = resume {
@@ -48,11 +75,13 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>) -> Result<
 
     let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, prompt, ctx.tx).await?;
     let (mut text, mut usage, mut error, mut completed) = (String::new(), Usage::default(), None::<String>, false);
+    let mut session = None;
 
     while let Some(v) = p.next_json().await? {
         match v["type"].as_str().unwrap_or_default() {
             "thread.started" => {
                 if let Some(id) = v["thread_id"].as_str() {
+                    session = Some(id.to_string());
                     emit(ctx.tx, Event::Session { id: id.to_string() });
                 }
             }
@@ -101,5 +130,6 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>) -> Result<
         _ => RunResult::ok(text, usage),
     };
     res.usage = usage;
+    res.session = session;
     Ok(res)
 }

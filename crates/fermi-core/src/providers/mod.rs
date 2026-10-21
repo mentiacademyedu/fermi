@@ -66,17 +66,22 @@ pub struct RunResult {
     pub text: String,
     pub usage: Usage,
     pub artifacts: Vec<PathBuf>,
+    /// The provider session this run used, when the adapter knows it.
+    pub session: Option<String>,
 }
 
 impl RunResult {
+    fn new(status: Status, text: String, usage: Usage) -> Self {
+        RunResult { status, text, usage, artifacts: vec![], session: None }
+    }
     pub fn ok(text: String, usage: Usage) -> Self {
-        RunResult { status: Status::Ok, text, usage, artifacts: vec![] }
+        Self::new(Status::Ok, text, usage)
     }
     pub fn failed(msg: String, retry: bool) -> Self {
-        RunResult { status: Status::Failed { msg, retry }, text: String::new(), usage: Usage::default(), artifacts: vec![] }
+        Self::new(Status::Failed { msg, retry }, String::new(), Usage::default())
     }
     pub fn limited(until: Option<u64>) -> Self {
-        RunResult { status: Status::Limited { until }, text: String::new(), usage: Usage::default(), artifacts: vec![] }
+        Self::new(Status::Limited { until }, String::new(), Usage::default())
     }
 }
 
@@ -86,7 +91,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     }
     match (ctx.account.provider, ctx.account.auth) {
         (Provider::Claude, Auth::Cli) => claude_cli::run(ctx).await,
-        (Provider::Openai, Auth::Cli) => codex_cli::run(ctx, &ctx.task.prompt, ctx.model.cli.as_deref()).await,
+        (Provider::Openai, Auth::Cli) => codex_cli::run(ctx, &ctx.task.prompt, ctx.model.cli.as_deref(), None).await,
         (Provider::Claude, Auth::Api) => api::anthropic(ctx).await,
         (Provider::Openai, Auth::Api) => api::openai(ctx).await,
         // The Gemini CLI takes API keys too, so both go through it.
