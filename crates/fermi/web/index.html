@@ -47,9 +47,9 @@ header { display: flex; align-items: center; gap: 14px; padding: 0 18px; border-
 .pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 .pill.off::before { background: var(--bad); }
 .body { display: grid; grid-template-columns: 330px 1fr; min-height: 0; }
-aside { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+aside { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; overflow-y: auto; background: var(--panel); }
 aside section { padding: 14px; border-bottom: 1px solid var(--line); }
-aside section.grow { flex: 1; overflow: auto; border-bottom: 0; }
+aside section.grow { flex: 1 0 auto; border-bottom: 0; }
 .sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; font-weight: 600; }
 main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
@@ -129,8 +129,28 @@ select, input[type=text] { padding: 7px 9px; border-radius: 8px; border: 1px sol
 .welcome ol { padding-left: 20px; } .welcome li { margin: 4px 0; }
 code { font: 12.5px var(--mono); background: var(--panel-2); border: 1px solid var(--line); padding: 1px 5px; border-radius: 5px; }
 
+/* profiles */
+.prof { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+.prof:hover { background: var(--panel-2); border-color: var(--line); }
+.p-name { font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.p-meta { grid-column: 1 / 3; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-edit { color: var(--faint); font-size: 12px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 10px; font-size: 13px; color: var(--text); cursor: pointer; user-select: none; }
+.chip input { margin: 0; accent-color: var(--accent); }
+.chip:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.chip.check { align-self: start; }
+.chip .faint { font-size: 11.5px; }
+.model-group { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; margin: 8px 0 5px; }
+textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); font: 13px var(--mono); }
+.push-left { margin-right: auto; }
+.a-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.linkish { background: none; border: 0; padding: 2px 4px; font-size: 11.5px; color: var(--faint); }
+.linkish:hover { color: var(--bad); }
+
 /* dialog + toast */
-dialog { border: 1px solid var(--line-2); border-radius: 14px; background: var(--panel); color: var(--text); padding: 22px; width: min(460px, 92vw); }
+dialog { border: 1px solid var(--line-2); border-radius: 14px; background: var(--panel); color: var(--text); padding: 22px; width: min(460px, 92vw); max-height: 90vh; }
+dialog.wide { width: min(680px, 94vw); }
 dialog::backdrop { background: rgba(0,0,0,.5); }
 dialog h3 { margin: 0 0 4px; }
 dialog form { display: grid; gap: 12px; }
@@ -187,6 +207,10 @@ dialog label.f input, dialog label.f select { width: 100%; }
         <div class="sec-head"><h2>Accounts</h2><button id="add-acct" class="small">+ Add account</button></div>
         <div id="accounts"></div>
       </section>
+      <section>
+        <div class="sec-head"><h2>Profiles</h2><button id="add-profile" class="small">+ New profile</button></div>
+        <div id="profiles"></div>
+      </section>
       <section class="grow">
         <div class="sec-head"><h2>Tasks</h2></div>
         <div id="tasks"></div>
@@ -235,6 +259,40 @@ dialog label.f input, dialog label.f select { width: 100%; }
     <div class="actions">
       <button type="button" class="ghost" id="add-cancel">Cancel</button>
       <button type="submit" class="primary" id="add-save">Save and log in</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-profile" class="wide">
+  <form id="prof-form" method="dialog">
+    <div><h3 id="prof-title">New profile</h3><div class="muted">A profile is a set of accounts. Tasks only ever use their profile's accounts, so work and personal never mix.</div></div>
+    <label class="f">Name <input type="text" name="name" placeholder="work" required pattern="[A-Za-z0-9_\-]+" title="letters, digits, - or _"></label>
+    <div class="f"><span>Accounts <span class="faint">(tried in this order)</span></span><div class="chips" id="prof-accounts"></div></div>
+    <label class="f">Project folders <span class="faint">one per line; tasks started in these folders use this profile</span>
+      <textarea class="paths" name="paths" spellcheck="false" placeholder="C:\work"></textarea></label>
+    <div class="row">
+      <label class="f">Model choice
+        <select name="mode">
+          <option value="auto">Auto: best model for each task</option>
+          <option value="pinned">Only the models I pick</option>
+          <option value="single">Always one model</option>
+        </select></label>
+      <label class="f">Default effort <select name="effort"></select></label>
+      <label class="f">What agents may do
+        <select name="permission_mode">
+          <option value="acceptEdits">Edit files freely (recommended)</option>
+          <option value="bypassPermissions">Anything, without asking</option>
+          <option value="plan">Plan only, change nothing</option>
+          <option value="">Ask first (unanswered asks are skipped)</option>
+        </select></label>
+    </div>
+    <div class="f" id="prof-models-row"><span id="prof-models-label">Models</span><div id="prof-models"></div></div>
+    <label class="chip check"><input type="checkbox" name="default"> Default profile, used when no folder matches</label>
+    <div class="err" id="prof-err"></div>
+    <div class="actions">
+      <button type="button" class="ghost danger push-left" id="prof-delete">Delete profile</button>
+      <button type="button" class="ghost" id="prof-cancel">Cancel</button>
+      <button type="submit" class="primary">Save</button>
     </div>
   </form>
 </dialog>
@@ -305,17 +363,132 @@ function renderAccounts() {
     if (a.running) meta.push(`${a.running} running`);
     if (a.tasks) meta.push(`${a.tasks} tasks · ${fmtTok(a.tokens)} tokens`);
     if (meta.length) main.append(el("div", "a-meta", meta.join(" · ")));
-    const actions = el("div");
+    const actions = el("div", "a-actions");
     if (a.auth === "cli") {
       const b = el("button", "small" + (a.logged_in === false ? " primary" : " ghost"), a.logged_in === false ? "Log in" : "Re-login");
-      b.title = a.logged_in === false ? "Opens a terminal window to sign in" : "Sign in again (e.g. to switch organization)";
+      b.title = a.logged_in === false ? "Opens a window to sign in" : "Sign in again (e.g. to switch organization)";
       b.onclick = () => login(a.id);
       actions.append(b);
     }
+    const rm = el("button", "linkish", "Remove");
+    rm.title = "Remove this account from fermi (its login stays on disk)";
+    rm.onclick = confirmClick(rm, "Click again to remove", async () => {
+      try { toast((await api(`/api/accounts/${encodeURIComponent(a.id)}/remove`, {})).message); }
+      catch (e) { toast(e.message, true); }
+    });
+    actions.append(rm);
     card.append(dot, main, actions);
     box.append(card);
   }
 }
+
+// Destructive buttons need a second click within a few seconds.
+function confirmClick(btn, armedText, action) {
+  let armed = null; const label = btn.textContent;
+  return () => {
+    if (armed) { clearTimeout(armed); armed = null; btn.textContent = label; action(); return; }
+    btn.textContent = armedText;
+    armed = setTimeout(() => { armed = null; btn.textContent = label; }, 3000);
+  };
+}
+
+// ── profiles ───────────────────────────────────────────────────────────────
+const MODE_NAMES = { auto: "auto", pinned: "picked models", single: "one model" };
+function renderProfiles() {
+  const box = $("#profiles"); box.replaceChildren();
+  const list = S.state.profiles;
+  if (!list.length) box.append(el("div", "empty", "No profiles: every task can use every account."));
+  for (const p of list) {
+    const row = el("div", "prof"); row.onclick = () => openProfile(p);
+    const name = el("div", "p-name", p.name);
+    name.append(el("span", "badge", MODE_NAMES[p.mode] || p.mode));
+    if (p.default) name.append(el("span", "badge", "default"));
+    if (p.name === S.state.here) name.append(el("span", "badge", "this folder"));
+    row.append(name, el("span", "p-edit", "Edit"));
+    const meta = [`${p.accounts.length} account${p.accounts.length === 1 ? "" : "s"}`];
+    if (p.paths.length) meta.push(p.paths.join(", "));
+    if (p.effort) meta.push(`effort ${p.effort}`);
+    row.append(el("div", "p-meta", meta.join(" · ")));
+    box.append(row);
+  }
+}
+
+const profDlg = $("#dlg-profile"), profForm = $("#prof-form");
+let profEditing = null;
+function openProfile(p) {
+  profEditing = p ? p.name : null;
+  $("#prof-title").textContent = p ? `Edit profile · ${p.name}` : "New profile";
+  $("#prof-err").textContent = "";
+  $("#prof-delete").hidden = !p;
+  $("#prof-delete").textContent = "Delete profile";
+  profForm.name.value = p ? p.name : "";
+  profForm.paths.value = p ? p.paths.join("\n") : "";
+  profForm.mode.value = p ? p.mode : "auto";
+  profForm.effort.replaceChildren(...[["", "Model default"], ...S.state.efforts.map((e) => [e, e])].map(([v, l]) => { const o = el("option", null, l); o.value = v; return o; }));
+  profForm.effort.value = p?.effort || "";
+  profForm.permission_mode.value = p ? (p.permission_mode || "") : "acceptEdits";
+  profForm.default.checked = !!p?.default;
+  // Accounts: the profile's, in its order, then the rest.
+  const chosen = p ? p.accounts : [];
+  const order = [...chosen, ...S.state.accounts.map((a) => a.id).filter((id) => !chosen.includes(id))];
+  $("#prof-accounts").replaceChildren(...order.map((id) => {
+    const a = S.state.accounts.find((x) => x.id === id);
+    const chip = el("label", "chip"); const cb = el("input"); cb.type = "checkbox"; cb.value = id; cb.checked = chosen.includes(id);
+    chip.append(cb, document.createTextNode(id), el("span", "faint", a ? a.provider : "missing"));
+    return chip;
+  }));
+  if (!S.state.accounts.length) $("#prof-accounts").append(el("span", "faint", "Add an account first."));
+  renderProfModels(p ? p.models : []);
+  profDlg.showModal(); (p ? profForm.paths : profForm.name).focus();
+}
+function renderProfModels(selected) {
+  const mode = profForm.mode.value;
+  $("#prof-models-row").hidden = mode === "auto";
+  $("#prof-models-label").textContent = mode === "single" ? "The model to always use" : "Models fermi may pick from (it still picks the best fit per task)";
+  const box = $("#prof-models"); box.replaceChildren();
+  const groups = new Map();
+  for (const m of S.state.models) {
+    const g = { claude: "Claude", openai: "OpenAI", gemini: "Gemini" }[m.provider] || m.provider;
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(m);
+  }
+  for (const [g, models] of groups) {
+    box.append(el("div", "model-group", g));
+    const chips = el("div", "chips");
+    for (const m of models) {
+      const chip = el("label", "chip"); const inp = el("input");
+      inp.type = mode === "single" ? "radio" : "checkbox"; inp.name = "model"; inp.value = m.id; inp.checked = selected.includes(m.id);
+      chip.append(inp, document.createTextNode(m.label), el("span", "faint", m.caps.includes("image") ? "images" : m.tier_name));
+      chips.append(chip);
+    }
+    box.append(chips);
+  }
+}
+profForm.mode.onchange = () => renderProfModels([...profForm.querySelectorAll("input[name=model]:checked")].map((i) => i.value));
+$("#prof-cancel").onclick = () => profDlg.close();
+$("#add-profile").onclick = () => openProfile(null);
+$("#prof-delete").onclick = confirmClick($("#prof-delete"), "Click again to delete", async () => {
+  try { const r = await api(`/api/profiles/${encodeURIComponent(profEditing)}/delete`, {}); profDlg.close(); toast(r.message); }
+  catch (e) { $("#prof-err").textContent = e.message; }
+});
+profForm.onsubmit = async (e) => {
+  e.preventDefault();
+  const body = {
+    original: profEditing,
+    name: profForm.name.value.trim(),
+    accounts: [...$("#prof-accounts").querySelectorAll("input:checked")].map((i) => i.value),
+    paths: profForm.paths.value.split("\n").map((s) => s.trim()).filter(Boolean),
+    mode: profForm.mode.value,
+    models: profForm.mode.value === "auto" ? [] : [...profForm.querySelectorAll("input[name=model]:checked")].map((i) => i.value),
+    effort: profForm.effort.value || null,
+    permission_mode: profForm.permission_mode.value || null,
+    default: profForm.default.checked,
+  };
+  if (!body.accounts.length) { $("#prof-err").textContent = "Pick at least one account."; return; }
+  if (body.mode !== "auto" && !body.models.length) { $("#prof-err").textContent = "Pick at least one model, or set Model choice to Auto."; return; }
+  try { const r = await api("/api/profiles", body); profDlg.close(); toast(r.message); }
+  catch (err) { $("#prof-err").textContent = err.message; }
+};
 
 async function login(id) {
   try { const r = await api(`/api/accounts/${encodeURIComponent(id)}/login`, {}); toast(r.message); }
@@ -485,7 +658,7 @@ async function refresh() {
   try {
     S.state = await api("/api/state");
     for (const t of S.state.tasks) S.tasks.set(t.id, t);
-    renderAccounts(); renderComposer(); renderTasks();
+    renderAccounts(); renderProfiles(); renderComposer(); renderTasks();
     const linked = Number(new URLSearchParams(location.search).get("task"));
     if (S.sel == null && S.tasks.has(linked)) S.sel = linked;
     if (S.sel != null) { S.logs.delete(S.sel); select(S.sel); } else renderWelcome();

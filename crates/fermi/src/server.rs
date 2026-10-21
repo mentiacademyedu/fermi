@@ -97,6 +97,9 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         .route("/api/accounts", post(add_account))
         .route("/api/accounts/probe", post(probe))
         .route("/api/accounts/{id}/login", post(login))
+        .route("/api/accounts/{id}/remove", post(remove_account))
+        .route("/api/profiles", post(save_profile))
+        .route("/api/profiles/{name}/delete", post(delete_profile))
         .route("/api/ws", get(ws))
         .route_layer(middleware::from_fn_with_state(srv.clone(), require_token))
         .route("/", get(index))
@@ -217,7 +220,13 @@ impl Srv {
             .cfg
             .profiles
             .iter()
-            .map(|p| json!({ "name": p.name, "mode": p.mode, "accounts": p.accounts, "models": p.models, "paths": p.paths }))
+            .map(|p| {
+                json!({
+                    "name": p.name, "mode": p.mode, "accounts": p.accounts, "models": p.models, "paths": p.paths,
+                    "effort": p.effort, "permission_mode": p.permission_mode,
+                    "default": e.cfg.default_profile.as_deref() == Some(p.name.as_str()),
+                })
+            })
             .collect();
         let models: Vec<Value> = e
             .catalog
@@ -377,6 +386,32 @@ async fn add_account(State(s): S, Json(b): Json<NewAccount>) -> Response {
         }
         Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
     }
+}
+
+/// Runs a config edit, then reloads so every client sees it.
+fn edit_config(s: &Srv, edit: impl FnOnce() -> Result<String>) -> Response {
+    match edit().and_then(|msg| {
+        s.hub.reload()?;
+        Ok(msg)
+    }) {
+        Ok(msg) => Json(json!({ "message": msg })).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+async fn save_profile(State(s): S, Json(p): Json<setup::ProfileEdit>) -> Response {
+    edit_config(&s, || setup::save_profile(&p))
+}
+
+async fn delete_profile(State(s): S, Path(name): Path<String>) -> Response {
+    edit_config(&s, || setup::delete_profile(&name))
+}
+
+async fn remove_account(State(s): S, Path(id): Path<String>) -> Response {
+    let r = edit_config(&s, || setup::remove_account(&id));
+    s.auth.lock().unwrap().remove(&id);
+    s.push_accounts();
+    r
 }
 
 async fn probe(State(s): S) -> Json<Value> {

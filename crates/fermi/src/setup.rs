@@ -92,6 +92,147 @@ pub fn add_account(id: &str, provider: &str, key_env: Option<&str>, home: Option
     })
 }
 
+// ── editing the config (keeps comments and layout) ───────────────────────────
+
+fn load_doc() -> Result<DocumentMut> {
+    let path = Config::path();
+    let text = std::fs::read_to_string(&path).with_context(|| format!("reading {} (run `fermi init`)", path.display()))?;
+    Ok(text.parse()?)
+}
+
+/// Validates the edited config before anything touches the disk.
+fn save_doc(doc: &DocumentMut) -> Result<()> {
+    let out = doc.to_string();
+    Config::parse(&out).context("that change would make the config invalid")?;
+    std::fs::write(Config::path(), out)?;
+    Ok(())
+}
+
+fn str_array<S: AsRef<str>>(items: &[S]) -> Item {
+    let mut a = Array::new();
+    for s in items {
+        a.push(s.as_ref());
+    }
+    value(a)
+}
+
+fn valid_name(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+}
+
+/// A profile as edited in the dashboard.
+#[derive(Debug, serde::Deserialize)]
+pub struct ProfileEdit {
+    /// Current name when editing (None = new profile).
+    pub original: Option<String>,
+    pub name: String,
+    pub accounts: Vec<String>,
+    #[serde(default)]
+    pub paths: Vec<String>,
+    pub mode: String,
+    #[serde(default)]
+    pub models: Vec<String>,
+    pub effort: Option<String>,
+    pub permission_mode: Option<String>,
+    #[serde(default)]
+    pub default: bool,
+}
+
+/// Creates or updates a profile. Keys the dashboard doesn't edit (sandbox,
+/// extra CLI args, …) are left as they are.
+pub fn save_profile(p: &ProfileEdit) -> Result<String> {
+    let mut doc = load_doc()?;
+    let msg = apply_profile(&mut doc, p)?;
+    save_doc(&doc)?;
+    Ok(msg)
+}
+
+fn apply_profile(doc: &mut DocumentMut, p: &ProfileEdit) -> Result<String> {
+    let name = p.name.trim();
+    if !valid_name(name) {
+        bail!("profile name must be letters, digits, - or _ (e.g. work)");
+    }
+    let profiles = doc.entry("profiles").or_insert(Item::ArrayOfTables(ArrayOfTables::new()));
+    let Some(arr) = profiles.as_array_of_tables_mut() else { bail!("`profiles` is not [[profiles]]") };
+    let find = |arr: &ArrayOfTables, n: &str| arr.iter().position(|t| t.get("name").and_then(|v| v.as_str()) == Some(n));
+
+    let original = p.original.as_deref().filter(|o| !o.is_empty());
+    if original != Some(name) && find(arr, name).is_some() {
+        bail!("a profile named `{name}` already exists");
+    }
+    let idx = match original.and_then(|o| find(arr, o)) {
+        Some(i) => i,
+        None if original.is_some() => bail!("profile `{}` no longer exists", original.unwrap_or_default()),
+        None => {
+            arr.push(Table::new());
+            arr.len() - 1
+        }
+    };
+    let t = arr.get_mut(idx).expect("index is valid");
+    t["name"] = value(name);
+    t["accounts"] = str_array(&p.accounts);
+    let paths: Vec<&str> = p.paths.iter().map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    t["paths"] = str_array(&paths);
+    t["mode"] = value(p.mode.as_str());
+    let set_or_remove = |t: &mut Table, key: &str, v: Option<Item>| match v {
+        Some(v) => {
+            t[key] = v;
+        }
+        None => {
+            t.remove(key);
+        }
+    };
+    set_or_remove(t, "models", (!p.models.is_empty()).then(|| str_array(&p.models)));
+    set_or_remove(t, "effort", p.effort.as_deref().filter(|e| !e.is_empty()).map(value));
+    set_or_remove(t, "permission_mode", p.permission_mode.as_deref().filter(|e| !e.is_empty()).map(value));
+
+    let current_default = doc.get("default_profile").and_then(|v| v.as_str()).map(str::to_string);
+    if p.default {
+        doc["default_profile"] = value(name);
+    } else if current_default.as_deref().is_some_and(|d| Some(d) == original || d == name) {
+        doc.remove("default_profile");
+    }
+    Ok(match original {
+        Some(o) if o != name => format!("renamed profile `{o}` to `{name}`"),
+        Some(_) => format!("saved profile `{name}`"),
+        None => format!("created profile `{name}`"),
+    })
+}
+
+pub fn delete_profile(name: &str) -> Result<String> {
+    let mut doc = load_doc()?;
+    let Some(arr) = doc.get_mut("profiles").and_then(|i| i.as_array_of_tables_mut()) else { bail!("no profiles") };
+    let Some(i) = arr.iter().position(|t| t.get("name").and_then(|v| v.as_str()) == Some(name)) else {
+        bail!("no profile named `{name}`")
+    };
+    arr.remove(i);
+    if doc.get("default_profile").and_then(|v| v.as_str()) == Some(name) {
+        doc.remove("default_profile");
+    }
+    save_doc(&doc)?;
+    Ok(format!("deleted profile `{name}`"))
+}
+
+/// Removes an account and takes it out of every profile. Its login folder is
+/// left on disk, so adding it back under the same name needs no new login.
+pub fn remove_account(id: &str) -> Result<String> {
+    let mut doc = load_doc()?;
+    let Some(arr) = doc.get_mut("accounts").and_then(|i| i.as_array_of_tables_mut()) else { bail!("no accounts") };
+    let Some(i) = arr.iter().position(|t| t.get("id").and_then(|v| v.as_str()) == Some(id)) else {
+        bail!("no account named `{id}`")
+    };
+    arr.remove(i);
+    if let Some(profiles) = doc.get_mut("profiles").and_then(|i| i.as_array_of_tables_mut()) {
+        for t in profiles.iter_mut() {
+            if let Some(a) = t.get_mut("accounts").and_then(|v| v.as_array_mut()) {
+                a.retain(|v| v.as_str() != Some(id));
+            }
+        }
+    }
+    save_doc(&doc)?;
+    Ok(format!("removed account `{id}`"))
+}
+
 fn push_table(doc: &mut DocumentMut, key: &str, t: Table) {
     match doc.get_mut(key).and_then(|i| i.as_array_of_tables_mut()) {
         Some(arr) => arr.push(t),
@@ -210,5 +351,49 @@ pub async fn status(engine: &Engine) {
             s.tasks,
             fmt_tokens(s.input_tokens + s.output_tokens),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn edit(name: &str, original: Option<&str>, default: bool) -> ProfileEdit {
+        ProfileEdit {
+            original: original.map(Into::into),
+            name: name.into(),
+            accounts: vec!["claude-personal".into()],
+            paths: vec!["C:/work".into()],
+            mode: "auto".into(),
+            models: vec![],
+            effort: Some("high".into()),
+            permission_mode: None,
+            default,
+        }
+    }
+
+    #[test]
+    fn profile_edits_keep_config_valid() {
+        let mut doc: DocumentMut = TEMPLATE.parse().unwrap();
+        apply_profile(&mut doc, &edit("work", None, false)).unwrap();
+        apply_profile(&mut doc, &edit("acme", Some("work"), true)).unwrap();
+        let text = doc.to_string();
+        let cfg = Config::parse(&text).unwrap();
+        assert_eq!(cfg.default_profile.as_deref(), Some("acme"), "default must stay a top-level key:\n{text}");
+        let acme = cfg.profiles.iter().find(|p| p.name == "acme").unwrap();
+        assert_eq!(acme.effort.as_deref(), Some("high"));
+        assert!(cfg.profiles.iter().all(|p| p.name != "work"));
+        // Comments survive.
+        assert!(text.contains("# ── Accounts"));
+    }
+
+    #[test]
+    fn default_added_back_stays_top_level() {
+        let mut doc: DocumentMut = TEMPLATE.parse().unwrap();
+        doc.remove("default_profile");
+        apply_profile(&mut doc, &edit("work", None, true)).unwrap();
+        let text = doc.to_string();
+        let cfg = Config::parse(&text).unwrap();
+        assert_eq!(cfg.default_profile.as_deref(), Some("work"), "default must stay a top-level key:\n{text}");
     }
 }
