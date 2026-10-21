@@ -31,6 +31,7 @@ pub struct TaskRec {
     pub profile: Option<String>,
     pub model: Option<String>,
     pub account: Option<String>,
+    pub effort: Option<String>,
     pub cwd: PathBuf,
     pub status: TaskStatus,
     /// `model @ account` once routed.
@@ -45,7 +46,7 @@ impl TaskRec {
     pub fn summary(&self) -> Value {
         json!({
             "id": self.id, "prompt": self.prompt, "profile": self.profile, "model": self.model,
-            "account": self.account, "cwd": self.cwd, "status": self.status, "route": self.route,
+            "account": self.account, "effort": self.effort, "cwd": self.cwd, "status": self.status, "route": self.route,
             "started": self.started, "ended": self.ended,
         })
     }
@@ -109,6 +110,7 @@ impl Hub {
             profile: task.profile.clone(),
             model: task.model.clone(),
             account: task.account.clone(),
+            effort: task.effort.clone(),
             cwd: task.cwd.clone(),
             status: TaskStatus::Running,
             route: None,
@@ -144,7 +146,10 @@ impl Hub {
                 return; // cancelled: drop late events
             }
             match &ev {
-                Event::Routed { model, account, .. } => t.route = Some(format!("{model} @ {account}")),
+                Event::Routed { label, effort, account, .. } => {
+                    let effort = effort.as_deref().map(|e| format!(" · {e}")).unwrap_or_default();
+                    t.route = Some(format!("{label}{effort} @ {account}"));
+                }
                 Event::Done { ok, .. } => {
                     t.status = if *ok { TaskStatus::Done } else { TaskStatus::Failed };
                     t.ended = Some(now());

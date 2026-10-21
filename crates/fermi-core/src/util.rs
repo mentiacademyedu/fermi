@@ -65,7 +65,14 @@ pub fn resolve_bin(name: &str, overridden: Option<&str>) -> Result<PathBuf> {
             }
         }
     }
-    let p = found.ok_or_else(|| anyhow!("`{name}` not found on PATH (set [bins].{name} in config)"))?;
+    let p = found.ok_or_else(|| {
+        let install = match name {
+            "claude" => " Install Claude Code: npm install -g @anthropic-ai/claude-code",
+            "codex" => " Install the Codex CLI: npm install -g @openai/codex",
+            _ => "",
+        };
+        anyhow!("`{name}` isn't installed (not found on PATH).{install}  If it's installed somewhere else, set [bins].{name} in the config.")
+    })?;
     cache.lock().unwrap().insert(name.to_string(), p.clone());
     Ok(p)
 }

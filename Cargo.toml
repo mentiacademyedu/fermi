@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/fermi-core", "crates/fermi"]
+members = ["crates/fermi-core", "crates/fermi", "crates/fermi-desktop"]
 
 [workspace.package]
 version = "0.1.0"

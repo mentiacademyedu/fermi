@@ -19,6 +19,11 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>) -> Result<
     if let Some(m) = model {
         args.extend(["-m".into(), m.to_string()]);
     }
+    if let Some(e) = ctx.effort() {
+        // Unquoted on purpose: Codex reads a non-TOML value as a plain string,
+        // and quotes would have to survive the npm .cmd shim on Windows.
+        args.extend(["--config".into(), format!("model_reasoning_effort={e}")]);
+    }
     if let Some(s) = &ctx.profile.codex_sandbox {
         args.extend(["--sandbox".into(), s.clone()]);
     }

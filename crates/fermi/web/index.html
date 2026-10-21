@@ -198,6 +198,7 @@ dialog label.f input, dialog label.f select { width: 100%; }
         <div class="row">
           <label class="f">Profile <select id="f-profile"></select></label>
           <label class="f">Model <select id="f-model"></select></label>
+          <label class="f">Effort <select id="f-effort"></select></label>
           <label class="f">Account <select id="f-account"></select></label>
           <label class="f grow">Folder <input type="text" id="f-cwd" spellcheck="false"></label>
           <button type="submit" class="primary" id="run">Run</button>
@@ -327,10 +328,25 @@ function fillSelect(sel, items, keep) {
   sel.replaceChildren(...items.map(([v, label]) => { const o = el("option", null, label); o.value = v; return o; }));
   if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
 }
+// Models grouped by provider, named with their version and strength.
+function fillModels(sel, models) {
+  const prev = sel.value;
+  const auto = el("option", null, "Auto (best for task)"); auto.value = "";
+  const groups = new Map();
+  for (const m of models) {
+    const name = m.provider === "openai" ? "OpenAI" : m.provider === "claude" ? "Claude" : m.provider;
+    if (!groups.has(name)) { const g = el("optgroup"); g.label = name; groups.set(name, g); }
+    const o = el("option", null, `${m.label} · ${m.caps.includes("image") ? "images" : m.tier_name}`);
+    o.value = m.id; groups.get(name).append(o);
+  }
+  sel.replaceChildren(auto, ...groups.values());
+  if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
 function renderComposer() {
   const st = S.state;
   fillSelect($("#f-profile"), [["", `Auto (folder → ${st.here || "none"})`], ...st.profiles.map((p) => [p.name, `${p.name} · ${p.mode}`])], true);
-  fillSelect($("#f-model"), [["", "Auto (best for task)"], ...st.models.map((m) => [m.id, m.id])], true);
+  fillModels($("#f-model"), st.models);
+  fillSelect($("#f-effort"), [["", "Auto (model default)"], ...st.efforts.map((e) => [e, e])], true);
   fillSelect($("#f-account"), [["", "Auto (with failover)"], ...st.accounts.map((a) => [a.id, a.id])], true);
   if (!$("#f-cwd").value) $("#f-cwd").value = st.cwd;
   $("#profile-names").replaceChildren(...st.profiles.map((p) => { const o = el("option"); o.value = p.name; return o; }));
@@ -373,7 +389,7 @@ const summaryOf = (t) => { const { events, ...rest } = t; return rest; };
 // ── output log ─────────────────────────────────────────────────────────────
 function evNode(ev) {
   switch (ev.type) {
-    case "routed": return el("div", "ev meta", `▸ ${ev.model} @ ${ev.account}   [${ev.profile}]   ${ev.why}`);
+    case "routed": return el("div", "ev meta", `▸ ${ev.label || ev.model}${ev.effort ? " · effort " + ev.effort : ""} @ ${ev.account}   [${ev.profile}]   ${ev.why}`);
     case "text": return el("div", "ev text", ev.text);
     case "tool": return el("div", "ev tool", `· ${ev.name} ${ev.detail}`);
     case "limit":
@@ -426,7 +442,7 @@ function renderWelcome() {
   ]) ol.append(el("li", null, s));
   w.append(ol);
   w.append(el("p", null, "Leave Profile, Model and Account on Auto and fermi picks for you: the profile from the folder, the model from the task, the account by availability (with failover when one hits its limit)."));
-  $("#log").append(w);
+  $("#log").replaceChildren(w);
 }
 
 // ── live updates ───────────────────────────────────────────────────────────
@@ -505,7 +521,7 @@ $("#composer").onsubmit = async (e) => {
   if (!prompt) { $("#form-err").textContent = "Describe the task first."; return; }
   $("#run").disabled = true;
   try {
-    const r = await api("/api/tasks", { prompt, profile: $("#f-profile").value, model: $("#f-model").value, account: $("#f-account").value, cwd: $("#f-cwd").value });
+    const r = await api("/api/tasks", { prompt, profile: $("#f-profile").value, model: $("#f-model").value, effort: $("#f-effort").value, account: $("#f-account").value, cwd: $("#f-cwd").value });
     $("#prompt").value = "";
     if (!S.tasks.has(r.id)) S.tasks.set(r.id, { id: r.id, prompt, status: "running", started: nowS() });
     if (!S.logs.has(r.id)) S.logs.set(r.id, []);

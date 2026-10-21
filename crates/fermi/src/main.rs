@@ -1,8 +1,7 @@
-mod server;
-mod setup;
 mod tui;
 
 use anyhow::Result;
+use fermi::{server, setup};
 use clap::{Parser, Subcommand};
 use fermi_core::{Engine, Event, Task};
 use std::io::{IsTerminal, Read};
@@ -27,6 +26,9 @@ struct Target {
     /// Force an account (disables failover)
     #[arg(short, long)]
     account: Option<String>,
+    /// Reasoning effort: low, medium, high, xhigh, max
+    #[arg(short, long)]
+    effort: Option<String>,
     /// Working directory for the task
     #[arg(short = 'C', long)]
     dir: Option<PathBuf>,
@@ -90,12 +92,7 @@ enum AccountCmd {
         profile: Option<String>,
     },
     /// Log in to a CLI account in its own isolated config dir
-    Login {
-        id: String,
-        /// Wait for Enter at the end (used when the dashboard opens a login window)
-        #[arg(long, hide = true)]
-        pause: bool,
-    },
+    Login { id: String },
 }
 
 #[tokio::main]
@@ -116,18 +113,7 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Account(AccountCmd::Add { id, provider, api_key_env, home, profile }) => {
             println!("{}", setup::add_account(&id, &provider, api_key_env.as_deref(), home.as_deref(), profile.as_deref())?)
         }
-        Cmd::Account(AccountCmd::Login { id, pause }) => {
-            let r = setup::login(&id);
-            if pause {
-                match &r {
-                    Ok(()) => println!("\ndone. You can close this window and go back to the dashboard."),
-                    Err(e) => println!("\nlogin failed: {e:#}"),
-                }
-                println!("press Enter to close…");
-                let _ = std::io::stdin().read_line(&mut String::new());
-            }
-            r?
-        }
+        Cmd::Account(AccountCmd::Login { id }) => setup::login(&id)?,
         Cmd::Status => setup::status(&*Engine::load()?).await,
         Cmd::Route(t) => route(t)?,
         Cmd::Run(t) => return run(t).await,
@@ -162,6 +148,7 @@ fn task_from(t: Target) -> Result<Task> {
     task.profile = t.profile;
     task.model = t.model;
     task.account = t.account;
+    task.effort = t.effort;
     Ok(task)
 }
 
@@ -171,14 +158,16 @@ fn route(t: Target) -> Result<()> {
     let plan = engine.plan(&task)?;
     println!("profile  {} ({:?})", plan.profile.name, plan.profile.mode);
     println!("need     {:?} tier {} — {}", plan.need.cap, plan.need.tier, plan.need.why);
-    println!("try      {}", plan.models.iter().map(|m| m.id.as_str()).collect::<Vec<_>>().join(" → "));
+    println!("try      {}", plan.models.iter().map(|m| m.name()).collect::<Vec<_>>().join(" → "));
+    let effort = task.effort.clone().or(plan.profile.effort.clone());
+    println!("effort   {}", effort.as_deref().unwrap_or("model default"));
     for m in &plan.models {
         let Some(p) = m.provider() else { continue };
         let accts: Vec<_> = match &task.account {
             Some(id) => vec![id.clone()],
             None => engine.cfg.profile_accounts(&plan.profile).filter(|a| a.provider == p).map(|a| a.id.clone()).collect(),
         };
-        println!("  {:<14} accounts: {}", m.id, accts.join(", "));
+        println!("  {:<22} {:<20} accounts: {}", m.name(), m.id, accts.join(", "));
     }
     Ok(())
 }
@@ -198,8 +187,9 @@ async fn run(t: Target) -> Result<ExitCode> {
     let mut ok = false;
     while let Some(ev) = rx.recv().await {
         match ev {
-            Event::Routed { profile, model, account, why } => {
-                eprintln!("{}", paint("33", format!("▸ {model} @ {account}  [{profile}]  {why}")))
+            Event::Routed { profile, label, effort, account, why, .. } => {
+                let effort = effort.map(|e| format!(" · effort {e}")).unwrap_or_default();
+                eprintln!("{}", paint("33", format!("▸ {label}{effort} @ {account}  [{profile}]  {why}")))
             }
             Event::Text { text } => println!("{text}"),
             Event::Tool { name, detail } => eprintln!("{}", paint("36", format!("  · {name} {detail}"))),

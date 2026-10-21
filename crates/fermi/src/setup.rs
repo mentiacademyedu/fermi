@@ -7,6 +7,17 @@ use toml_edit::{value, Array, ArrayOfTables, DocumentMut, Item, Table};
 
 const TEMPLATE: &str = include_str!("../config.example.toml");
 
+/// Writes the starter config if there is none yet. Returns true if it did.
+pub fn ensure_config() -> Result<bool> {
+    let path = Config::path();
+    if path.exists() {
+        return Ok(false);
+    }
+    std::fs::create_dir_all(Config::home())?;
+    std::fs::write(&path, TEMPLATE)?;
+    Ok(true)
+}
+
 pub fn init(force: bool) -> Result<()> {
     let path = Config::path();
     if path.exists() && !force {
@@ -99,6 +110,20 @@ pub fn login(id: &str) -> Result<()> {
         println!("`{id}` uses an API key: set {} in your environment.", acct.api_key_env.as_deref().unwrap_or("?"));
         return Ok(());
     }
+    match acct.home_dir() {
+        Some(home) => println!("logging `{id}` in (its login lives in {})", home.display()),
+        None => println!("logging `{id}` in (the CLI's default login)"),
+    }
+    let status = login_command(&cfg, acct)?.status()?;
+    if !status.success() {
+        bail!("login exited with {status}");
+    }
+    Ok(())
+}
+
+/// The provider CLI's own interactive login, pointed at the account's
+/// isolated config dir.
+pub fn login_command(cfg: &Config, acct: &fermi_core::Account) -> Result<std::process::Command> {
     let (bin, args, var): (_, &[&str], _) = match acct.provider {
         Provider::Claude => (resolve_bin("claude", cfg.bins.claude.as_deref())?, &["auth", "login"], "CLAUDE_CONFIG_DIR"),
         Provider::Openai => (resolve_bin("codex", cfg.bins.codex.as_deref())?, &["login"], "CODEX_HOME"),
@@ -107,14 +132,9 @@ pub fn login(id: &str) -> Result<()> {
     cmd.args(args);
     if let Some(home) = acct.home_dir() {
         std::fs::create_dir_all(&home)?;
-        println!("logging `{id}` in with {var}={}", home.display());
         cmd.env(var, home);
     }
-    let status = cmd.status()?;
-    if !status.success() {
-        bail!("login exited with {status}");
-    }
-    Ok(())
+    Ok(cmd)
 }
 
 pub async fn status(engine: &Engine) {

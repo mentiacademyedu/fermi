@@ -15,6 +15,9 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     if let Some(m) = &ctx.model.cli {
         args.extend(["--model".into(), m.clone()]);
     }
+    if let Some(e) = ctx.effort() {
+        args.extend(["--effort".into(), e.to_string()]);
+    }
     if let Some(pm) = &ctx.profile.permission_mode {
         args.extend(["--permission-mode".into(), pm.clone()]);
     }

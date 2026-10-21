@@ -47,6 +47,7 @@ paths = []                         # e.g. ["C:/code", "~/projects"]
 mode = "auto"
 permission_mode = "acceptEdits"    # claude --permission-mode
 codex_sandbox = "workspace-write"  # codex exec --sandbox
+# effort = "high"                  # default reasoning effort: low, medium, high, xhigh, max
 # claude_args = ["--strict-mcp-config"]  # lean: skip your global MCP servers (faster, fewer tokens)
 # codex_args = []
 

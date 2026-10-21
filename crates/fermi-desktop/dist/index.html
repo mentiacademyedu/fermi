@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fermi</title>
+<style>
+  :root { --bg: #0e1014; --text: #e7e9ee; --muted: #8a93a3; --bad: #f2615c; --line: #262b36; }
+  @media (prefers-color-scheme: light) { :root { --bg: #f6f7f9; --text: #161a22; --muted: #5d6676; --bad: #c8322d; --line: #e3e6eb; } }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, "Segoe UI", sans-serif; display: grid; place-content: center; padding: 24px; }
+  .box { max-width: 640px; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  pre { white-space: pre-wrap; color: var(--bad); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font: 13px ui-monospace, Consolas, monospace; }
+  p { color: var(--muted); }
+</style>
+</head>
+<body>
+  <!-- Shown only when the dashboard couldn't start; the error comes in the URL fragment. -->
+  <div class="box">
+    <h1>Fermi couldn't start</h1>
+    <pre id="err"></pre>
+    <p>This is usually a problem in <code>~/.fermi/config.toml</code>. Fix it (or delete it to start fresh) and reopen Fermi.</p>
+  </div>
+  <script>
+    document.getElementById("err").textContent = decodeURIComponent(location.hash.slice(1)) || "unknown error";
+  </script>
+</body>
+</html>

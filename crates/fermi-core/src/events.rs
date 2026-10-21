@@ -5,7 +5,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Event {
-    Routed { profile: String, model: String, account: String, why: String },
+    Routed { profile: String, model: String, label: String, effort: Option<String>, account: String, why: String },
     Text { text: String },
     Tool { name: String, detail: String },
     Limit { account: String, utilization: Option<f64>, resets_at: Option<u64>, blocked: bool },

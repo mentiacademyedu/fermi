@@ -87,7 +87,10 @@ pub async fn anthropic(ctx: &RunCtx<'_>) -> Result<RunResult> {
 pub async fn openai(ctx: &RunCtx<'_>) -> Result<RunResult> {
     let key = api_key(ctx.account)?;
     let url = format!("{}/v1/responses", base(ctx.account, "https://api.openai.com"));
-    let body = json!({ "model": api_model(ctx)?, "input": ctx.task.prompt });
+    let mut body = json!({ "model": api_model(ctx)?, "input": ctx.task.prompt });
+    if let Some(e) = ctx.effort() {
+        body["reasoning"] = json!({ "effort": e });
+    }
     let v = match send(http().post(url).bearer_auth(key).json(&body)).await? {
         Ok(v) => v,
         Err(r) => return Ok(r),

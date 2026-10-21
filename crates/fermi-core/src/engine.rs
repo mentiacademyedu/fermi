@@ -21,13 +21,15 @@ pub struct Task {
     pub model: Option<String>,
     /// Force an account; disables failover.
     pub account: Option<String>,
+    /// Reasoning effort (see `models::EFFORTS`); None = profile default, else the CLI's.
+    pub effort: Option<String>,
     /// Output file for image tasks.
     pub out: Option<PathBuf>,
 }
 
 impl Task {
     pub fn new(prompt: impl Into<String>, cwd: impl Into<PathBuf>) -> Self {
-        Task { prompt: prompt.into(), cwd: cwd.into(), profile: None, model: None, account: None, out: None }
+        Task { prompt: prompt.into(), cwd: cwd.into(), profile: None, model: None, account: None, effort: None, out: None }
     }
 }
 
@@ -65,6 +67,9 @@ impl Engine {
     }
 
     pub fn plan(&self, task: &Task) -> Result<Plan> {
+        if let Some(e) = task.effort.as_deref().filter(|e| !crate::models::EFFORTS.contains(e)) {
+            bail!("unknown effort `{e}` (use {})", crate::models::EFFORTS.join(", "));
+        }
         let profile = self.cfg.resolve_profile(task.profile.as_deref(), &task.cwd)?;
         let need = router::classify(&task.prompt);
         let accounts: Vec<&Account> = match &task.account {
@@ -144,8 +149,10 @@ impl Engine {
                 emit(tx, Event::Routed {
                     profile: profile.name.clone(),
                     model: model.id.clone(),
+                    label: model.name().to_string(),
+                    effort: task.effort.clone().or_else(|| profile.effort.clone()),
                     account: acct.id.clone(),
-                    why: if task.model.is_some() { "forced".into() } else { plan.need.why.clone() },
+                    why: if task.model.is_some() { "chosen".into() } else { plan.need.why.clone() },
                 });
 
                 let started = Instant::now();

@@ -2,8 +2,8 @@
 //! and log in to accounts, and watch everything live. Keyboard and mouse.
 //! Thin client over `Engine`, like the future web dashboard.
 
-use crate::setup;
 use anyhow::Result;
+use fermi::setup;
 use fermi_core::auth::{self, AuthInfo};
 use fermi_core::state::AcctState;
 use fermi_core::util::{fmt_dur, now};
@@ -657,7 +657,7 @@ impl App {
         self.scroll = 0;
     }
 
-    /// Input syntax: optional leading `@profile`, `m=model`, `a=account`, then the prompt.
+    /// Input syntax: optional leading `@profile`, `m=model`, `a=account`, `e=effort`, then the prompt.
     fn submit(&mut self, ev_tx: &EvTx) {
         let raw = std::mem::take(&mut self.input);
         let mut task = Task::new("", self.cwd.clone());
@@ -671,6 +671,8 @@ impl App {
                 task.model = Some(m.into());
             } else if let Some(a) = tok.strip_prefix("a=") {
                 task.account = Some(a.into());
+            } else if let Some(e) = tok.strip_prefix("e=") {
+                task.effort = Some(e.into());
             } else {
                 break;
             }
@@ -726,9 +728,10 @@ impl App {
             return; // cancelled
         }
         match ev {
-            Event::Routed { profile, model, account, why } => {
-                t.route = format!("{model} @ {account}");
-                t.lines.push((Kind::Meta, format!("▸ {model} @ {account}  [{profile}]  {why}")));
+            Event::Routed { profile, label, effort, account, why, .. } => {
+                let effort = effort.map(|e| format!(" · {e}")).unwrap_or_default();
+                t.route = format!("{label}{effort} @ {account}");
+                t.lines.push((Kind::Meta, format!("▸ {label}{effort} @ {account}  [{profile}]  {why}")));
             }
             Event::Text { text } => {
                 t.lines.extend(text.lines().map(|l| (Kind::Text, l.to_string())));
@@ -962,7 +965,7 @@ impl App {
                     Line::from(Span::styled("Accounts: click one, then \"log in\". Add more with \"+ account\".", d)),
                     Line::from(Span::styled("Tab moves between panels. F1 or \"help\" shows every key.", d)),
                     Line::from(""),
-                    Line::from(Span::styled("Optional prefixes: @work (profile)  m=claude:opus (model)  a=claude-work (account)", d)),
+                    Line::from(Span::styled("Optional prefixes: @work (profile)  m=claude:opus (model)  e=high (effort)  a=claude-work (account)", d)),
                 ];
                 f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block.title(" output ")), area);
             }
@@ -1079,7 +1082,8 @@ fn draw_help(f: &mut Frame) {
         k("p", "switch the profile for new tasks"),
         k("Ctrl+C / q", "quit"),
         Line::from(""),
-        Line::from(" Task prefixes:  @work  m=claude:opus  a=claude-work".fg(Color::DarkGray)),
+        Line::from(" Task prefixes:  @work  m=claude:opus  e=high  a=claude-work".fg(Color::DarkGray)),
+        Line::from(" Efforts: low · medium · high · xhigh · max".fg(Color::DarkGray)),
         Line::from(" Select text: hold Shift while dragging.".fg(Color::DarkGray)),
         Line::from(""),
         Line::from(" any key or click closes this".fg(Color::DarkGray)),

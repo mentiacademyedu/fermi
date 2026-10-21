@@ -39,14 +39,50 @@ struct Srv {
 
 type S = State<Arc<Srv>>;
 
+/// A bound, not yet serving dashboard.
+pub struct Server {
+    /// Full URL including the access key.
+    pub url: String,
+    pub hub: Arc<Hub>,
+    listener: tokio::net::TcpListener,
+    app: Router,
+}
+
+impl Server {
+    /// Serves until `shutdown` resolves, then cancels running tasks.
+    pub async fn serve(self, shutdown: impl std::future::Future<Output = ()> + Send + 'static) -> Result<()> {
+        let hub = self.hub.clone();
+        axum::serve(self.listener, self.app).with_graceful_shutdown(shutdown).await?;
+        hub.cancel_all();
+        Ok(())
+    }
+}
+
+/// `fermi ui`: serve until Ctrl+C.
 pub async fn run(engine: Arc<Engine>, port: u16, open: bool) -> Result<()> {
+    let server = start(engine, port, std::env::current_dir()?).await?;
+    println!("fermi dashboard: {}", server.url);
+    println!("(this link includes your access key; Ctrl+C stops the dashboard and its running tasks)");
+    if open {
+        open_browser(&server.url);
+    }
+    server
+        .serve(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await
+}
+
+/// Binds 127.0.0.1 (`port` 0 = any free port) and builds the app. `cwd` is
+/// the default folder for tasks and for picking the profile.
+pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Server> {
     let listener = bind(port).await?;
     let port = listener.local_addr()?.port();
     let srv = Arc::new(Srv {
         hub: Hub::new(engine),
         token: new_token()?,
         port,
-        cwd: std::env::current_dir()?,
+        cwd,
         auth: Mutex::new(HashMap::new()),
         probing: Mutex::new(HashSet::new()),
     });
@@ -67,22 +103,13 @@ pub async fn run(engine: Arc<Engine>, port: u16, open: bool) -> Result<()> {
         .layer(middleware::from_fn_with_state(srv.clone(), check_host))
         .with_state(srv.clone());
 
-    let url = format!("http://127.0.0.1:{port}/#t={}", srv.token);
-    println!("fermi dashboard: {url}");
-    println!("(this link includes your access key; Ctrl+C stops the dashboard and its running tasks)");
-    if open {
-        open_browser(&url);
-    }
-    axum::serve(listener, app)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await?;
-    srv.hub.cancel_all();
-    Ok(())
+    Ok(Server { url: format!("http://127.0.0.1:{port}/#t={}", srv.token), hub: srv.hub.clone(), listener, app })
 }
 
 async fn bind(port: u16) -> Result<tokio::net::TcpListener> {
+    if port == 0 {
+        return Ok(tokio::net::TcpListener::bind(("127.0.0.1", 0)).await?);
+    }
     for p in port..port.saturating_add(20) {
         if let Ok(l) = tokio::net::TcpListener::bind(("127.0.0.1", p)).await {
             return Ok(l);
@@ -192,8 +219,16 @@ impl Srv {
             .iter()
             .map(|p| json!({ "name": p.name, "mode": p.mode, "accounts": p.accounts, "models": p.models, "paths": p.paths }))
             .collect();
-        let models: Vec<Value> =
-            e.catalog.iter().map(|m| json!({ "id": m.id, "caps": m.caps, "tier": m.tier, "auto": m.auto })).collect();
+        let models: Vec<Value> = e
+            .catalog
+            .iter()
+            .map(|m| {
+                json!({
+                    "id": m.id, "label": m.name(), "provider": m.provider().map(|p| p.as_str()),
+                    "caps": m.caps, "tier": m.tier, "tier_name": m.tier_name(), "auto": m.auto,
+                })
+            })
+            .collect();
         json!({
             "version": env!("CARGO_PKG_VERSION"),
             "cwd": self.cwd,
@@ -201,6 +236,7 @@ impl Srv {
             "profiles": profiles,
             "accounts": self.accounts_json(),
             "models": models,
+            "efforts": fermi_core::models::EFFORTS,
             "tasks": self.hub.list(),
             "now": now(),
         })
@@ -282,6 +318,7 @@ struct NewTask {
     profile: Option<String>,
     model: Option<String>,
     account: Option<String>,
+    effort: Option<String>,
     cwd: Option<String>,
 }
 
@@ -298,6 +335,7 @@ async fn create_task(State(s): S, Json(b): Json<NewTask>) -> Response {
     task.profile = non_empty(b.profile);
     task.model = non_empty(b.model);
     task.account = non_empty(b.account);
+    task.effort = non_empty(b.effort);
     // Surface routing errors (unknown profile, no account…) right away.
     if let Err(e) = s.hub.engine().plan(&task) {
         return err(StatusCode::BAD_REQUEST, format!("{e:#}"));
@@ -353,40 +391,53 @@ async fn login(State(s): S, Path(id): Path<String>) -> Response {
         let var = a.api_key_env.clone().unwrap_or_default();
         return err(StatusCode::BAD_REQUEST, format!("API-key accounts don't log in: set {var} and restart fermi ui"));
     }
-    match open_login_terminal(&id) {
+    match open_login_window(&e.cfg, a) {
         Ok(()) => {
             s.watch_login(id);
-            Json(json!({ "message": "A terminal window opened for the login. Finish there and this page updates by itself." }))
-                .into_response()
+            Json(json!({ "message": "A sign-in window opened. Finish there and fermi updates by itself." })).into_response()
         }
         Err(e) => err(
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("couldn't open a terminal ({e:#}). Run `fermi account login {id}` yourself."),
+            format!("couldn't open a sign-in window ({e:#}). Run `fermi account login {id}` in a terminal instead."),
         ),
     }
 }
 
-/// The CLIs' logins are interactive, so they run in a new terminal window.
-fn open_login_terminal(id: &str) -> Result<()> {
-    // Account ids are restricted to [A-Za-z0-9_-] when added, but check anyway:
-    // the id ends up on a command line.
-    if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-        bail!("invalid account id");
+/// The CLIs' logins are interactive, so they get their own console window.
+fn open_login_window(cfg: &fermi_core::Config, acct: &fermi_core::Account) -> Result<()> {
+    let cmd = setup::login_command(cfg, acct)?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let mut cmd = cmd;
+        cmd.creation_flags(0x0000_0010); // CREATE_NEW_CONSOLE
+        cmd.spawn()?;
     }
-    let exe = std::env::current_exe()?;
-    let args = ["account", "login", id, "--pause"];
-    if cfg!(windows) {
-        std::process::Command::new("cmd").args(["/c", "start", "fermi login"]).arg(&exe).args(args).spawn()?;
-    } else if cfg!(target_os = "macos") {
-        let cmd = format!("'{}' {}", exe.display(), args.join(" "));
-        let script = format!("tell application \"Terminal\" to do script \"{}\"", cmd.replace('\\', "\\\\").replace('"', "\\\""));
-        std::process::Command::new("osascript").args(["-e", &script]).spawn()?;
-    } else {
-        let terms: [(&str, &[&str]); 4] =
-            [("x-terminal-emulator", &["-e"]), ("gnome-terminal", &["--"]), ("konsole", &["-e"]), ("xterm", &["-e"])];
-        let ok = terms.iter().any(|(t, pre)| std::process::Command::new(t).args(*pre).arg(&exe).args(args).spawn().is_ok());
-        if !ok {
-            bail!("no terminal emulator found");
+    #[cfg(not(windows))]
+    {
+        // Rebuild as one shell line for the terminal emulator.
+        let quote = |s: &std::ffi::OsStr| format!("'{}'", s.to_string_lossy().replace('\'', "'\\''"));
+        let mut line = String::new();
+        for (k, v) in cmd.get_envs() {
+            if let Some(v) = v {
+                line += &format!("export {}={}; ", k.to_string_lossy(), quote(v));
+            }
+        }
+        line += &quote(cmd.get_program());
+        for a in cmd.get_args() {
+            line += " ";
+            line += &quote(a);
+        }
+        if cfg!(target_os = "macos") {
+            let script = format!("tell application \"Terminal\" to do script \"{}\"", line.replace('\\', "\\\\").replace('"', "\\\""));
+            std::process::Command::new("osascript").args(["-e", &script]).spawn()?;
+        } else {
+            let terms: [(&str, &[&str]); 4] =
+                [("x-terminal-emulator", &["-e"]), ("gnome-terminal", &["--"]), ("konsole", &["-e"]), ("xterm", &["-e"])];
+            let ok = terms.iter().any(|(t, pre)| std::process::Command::new(t).args(*pre).args(["sh", "-c", &line]).spawn().is_ok());
+            if !ok {
+                bail!("no terminal emulator found");
+            }
         }
     }
     Ok(())

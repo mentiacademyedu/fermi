@@ -71,10 +71,24 @@ fermi route "draw a logo for the landing page"   # dry run: which model/account
 
 In the TUI, prefix a task with `@profile`, `m=provider:model` or `a=account`.
 
+## Desktop app
+
+`crates/fermi-desktop` is a native app (Tauri: the system WebView, no bundled
+browser, about 10 MB) that shows the dashboard below in its own window,
+with its own icon and no console. Its dashboard server runs inside the app on
+a random local port, so the desktop app and `fermi ui` are the same interface.
+
+```sh
+cargo run -p fermi-desktop                 # run it
+cargo tauri build -c crates/fermi-desktop  # installers (.msi / .exe) — needs `cargo install tauri-cli`
+```
+
+The icon is the periodic-table tile of Fermium (Fm, 100), named after Fermi.
+
 ## Dashboard
 
 ```sh
-fermi ui                    # opens the web dashboard in your browser
+fermi ui                    # the same dashboard in your browser
 ```
 
 Everything the TUI does, in the browser: run tasks in parallel with live
@@ -109,6 +123,7 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
   web/index.html   the dashboard (single file, no build step, embedded in the binary)
+crates/fermi-desktop  native window around the dashboard (Tauri)
 ```
 
 Every front end consumes the same serializable `Event` stream.

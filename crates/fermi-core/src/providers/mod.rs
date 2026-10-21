@@ -23,6 +23,13 @@ pub struct RunCtx<'a> {
     pub tx: &'a Tx,
 }
 
+impl RunCtx<'_> {
+    /// Task effort, else the profile's default.
+    pub fn effort(&self) -> Option<&str> {
+        self.task.effort.as_deref().or(self.profile.effort.as_deref())
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Usage {
     pub input: u64,

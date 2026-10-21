@@ -114,6 +114,9 @@ pub struct Profile {
     /// Passed to `codex exec --sandbox`.
     #[serde(default)]
     pub codex_sandbox: Option<String>,
+    /// Default reasoning effort for this profile (low … max). Unset = the CLI's default.
+    #[serde(default)]
+    pub effort: Option<String>,
     /// Extra arguments for every `claude` / `codex exec` run in this profile.
     #[serde(default)]
     pub claude_args: Vec<String>,
@@ -197,6 +200,9 @@ impl Config {
                     bail!("profile `{}` lists unknown model `{id}`", p.name);
                 }
             }
+            if let Some(e) = p.effort.as_deref().filter(|e| !crate::models::EFFORTS.contains(e)) {
+                bail!("profile `{}` has unknown effort `{e}` (use {})", p.name, crate::models::EFFORTS.join(", "));
+            }
             if p.mode != Mode::Auto && p.models.is_empty() {
                 bail!("profile `{}` is {:?} but lists no models", p.name, p.mode);
             }
@@ -263,6 +269,7 @@ impl Config {
                 rotate: false,
                 permission_mode: None,
                 codex_sandbox: None,
+                effort: None,
                 claude_args: vec![],
                 codex_args: vec![],
             });
