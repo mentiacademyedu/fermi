@@ -95,7 +95,11 @@ Everything the TUI does, in the browser: run tasks in parallel with live
 output, **reply to a finished task to continue the conversation** (same
 session, account and model), browse and edit workspace files, review what
 agents changed in a **Changes** panel (git status and diffs), open **terminals** in
-your workspaces (Ctrl+`; PowerShell on Windows, your `$SHELL` elsewhere), browse
+your workspaces (Ctrl+`; PowerShell on Windows, your `$SHELL` elsewhere), check
+a website you're building in the **Preview** tab (an internal browser: it finds dev
+servers already running on the usual ports, can serve a plain HTML folder on its
+own local port, switches between desktop/tablet/mobile widths, and offers to open
+`localhost` links printed in terminals or task output), browse
 **trending GitHub repositories** and clone or analyze them with an editable prompt
 (read-only "Plan only" by default), keep a history across restarts that every
 fermi window on the PC shares (desktop, `fermi ui`, the TUI and `fermi run`;

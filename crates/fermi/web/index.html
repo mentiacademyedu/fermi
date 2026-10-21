@@ -358,6 +358,26 @@ button:disabled { opacity: .45; cursor: default; }
 .dl.hunk { color: var(--accent); background: var(--panel-2); margin-top: 6px; }
 .dl.meta { color: var(--faint); }
 
+/* preview (internal browser) */
+.pv-bar { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
+.pv-url { flex: 1; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 9px; background: var(--panel-2); color: var(--faint); min-width: 0; }
+.pv-url:focus-within { border-color: var(--accent); }
+.pv-url input { flex: 1; border: 0; background: transparent; padding: 6px 0; outline: none; color: var(--text); font: 13px var(--mono); min-width: 0; }
+#pv-device { margin: 0 4px; grid-template-columns: repeat(3, auto); }
+#pv-device button { padding: 3px 10px; white-space: nowrap; }
+.pv-stage { flex: 1; min-height: 0; display: flex; justify-content: center; background: var(--panel-2); overflow: auto; }
+#pv-frame { border: 0; background: #fff; width: 100%; height: 100%; }
+#pv-frame.device { border: 1px solid var(--line-2); border-radius: 10px; margin: 14px 0; height: calc(100% - 28px); box-shadow: var(--shadow); }
+.pv-empty { align-self: center; max-width: 560px; width: 100%; padding: 24px; display: grid; gap: 12px; }
+.pv-empty h3 { margin: 0; font-size: 17px; }
+.pv-empty .srv { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); cursor: pointer; text-align: left; width: 100%; }
+.pv-empty .srv:hover { border-color: var(--accent); }
+.pv-empty .srv .u { font: 13px var(--mono); }
+.pv-empty .srv .t { color: var(--muted); margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+.md-url { color: var(--accent); text-decoration: underline; cursor: pointer; overflow-wrap: anywhere; }
+#notice { position: fixed; right: 18px; bottom: 40px; z-index: 60; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line-2); box-shadow: var(--shadow); max-width: min(520px, 92vw); }
+#notice-text { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* terminals */
 .term-host { flex: 1; position: relative; background: var(--code-bg); min-height: 0; }
 .term { position: absolute; inset: 0; padding: 8px 4px 4px 12px; }
@@ -508,6 +528,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
         <span class="crumb" id="file-path"></span>
         <span class="faint" id="file-info"></span>
         <button class="small ghost" id="file-open" title="Open the file">Open file</button>
+        <button class="small ghost" id="file-preview" title="Show this page in the Preview tab">Preview</button>
         <button class="small ghost" id="file-mention" title="Mention this file in the chat">@ Mention</button>
         <button class="small primary" id="file-save" title="Save (Ctrl+S)">Save</button>
       </div>
@@ -530,6 +551,22 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
           </div>
           <div class="tr-grid" id="tr-grid"></div>
         </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-preview" hidden>
+      <div class="pv-bar">
+        <button class="icon-btn" id="pv-back" title="Back" data-i="arrowLeft"></button>
+        <button class="icon-btn" id="pv-fwd" title="Forward" data-i="arrowRight"></button>
+        <button class="icon-btn" id="pv-reload" title="Reload" data-i="refresh"></button>
+        <form id="pv-form" class="pv-url" autocomplete="off"><span data-i="globe"></span><input id="pv-url" placeholder="localhost:5173, a port, or any URL" spellcheck="false"></form>
+        <div class="seg" id="pv-device"><button data-w="0">Desktop</button><button data-w="820">Tablet</button><button data-w="390">Mobile</button></div>
+        <button class="icon-btn" id="pv-home" title="Dev servers" data-i="grid"></button>
+        <button class="icon-btn" id="pv-open" title="Open in your browser" data-i="external"></button>
+      </div>
+      <div class="pv-stage" id="pv-stage">
+        <iframe id="pv-frame" title="Preview" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads" hidden></iframe>
+        <div class="pv-empty" id="pv-empty"></div>
       </div>
     </section>
 
@@ -674,6 +711,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
 </dialog>
 
 <div id="toast"></div>
+<div id="notice" hidden><span id="notice-text"></span><button class="small primary" id="notice-go"></button><button class="icon-btn" id="notice-x" title="Dismiss" data-i="x"></button></div>
 
 <script>
 "use strict";
@@ -705,6 +743,10 @@ const I = {
   collapse: '<path d="m7 15 5-5 5 5"/>',
   terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/>',
   trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
+  arrowLeft: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/>',
   star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
   fork: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7M12 12v5"/>',
   external: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
@@ -888,11 +930,12 @@ function renderTabs() {
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
-    const ic = f.kind === "trending" ? "trend" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
+    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
     mk(f.id, f.name, ic, true, f.dirty);
   }
   const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
-  bar.append(add, el("span", "spacer"));
+  const web = el("button", "icon-btn tab-add"); web.innerHTML = svg("globe"); web.title = "Preview: an internal browser for your dev server"; web.onclick = () => openPreview();
+  bar.append(add, web, el("span", "spacer"));
   if (document.getElementById("app").classList.contains("no-files")) {
     const b = el("button", "icon-btn"); b.innerHTML = svg("panelRight"); b.title = "Show files"; b.onclick = toggleFiles; bar.append(b);
   }
@@ -900,14 +943,16 @@ function renderTabs() {
 function activate(id) {
   S.active = id;
   const tab = S.tabs.find((t) => t.id === id);
-  const isTerm = tab?.kind === "term", isTrend = id === "trending";
+  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
   $("#view-term").hidden = !isTerm;
   $("#view-trending").hidden = !isTrend;
-  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend;
+  $("#view-preview").hidden = !isPreview;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview;
   if (isTerm) showTerm(tab);
   else if (isTrend) loadTrending();
+  else if (isPreview) showPreview();
   else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
@@ -968,18 +1013,42 @@ function codeBlock(code, lang) {
   return wrap;
 }
 const INLINE = /(`+)([^`]+?)\1|\*\*([^*\n]+)\*\*|__([^_\n]+)__|(?<![\w*])\*([^*\n]+)\*(?![\w*])|(?<![\w])_([^_\n]+)_(?![\w])|\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+// Opens a link: local dev servers in Preview, everything else in the browser.
+function openLink(url) {
+  if (LOCAL_URL.test(url) && pvNormalize(url)) openPreview(url);
+  else api("/api/open-url", { url }).catch((e) => toast(e.message, true));
+}
+const URL_RE = /https?:\/\/[^\s<>"'`)\]]+/g;
+function linkText(parent, text) {
+  let last = 0, m;
+  URL_RE.lastIndex = 0;
+  while ((m = URL_RE.exec(text))) {
+    const url = m[0].replace(/[.,;:!?]+$/, "");
+    if (m.index > last) parent.append(text.slice(last, m.index));
+    const a = el("span", "md-url", url); a.title = LOCAL_URL.test(url) ? "Open in Preview" : "Open in your browser";
+    a.onclick = () => openLink(url);
+    parent.append(a);
+    last = m.index + url.length;
+    URL_RE.lastIndex = last;
+  }
+  if (last < text.length) parent.append(text.slice(last));
+}
 function inline(parent, text) {
   let last = 0, m;
   INLINE.lastIndex = 0;
   while ((m = INLINE.exec(text))) {
-    if (m.index > last) parent.append(text.slice(last, m.index));
+    if (m.index > last) linkText(parent, text.slice(last, m.index));
     last = INLINE.lastIndex;
     if (m[2] != null) parent.append(el("code", null, m[2]));
     else if (m[3] != null || m[4] != null) parent.append(el("strong", null, m[3] ?? m[4]));
     else if (m[5] != null || m[6] != null) parent.append(el("em", null, m[5] ?? m[6]));
-    else { const a = el("span", "md-link", m[7]); a.title = m[8]; parent.append(a); }
+    else {
+      const a = el("span", /^https?:/.test(m[8]) ? "md-url" : "md-link", m[7]); a.title = m[8];
+      if (/^https?:/.test(m[8])) a.onclick = () => openLink(m[8]);
+      parent.append(a);
+    }
   }
-  if (last < text.length) parent.append(text.slice(last));
+  if (last < text.length) linkText(parent, text.slice(last));
 }
 const LIST = /^(\s*)([-*+]|\d+[.)])\s+/;
 function renderMarkdown(src) {
@@ -1413,6 +1482,7 @@ function showFile(tab) {
   $("#file-msg").hidden = ["text", "image", "diff"].includes(tab.kind);
   $("#file-save").hidden = tab.kind !== "text";
   $("#file-open").hidden = tab.kind !== "diff" || tab.status === "D";
+  $("#file-preview").hidden = tab.kind !== "text" || !/\.html?$/i.test(tab.name);
   $("#file-info").textContent = tab.size != null ? fmtSize(tab.size) : "";
   if (tab.kind === "diff") {
     renderDiff(tab.diff);
@@ -1571,6 +1641,98 @@ $("#tr-lang").onchange = () => { S.tr.lang = $("#tr-lang").value; pref.set("trLa
 $("#tr-refresh").onclick = () => loadTrending(true);
 $("#open-trending").onclick = openTrending;
 
+// ── preview: an internal browser for dev servers and static pages ───────────
+S.pv = { hist: [], idx: -1, width: pref.get("pvWidth", 0) };
+const LOCAL_URL = /https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0):\d+[^\s"'<>`)\]]*/;
+function openPreview(url) {
+  if (!S.tabs.some((t) => t.id === "preview")) S.tabs.push({ id: "preview", name: "Preview", kind: "preview" });
+  activate("preview");
+  if (url) pvGo(url);
+}
+function pvNormalize(raw) {
+  let s = (raw || "").trim();
+  if (!s) return null;
+  if (/^\d{2,5}$/.test(s)) s = `localhost:${s}`; // just a port
+  s = s.replace(/^(https?:\/\/)0\.0\.0\.0/i, "$1localhost");
+  if (!/^https?:\/\//i.test(s)) s = (/^(localhost|127\.|\[::1\]|192\.168\.|10\.)/i.test(s) ? "http://" : "https://") + s;
+  try {
+    const u = new URL(s);
+    // Never frame the dashboard itself: it could reach the page that holds the access key.
+    if (u.host === location.host || (["localhost", "127.0.0.1"].includes(u.hostname) && u.port === location.port)) return null;
+    return u.href;
+  } catch (_) { return null; }
+}
+function pvGo(raw, push = true) {
+  const url = pvNormalize(raw);
+  if (!url) { toast("That isn't a page fermi can preview.", true); return; }
+  if (push) { S.pv.hist = S.pv.hist.slice(0, S.pv.idx + 1); S.pv.hist.push(url); S.pv.idx = S.pv.hist.length - 1; }
+  $("#pv-url").value = url;
+  $("#pv-empty").hidden = true;
+  const f = $("#pv-frame"); f.hidden = false; f.src = url;
+  pvSync();
+}
+function pvSync() {
+  $("#pv-back").disabled = S.pv.idx <= 0;
+  $("#pv-fwd").disabled = S.pv.idx >= S.pv.hist.length - 1;
+  $("#pv-reload").disabled = $("#pv-open").disabled = S.pv.idx < 0;
+  document.querySelectorAll("#pv-device button").forEach((b) => (b.className = +b.dataset.w === S.pv.width ? "on" : ""));
+  const f = $("#pv-frame");
+  f.classList.toggle("device", S.pv.width > 0);
+  f.style.width = S.pv.width ? `${S.pv.width}px` : "100%";
+}
+function showPreview() {
+  pvSync();
+  if (S.pv.idx < 0) pvHome();
+}
+async function pvHome() {
+  $("#pv-frame").hidden = true;
+  const box = $("#pv-empty"); box.hidden = false; box.replaceChildren(el("h3", null, "Preview"), el("div", "muted", "Looking for dev servers on this PC…"));
+  let servers = [];
+  try { servers = (await api("/api/preview/scan")).servers; } catch (_) {}
+  box.replaceChildren(el("h3", null, "Preview your site"));
+  if (servers.length) {
+    box.append(el("div", "muted", "Running on this PC:"));
+    for (const s of servers) {
+      const b = el("button", "srv"); b.append(icon("globe"), el("span", "u", `localhost:${s.port}`), el("span", "t", s.title || ""));
+      b.onclick = () => pvGo(s.url); box.append(b);
+    }
+  } else {
+    box.append(el("div", "muted", "No dev server found on the usual ports. Start one in a terminal (Ctrl+`), for example npm run dev, then click refresh, or type its address above."));
+  }
+  const w = currentWs();
+  if (w) {
+    const serve = el("button", "small", `Serve ${w.name} as a static site`);
+    serve.title = "For plain HTML/CSS/JS: serves the folder on its own local port";
+    serve.onclick = async () => { try { pvGo((await api("/api/preview/serve", { root: w.path })).url); } catch (e) { toast(e.message, true); } };
+    const again = el("button", "small ghost", "Look again"); again.onclick = pvHome;
+    const row = el("div", "row"); row.style.flex = "none"; row.append(serve, again); box.append(row);
+  }
+  box.append(el("div", "faint", "Some public websites refuse to be shown inside other apps; use Open in browser for those."));
+}
+$("#pv-form").onsubmit = (e) => { e.preventDefault(); pvGo($("#pv-url").value); };
+$("#pv-back").onclick = () => { if (S.pv.idx > 0) { S.pv.idx--; pvGo(S.pv.hist[S.pv.idx], false); } };
+$("#pv-fwd").onclick = () => { if (S.pv.idx < S.pv.hist.length - 1) { S.pv.idx++; pvGo(S.pv.hist[S.pv.idx], false); } };
+$("#pv-reload").onclick = () => { const f = $("#pv-frame"); if (f.src) f.src = f.src; };
+$("#pv-home").onclick = () => { S.pv.idx = -1; S.pv.hist = []; $("#pv-url").value = ""; pvSync(); pvHome(); };
+$("#pv-open").onclick = () => { const u = S.pv.hist[S.pv.idx]; if (u) api("/api/open-url", { url: u }).catch((e) => toast(e.message, true)); };
+document.querySelectorAll("#pv-device button").forEach((b) => (b.onclick = () => { S.pv.width = +b.dataset.w; pref.set("pvWidth", S.pv.width); pvSync(); }));
+$("#file-preview").onclick = async () => {
+  const t = activeTab(), w = currentWs();
+  if (!t || !w) return;
+  try { openPreview((await api("/api/preview/serve", { root: w.path, file: t.id })).url); } catch (e) { toast(e.message, true); }
+};
+
+// A small notice with one action (e.g. "Open preview").
+let noticeTimer;
+function notify(text, label, action) {
+  $("#notice-text").textContent = text; $("#notice-text").title = text;
+  const go = $("#notice-go"); go.textContent = label;
+  go.onclick = () => { $("#notice").hidden = true; action(); };
+  $("#notice").hidden = false;
+  clearTimeout(noticeTimer); noticeTimer = setTimeout(() => ($("#notice").hidden = true), 12000);
+}
+$("#notice-x").onclick = () => ($("#notice").hidden = true);
+
 // ── terminals ───────────────────────────────────────────────────────────────
 let termSeq = 0;
 function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
@@ -1594,7 +1756,18 @@ function newTerm() {
   term.focus();
   const ws = new WebSocket(`ws://${location.host}/api/term?${q({ t: token, cwd, cols: term.cols, rows: term.rows })}`);
   ws.binaryType = "arraybuffer";
-  ws.onmessage = (e) => term.write(typeof e.data === "string" ? e.data : new Uint8Array(e.data));
+  const decoder = new TextDecoder(), offered = new Set();
+  ws.onmessage = (e) => {
+    const bytes = typeof e.data === "string" ? e.data : new Uint8Array(e.data);
+    term.write(bytes);
+    // A dev server announcing its address: offer to open it in Preview.
+    const text = (typeof bytes === "string" ? bytes : decoder.decode(bytes, { stream: true })).replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "");
+    const m = text.match(LOCAL_URL);
+    if (m) {
+      const url = m[0].replace(/[.,;:]+$/, "");
+      if (!offered.has(url) && pvNormalize(url)) { offered.add(url); notify(`Dev server at ${url}`, "Open preview", () => openPreview(url)); }
+    }
+  };
   ws.onclose = () => term.write("\r\n\x1b[2m[session ended]\x1b[0m\r\n");
   term.onData((d) => { if (ws.readyState === 1) ws.send(JSON.stringify({ data: d })); });
   term.onResize(({ cols, rows }) => { if (ws.readyState === 1) ws.send(JSON.stringify({ resize: [cols, rows] })); });
@@ -2117,6 +2290,7 @@ async function refresh() {
     if (params.get("pane")) setPane(params.get("pane"));
     if (params.get("view") === "settings" && S.active !== "settings") openSettings();
     if (params.get("view") === "trending" && S.active !== "trending") openTrending();
+    if (params.get("view") === "preview" && S.active !== "preview") openPreview(params.get("url") || undefined);
     if (params.get("term") && !S.tabs.some((t) => t.kind === "term")) newTerm();
     if (params.get("diff") && !S.tabs.length) { const p = params.get("diff"); openDiff({ path: p, rel: relTo(currentWs()?.path, p), status: "M" }); }
     const linked = Number(params.get("task"));

@@ -29,7 +29,8 @@ const XTERM_JS: &str = include_str!("../web/vendor/xterm.js");
 const XTERM_CSS: &str = include_str!("../web/vendor/xterm.css");
 const XTERM_FIT: &str = include_str!("../web/vendor/addon-fit.js");
 const CSP: &str = "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; \
-                   connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'none'";
+                   connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; \
+                   frame-src http: https:";
 
 struct Srv {
     hub: Arc<Hub>,
@@ -173,6 +174,8 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/trending", get(trending))
         .route("/api/repos/clone", post(clone_repo))
         .route("/api/open-url", post(open_url))
+        .route("/api/preview/scan", get(preview_scan))
+        .route("/api/preview/serve", post(preview_serve))
         .route("/api/git/status", get(git_status))
         .route("/api/git/diff", get(git_diff))
         .route("/api/ws", get(ws))
@@ -207,8 +210,9 @@ fn new_token() -> Result<String> {
 }
 
 fn open_browser(url: &str) {
+    // Not `cmd /c start`: cmd.exe would treat `&` in a URL as a second command.
     let r = if cfg!(windows) {
-        std::process::Command::new("cmd").args(["/c", "start", "", url]).spawn()
+        std::process::Command::new("rundll32.exe").args(["url.dll,FileProtocolHandler", url]).spawn()
     } else if cfg!(target_os = "macos") {
         std::process::Command::new("open").arg(url).spawn()
     } else {
@@ -760,17 +764,48 @@ struct UrlBody {
     url: String,
 }
 
-/// Opens a GitHub page in the default browser (the desktop window can't
-/// navigate away from the app).
+/// Opens a web page in the default browser (the desktop window can't
+/// navigate away from the app). Only plain http(s) URLs.
 async fn open_url(Json(b): Json<UrlBody>) -> Response {
-    let ok = b.url.starts_with("https://github.com/")
-        && b.url.len() < 300
-        && b.url.chars().all(|c| c.is_ascii_alphanumeric() || "/:._-?=&#%".contains(c));
+    let ok = (b.url.starts_with("https://") || b.url.starts_with("http://"))
+        && b.url.len() < 2000
+        && b.url.chars().all(|c| c.is_ascii_graphic() && !"\"'<>\\^`{|}".contains(c));
     if !ok {
-        return err(StatusCode::BAD_REQUEST, "only github.com links can be opened");
+        return err(StatusCode::BAD_REQUEST, "only plain http(s) links can be opened");
     }
     open_browser(&b.url);
     Json(json!({ "ok": true })).into_response()
+}
+
+async fn preview_scan(State(s): S) -> Json<Value> {
+    Json(json!({ "servers": crate::preview::scan(s.port).await }))
+}
+
+#[derive(Deserialize)]
+struct ServeBody {
+    root: String,
+    /// A file inside the root to open (e.g. an .html file).
+    #[serde(default)]
+    file: Option<String>,
+}
+
+/// Serves a workspace folder (static files) on its own local port.
+async fn preview_serve(State(s): S, Json(b): Json<ServeBody>) -> Response {
+    let root = match files::check(&s.workspaces(), &b.root) {
+        Ok(p) if p.is_dir() => p,
+        Ok(_) => return err(StatusCode::BAD_REQUEST, "not a folder"),
+        Err(e) => return fs_err(e),
+    };
+    let port = match crate::preview::serve(root.clone()).await {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    let rel = b
+        .file
+        .and_then(|f| files::canon(std::path::Path::new(&f)))
+        .and_then(|f| f.strip_prefix(&root).ok().map(|r| r.to_string_lossy().replace('\\', "/")))
+        .unwrap_or_default();
+    Json(json!({ "url": format!("http://127.0.0.1:{port}/{rel}") })).into_response()
 }
 
 #[derive(Deserialize)]

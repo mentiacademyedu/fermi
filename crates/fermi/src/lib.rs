@@ -3,6 +3,7 @@
 
 pub mod files;
 pub mod git;
+pub mod preview;
 pub mod server;
 pub mod setup;
 pub mod term;
