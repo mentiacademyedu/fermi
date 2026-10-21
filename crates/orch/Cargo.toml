@@ -1,0 +1,18 @@
+[package]
+name = "orch"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "orch"
+path = "src/main.rs"
+
+[dependencies]
+orch-core = { path = "../orch-core" }
+anyhow.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+clap = { version = "4", features = ["derive"] }
+ratatui = "0.29"
+toml_edit = "0.22"

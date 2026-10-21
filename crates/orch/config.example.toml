@@ -1,0 +1,74 @@
+# orch config
+#
+# Profiles keep work and personal apart: a task only runs on the accounts of
+# its own profile, and failover never crosses profiles.
+
+default_profile = "personal"
+
+# ── Accounts ────────────────────────────────────────────────────────────────
+# provider: "claude" | "openai"
+# auth:     "cli" = subscription login through the official CLI (claude / codex)
+#           "api" = API key read from `api_key_env`
+# home:     CLI config dir. Omit for ~/.orch/accounts/<id> (isolated login);
+#           "default" reuses the CLI's normal login (~/.claude, ~/.codex).
+#
+# Add more with:   orch account add <id> --provider claude --profile work
+# Then log in:     orch account login <id>
+
+[[accounts]]
+id = "claude-personal"
+provider = "claude"
+auth = "cli"
+home = "default"
+
+# [[accounts]]
+# id = "openai-personal"
+# provider = "openai"
+# auth = "cli"                     # Codex CLI with your ChatGPT login
+
+# [[accounts]]
+# id = "openai-key"
+# provider = "openai"
+# auth = "api"
+# api_key_env = "OPENAI_API_KEY"   # direct Images API / Responses API
+
+# ── Profiles ────────────────────────────────────────────────────────────────
+# paths:  tasks started under these directories use this profile
+# mode:   "auto"   = pick the best model per task from the profile's providers
+#         "pinned" = only switch between `models`
+#         "single" = always models[0]
+# rotate: spread tasks across same-provider accounts (default: use accounts in
+#         order, moving to the next only on a limit or login failure)
+
+[[profiles]]
+name = "personal"
+accounts = ["claude-personal"]
+paths = []                         # e.g. ["C:/code", "~/projects"]
+mode = "auto"
+permission_mode = "acceptEdits"    # claude --permission-mode
+codex_sandbox = "workspace-write"  # codex exec --sandbox
+# claude_args = ["--strict-mcp-config"]  # lean: skip your global MCP servers (faster, fewer tokens)
+# codex_args = []
+
+# [[profiles]]
+# name = "work"
+# accounts = ["claude-work", "openai-work"]
+# paths = ["C:/work"]
+# mode = "pinned"
+# models = ["claude:opus", "claude:sonnet", "openai:image"]
+
+# ── Models ──────────────────────────────────────────────────────────────────
+# Built in: claude:fable claude:opus claude:sonnet claude:haiku openai:gpt openai:image
+# tier: 1 fast, 2 balanced, 3 strongest, 4 premium. auto = false keeps a model
+# out of auto mode (still usable with -m or pinned/single).
+#
+# [[models]]
+# id = "openai:gpt"
+# caps = ["code", "reasoning", "general"]
+# tier = 3
+# cli = "gpt-6-astra"     # codex -m; omit to use Codex's default
+# api = "gpt-6-astra"
+
+# [bins]                  # only if the CLIs aren't on PATH
+# claude = "C:/path/to/claude.exe"
+# codex = "C:/path/to/codex.exe"

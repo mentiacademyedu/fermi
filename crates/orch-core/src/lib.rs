@@ -1,0 +1,18 @@
+//! orch-core: routing, account pool and provider adapters.
+//!
+//! Every front end (CLI, TUI, the future web dashboard) drives the same
+//! [`Engine`] and consumes the same [`Event`] stream.
+
+pub mod config;
+pub mod engine;
+pub mod events;
+pub mod mcp;
+pub mod models;
+pub mod providers;
+pub mod router;
+pub mod state;
+pub mod util;
+
+pub use config::{Account, Auth, Config, Mode, Profile, Provider};
+pub use engine::{Engine, Outcome, Task};
+pub use events::{Event, Tx};
