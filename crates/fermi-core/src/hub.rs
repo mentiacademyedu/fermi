@@ -37,6 +37,8 @@ pub struct TaskRec {
     pub model: Option<String>,
     pub account: Option<String>,
     pub effort: Option<String>,
+    #[serde(default)]
+    pub permission: Option<String>,
     pub cwd: PathBuf,
     pub status: TaskStatus,
     /// `Model · effort @ account` once routed.
@@ -63,7 +65,7 @@ impl TaskRec {
     pub fn summary(&self) -> Value {
         json!({
             "id": self.id, "prompt": self.prompt, "profile": self.profile, "model": self.model,
-            "account": self.account, "effort": self.effort, "cwd": self.cwd, "status": self.status,
+            "account": self.account, "effort": self.effort, "permission": self.permission, "cwd": self.cwd, "status": self.status,
             "route": self.route, "started": self.started, "ended": self.ended,
             "resumable": self.session.is_some() && self.ran_on.is_some(),
             "turns": self.events.iter().filter(|e| matches!(e, Event::User { .. })).count(),
@@ -123,6 +125,17 @@ impl Hub {
         self.tasks.lock().unwrap().iter().find(|t| t.id == id).cloned()
     }
 
+    /// Folders tasks have run in, most recent first.
+    pub fn cwds(&self) -> Vec<PathBuf> {
+        let mut out: Vec<PathBuf> = vec![];
+        for t in self.tasks.lock().unwrap().iter().rev() {
+            if !out.contains(&t.cwd) {
+                out.push(t.cwd.clone());
+            }
+        }
+        out
+    }
+
     pub fn running(&self) -> usize {
         self.tasks.lock().unwrap().iter().filter(|t| t.status == TaskStatus::Running).count()
     }
@@ -136,6 +149,7 @@ impl Hub {
             model: task.model.clone(),
             account: task.account.clone(),
             effort: task.effort.clone(),
+            permission: task.permission.clone(),
             cwd: task.cwd.clone(),
             status: TaskStatus::Running,
             route: None,
@@ -169,6 +183,7 @@ impl Hub {
             task.model = Some(on.model);
             task.account = Some(on.account);
             task.effort = t.effort.clone();
+            task.permission = t.permission.clone();
             task.resume = Some(session);
             t.status = TaskStatus::Running;
             t.ended = None;

@@ -29,6 +29,19 @@ impl RunCtx<'_> {
     pub fn effort(&self) -> Option<&str> {
         self.task.effort.as_deref().or(self.profile.effort.as_deref())
     }
+    /// Claude-style permission mode: the task's, else the profile's.
+    pub fn permission(&self) -> Option<&str> {
+        self.task.permission.as_deref().or(self.profile.permission_mode.as_deref()).filter(|p| *p != "default")
+    }
+    /// Codex sandbox: follows a per-task permission override, else the profile's setting.
+    pub fn codex_sandbox(&self) -> Option<&str> {
+        match self.task.permission.as_deref() {
+            Some("plan") => Some("read-only"),
+            Some("acceptEdits") => Some("workspace-write"),
+            Some("bypassPermissions") => Some("danger-full-access"),
+            _ => self.profile.codex_sandbox.as_deref(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]

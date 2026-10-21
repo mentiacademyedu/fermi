@@ -3,10 +3,10 @@
 //! puts in the URL it opens, and the Host header must be local, so other
 //! sites in the browser can't drive it (CSRF / DNS rebinding).
 
-use crate::setup;
+use crate::{files, setup};
 use anyhow::{bail, Result};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, Request, State};
+use axum::extract::{Path, Query, Request, State};
 use axum::http::{header, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{Html, IntoResponse, Response};
@@ -35,9 +35,56 @@ struct Srv {
     cwd: PathBuf,
     auth: Mutex<HashMap<String, AuthInfo>>,
     probing: Mutex<HashSet<String>>,
+    /// Folders the user added as workspaces (`~/.fermi/workspaces.json`).
+    added: Mutex<Vec<PathBuf>>,
 }
 
 type S = State<Arc<Srv>>;
+
+impl Srv {
+    fn workspaces_file(&self) -> PathBuf {
+        self.hub.engine().home.join("workspaces.json")
+    }
+
+    /// Every folder the dashboard may browse: added ones, the launch folder
+    /// (unless it's the home folder), profile folders and folders tasks ran in.
+    fn workspaces(&self) -> Vec<PathBuf> {
+        let e = self.hub.engine();
+        let home = dirs_home();
+        let mut out: Vec<PathBuf> = vec![];
+        let mut push = |p: &std::path::Path| {
+            if let Some(c) = files::canon(p) {
+                if c.is_dir() && !out.contains(&c) && Some(&c) != home.as_ref() {
+                    out.push(c);
+                }
+            }
+        };
+        for p in self.added.lock().unwrap().iter() {
+            push(p);
+        }
+        push(&self.cwd);
+        for prof in &e.cfg.profiles {
+            for p in &prof.paths {
+                push(&expand(p));
+            }
+        }
+        for p in self.hub.cwds() {
+            push(&p);
+        }
+        out
+    }
+
+    fn save_added(&self) {
+        let list: Vec<String> = self.added.lock().unwrap().iter().map(|p| p.to_string_lossy().into_owned()).collect();
+        if let Ok(b) = serde_json::to_vec_pretty(&list) {
+            let _ = std::fs::write(self.workspaces_file(), b);
+        }
+    }
+}
+
+fn dirs_home() -> Option<PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).and_then(|h| files::canon(std::path::Path::new(&h)))
+}
 
 /// A bound, not yet serving dashboard.
 pub struct Server {
@@ -85,7 +132,11 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         cwd,
         auth: Mutex::new(HashMap::new()),
         probing: Mutex::new(HashSet::new()),
+        added: Mutex::new(vec![]),
     });
+    let saved: Vec<String> =
+        std::fs::read(srv.workspaces_file()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    *srv.added.lock().unwrap() = saved.into_iter().map(PathBuf::from).collect();
     srv.probe_all();
     tokio::spawn(push_accounts_loop(srv.clone()));
 
@@ -102,6 +153,13 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         .route("/api/accounts/{id}/remove", post(remove_account))
         .route("/api/profiles", post(save_profile))
         .route("/api/profiles/{name}/delete", post(delete_profile))
+        .route("/api/workspaces", post(workspace_add))
+        .route("/api/workspaces/remove", post(workspace_remove))
+        .route("/api/fs/list", get(fs_list))
+        .route("/api/fs/read", get(fs_read))
+        .route("/api/fs/raw", get(fs_raw))
+        .route("/api/fs/write", post(fs_write))
+        .route("/api/fs/search", get(fs_search))
         .route("/api/ws", get(ws))
         .route_layer(middleware::from_fn_with_state(srv.clone(), require_token))
         .route("/", get(index))
@@ -247,6 +305,14 @@ impl Srv {
             "profiles": profiles,
             "accounts": self.accounts_json(),
             "models": models,
+            "workspaces": self.workspaces().iter().map(|p| json!({
+                "path": p,
+                "name": p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.to_string_lossy().into_owned()),
+                "profile": e.cfg.resolve_profile(None, p).ok().map(|pr| pr.name),
+                "added": self.added.lock().unwrap().iter().any(|a| files::canon(a).as_deref() == Some(p.as_path())),
+            })).collect::<Vec<_>>(),
+            "home": dirs_home(),
+            "permissions": fermi_core::engine::PERMISSIONS,
             "efforts": fermi_core::models::EFFORTS,
             "tasks": self.hub.list(),
             "now": now(),
@@ -330,6 +396,7 @@ struct NewTask {
     model: Option<String>,
     account: Option<String>,
     effort: Option<String>,
+    permission: Option<String>,
     cwd: Option<String>,
 }
 
@@ -347,6 +414,7 @@ async fn create_task(State(s): S, Json(b): Json<NewTask>) -> Response {
     task.model = non_empty(b.model);
     task.account = non_empty(b.account);
     task.effort = non_empty(b.effort);
+    task.permission = non_empty(b.permission);
     // Surface routing errors (unknown profile, no account…) right away.
     if let Err(e) = s.hub.engine().plan(&task) {
         return err(StatusCode::BAD_REQUEST, format!("{e:#}"));
@@ -444,6 +512,120 @@ async fn remove_account(State(s): S, Path(id): Path<String>) -> Response {
     s.auth.lock().unwrap().remove(&id);
     s.push_accounts();
     r
+}
+
+// ── workspaces and files ─────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct PathBody {
+    path: String,
+}
+
+async fn workspace_add(State(s): S, Json(b): Json<PathBody>) -> Response {
+    let Some(dir) = files::canon(&expand(b.path.trim())).filter(|d| d.is_dir()) else {
+        return err(StatusCode::BAD_REQUEST, format!("folder not found: {}", b.path.trim()));
+    };
+    {
+        let mut added = s.added.lock().unwrap();
+        if !added.contains(&dir) {
+            added.insert(0, dir.clone());
+        }
+    }
+    s.save_added();
+    s.hub.publish(json!({ "kind": "config" }));
+    Json(json!({ "path": dir })).into_response()
+}
+
+async fn workspace_remove(State(s): S, Json(b): Json<PathBody>) -> Json<Value> {
+    let target = files::canon(std::path::Path::new(&b.path));
+    s.added.lock().unwrap().retain(|p| files::canon(p) != target && p.to_string_lossy() != b.path);
+    s.save_added();
+    s.hub.publish(json!({ "kind": "config" }));
+    Json(json!({ "ok": true }))
+}
+
+fn fs_err(e: anyhow::Error) -> Response {
+    err(StatusCode::BAD_REQUEST, format!("{e:#}"))
+}
+
+async fn fs_list(State(s): S, Query(q): Query<PathBody>) -> Response {
+    match files::check(&s.workspaces(), &q.path).and_then(|p| files::list(&p)) {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => fs_err(e),
+    }
+}
+
+async fn fs_read(State(s): S, Query(q): Query<PathBody>) -> Response {
+    match files::check(&s.workspaces(), &q.path).and_then(|p| files::read(&p)) {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => fs_err(e),
+    }
+}
+
+/// Raw bytes for image previews. Sandboxed so an SVG or HTML file opened
+/// directly can't run script with the dashboard's access.
+async fn fs_raw(State(s): S, Query(q): Query<PathBody>) -> Response {
+    let path = match files::check(&s.workspaces(), &q.path) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    if std::fs::metadata(&path).map(|m| m.len() > files::MAX_RAW).unwrap_or(true) {
+        return err(StatusCode::BAD_REQUEST, "file too large to preview");
+    }
+    match tokio::fs::read(&path).await {
+        Ok(bytes) => (
+            [
+                (header::CONTENT_TYPE, files::content_type(&path)),
+                (header::CONTENT_SECURITY_POLICY, "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'"),
+                (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        Err(e) => fs_err(e.into()),
+    }
+}
+
+#[derive(Deserialize)]
+struct WriteBody {
+    path: String,
+    text: String,
+}
+
+async fn fs_write(State(s): S, Json(b): Json<WriteBody>) -> Response {
+    let res = files::check_new(&s.workspaces(), &b.path).and_then(|p| {
+        std::fs::write(&p, b.text.as_bytes())?;
+        Ok(p)
+    });
+    match res {
+        Ok(p) => Json(json!({ "path": p, "size": b.text.len() })).into_response(),
+        Err(e) => fs_err(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct SearchQuery {
+    root: String,
+    q: String,
+    #[serde(default)]
+    mode: Option<String>,
+}
+
+async fn fs_search(State(s): S, Query(q): Query<SearchQuery>) -> Response {
+    let root = match files::check(&s.workspaces(), &q.root) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    if q.q.trim().is_empty() {
+        return Json(Vec::<files::Hit>::new()).into_response();
+    }
+    let contents = q.mode.as_deref() == Some("contents");
+    let needle = q.q.trim().to_string();
+    match tokio::task::spawn_blocking(move || files::search(&root, &needle, contents)).await {
+        Ok(hits) => Json(hits).into_response(),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
 }
 
 async fn probe(State(s): S) -> Json<Value> {

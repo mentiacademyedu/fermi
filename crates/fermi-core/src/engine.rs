@@ -28,7 +28,13 @@ pub struct Task {
     /// Continue this provider session (a follow-up). Needs `model` and
     /// `account` set to the ones the session lives on.
     pub resume: Option<String>,
+    /// Overrides the profile's permission mode for this task
+    /// (`acceptEdits`, `bypassPermissions`, `plan`, `default`).
+    pub permission: Option<String>,
 }
+
+/// Permission modes a task may ask for.
+pub const PERMISSIONS: [&str; 4] = ["acceptEdits", "bypassPermissions", "plan", "default"];
 
 impl Task {
     pub fn new(prompt: impl Into<String>, cwd: impl Into<PathBuf>) -> Self {
@@ -41,6 +47,7 @@ impl Task {
             effort: None,
             out: None,
             resume: None,
+            permission: None,
         }
     }
 }
@@ -81,6 +88,9 @@ impl Engine {
     pub fn plan(&self, task: &Task) -> Result<Plan> {
         if let Some(e) = task.effort.as_deref().filter(|e| !crate::models::EFFORTS.contains(e)) {
             bail!("unknown effort `{e}` (use {})", crate::models::EFFORTS.join(", "));
+        }
+        if let Some(p) = task.permission.as_deref().filter(|p| !PERMISSIONS.contains(p)) {
+            bail!("unknown permission mode `{p}` (use {})", PERMISSIONS.join(", "));
         }
         if task.resume.is_some() && (task.model.is_none() || task.account.is_none()) {
             bail!("a follow-up must name the model and account its session lives on");

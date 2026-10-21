@@ -27,8 +27,8 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
             emit(ctx.tx, Event::Session { id });
         }
     }
-    if let Some(pm) = &ctx.profile.permission_mode {
-        args.extend(["--permission-mode".into(), pm.clone()]);
+    if let Some(pm) = ctx.permission() {
+        args.extend(["--permission-mode".into(), pm.to_string()]);
     }
     if let Some(b) = mcp::bridge_for(e, ctx.profile)? {
         args.extend([

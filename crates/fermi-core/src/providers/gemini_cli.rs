@@ -28,7 +28,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         "stream-json".into(),
         "--skip-trust".into(),
         "--approval-mode".into(),
-        approval_mode(ctx.profile.permission_mode.as_deref()).into(),
+        approval_mode(ctx.permission()).into(),
     ];
     if let Some(m) = &ctx.model.cli {
         args.extend(["--model".into(), m.clone()]);

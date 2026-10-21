@@ -6,176 +6,284 @@
 <title>fermi</title>
 <style>
 :root {
-  --bg: #0e1014; --panel: #151820; --panel-2: #1b1f29; --line: #262b36; --line-2: #313848;
-  --text: #e7e9ee; --muted: #8a93a3; --faint: #5d6575;
-  --accent: #5cc8ff; --accent-ink: #04121b;
-  --ok: #3ecf8e; --warn: #f5a524; --bad: #f2615c; --meta: #e3c35a; --tool: #6fc9ef;
+  --bg: #f7f7f8; --side: #f1f1f3; --panel: #ffffff; --panel-2: #f4f4f6; --hover: #e9e9ed; --sel: #e4e4ea;
+  --line: #e4e4e9; --line-2: #d6d6dd; --text: #18181b; --muted: #62626d; --faint: #9a9aa5;
+  --accent: #2f6fed; --accent-soft: #e8efff; --accent-ink: #ffffff;
+  --ok: #15915a; --warn: #b26b00; --bad: #d1342f; --meta: #8a6a00; --tool: #1d6fb8;
+  --code-bg: #ffffff;
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Liberation Mono", monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --r: 10px;
+  --r: 12px;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06);
 }
-@media (prefers-color-scheme: light) {
+@media (prefers-color-scheme: dark) {
   :root {
-    --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f1f3f6; --line: #e3e6eb; --line-2: #d3d8e0;
-    --text: #161a22; --muted: #5d6676; --faint: #8f97a5;
-    --accent: #0b84c6; --accent-ink: #ffffff;
-    --ok: #13915c; --warn: #b26b00; --bad: #c8322d; --meta: #8a6a00; --tool: #0b74ad;
+    --bg: #1b1d22; --side: #16181c; --panel: #202329; --panel-2: #262a31; --hover: #2a2e36; --sel: #30353e;
+    --line: #2d3139; --line-2: #393e48; --text: #e8e9ec; --muted: #9a9fab; --faint: #686d79;
+    --accent: #6c9cff; --accent-soft: #24304a; --accent-ink: #0b1020;
+    --ok: #3ecf8e; --warn: #f5a524; --bad: #f2615c; --meta: #e3c35a; --tool: #6fc9ef;
+    --code-bg: #1a1c21;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
   }
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
-body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); }
+body { background: var(--bg); color: var(--text); font: 14px/1.45 var(--sans); overflow: hidden; }
 button, input, select, textarea { font: inherit; color: inherit; }
 [hidden] { display: none !important; }
+svg { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; }
 
-/* splash */
-#splash { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; background: var(--bg); z-index: 10; transition: opacity .25s; }
+/* ── buttons ───────────────────────────────────────────────────────────── */
+button { cursor: pointer; border: 1px solid var(--line-2); background: var(--panel); border-radius: 8px; padding: 6px 12px; }
+button:hover { background: var(--hover); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
+button.primary:hover { filter: brightness(1.07); }
+button.ghost { background: transparent; border-color: transparent; }
+button.ghost:hover { background: var(--hover); }
+button.small { padding: 3px 10px; font-size: 12.5px; }
+button.danger { color: var(--bad); }
+button:disabled { opacity: .45; cursor: default; }
+.icon-btn { display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--muted); border-radius: 7px; }
+.icon-btn:hover { background: var(--hover); color: var(--text); }
+.icon-btn.on { color: var(--accent); }
+
+/* ── splash ────────────────────────────────────────────────────────────── */
+#splash { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; gap: 6px; background: var(--bg); z-index: 50; transition: opacity .25s; }
 #splash.gone { opacity: 0; pointer-events: none; }
 #splash pre { margin: 0 auto; color: var(--accent); font: 13px/1.15 var(--mono); text-align: left; }
-.brand { font: 600 15px var(--mono); letter-spacing: .6em; margin-top: 14px; padding-left: .6em; }
+.brand-big { font: 600 15px var(--mono); letter-spacing: .6em; margin-top: 14px; padding-left: .6em; }
 .quote { color: var(--muted); font-style: italic; }
 #splash-status { color: var(--muted); font: 12px var(--mono); margin-top: 10px; min-height: 3.5em; white-space: pre-line; }
 
-/* layout */
-#app { display: grid; grid-template-rows: 52px 1fr; height: 100%; }
-header { display: flex; align-items: center; gap: 14px; padding: 0 18px; border-bottom: 1px solid var(--line); background: var(--panel); }
-.logo { font: 700 16px var(--mono); letter-spacing: .08em; }
-.logo span { color: var(--accent); }
-.where { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.spacer { flex: 1; }
-.pill { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
-.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
-.pill.off::before { background: var(--bad); }
-.body { display: grid; grid-template-columns: 330px 1fr; min-height: 0; }
-aside { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; overflow-y: auto; background: var(--panel); }
-aside section { padding: 14px; border-bottom: 1px solid var(--line); }
-aside section.grow { flex: 1 0 auto; border-bottom: 0; }
-.sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0; font-weight: 600; }
-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+/* ── layout ────────────────────────────────────────────────────────────── */
+.app { display: grid; height: 100%; grid-template-columns: 272px minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr) 28px; }
+.app.no-side { grid-template-columns: 0 minmax(0, 1fr) 300px; }
+.app.no-files { grid-template-columns: 272px minmax(0, 1fr) 0; }
+.app.no-side.no-files { grid-template-columns: 0 minmax(0, 1fr) 0; }
+.app.no-side .side, .app.no-files .files { display: none; }
 
-/* buttons */
-button { cursor: pointer; border: 1px solid var(--line-2); background: var(--panel-2); border-radius: 8px; padding: 7px 12px; }
-button:hover { border-color: var(--faint); }
-button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; font-weight: 600; }
-button.primary:hover { filter: brightness(1.08); }
-button.ghost { background: transparent; }
-button.small { padding: 3px 9px; font-size: 12px; }
-button.danger { color: var(--bad); }
-button:disabled { opacity: .5; cursor: default; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-/* accounts */
-.acct { display: grid; grid-template-columns: 12px 1fr auto; gap: 4px 10px; align-items: start; padding: 10px; border: 1px solid var(--line); border-radius: var(--r); margin-bottom: 8px; background: var(--panel-2); }
-.dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 6px; background: var(--ok); }
-.dot.off { background: transparent; border: 2px solid var(--faint); }
-.dot.busy { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
-.dot.limited { background: var(--bad); }
-.dot.checking { background: var(--faint); animation: pulse 1s infinite; }
-@keyframes pulse { 50% { opacity: .3; } }
-.a-id { font-weight: 600; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.badge { font: 500 11px var(--mono); color: var(--muted); border: 1px solid var(--line-2); border-radius: 5px; padding: 0 5px; }
-.a-who { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
-.a-who.bad { color: var(--bad); }
-.bar { height: 4px; border-radius: 3px; background: var(--line); margin-top: 7px; overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--ok); }
-.bar i.hi { background: var(--warn); }
-.bar i.full { background: var(--bad); }
-.a-meta { color: var(--faint); font-size: 11.5px; margin-top: 4px; }
-
-/* tasks list */
-.task { display: grid; grid-template-columns: 16px 1fr auto; gap: 2px 8px; padding: 9px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
-.task:hover { background: var(--panel-2); }
-.task.sel { background: var(--panel-2); border-color: var(--line-2); }
-.t-icon { font: 13px var(--mono); }
-.t-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.t-time { color: var(--faint); font: 12px var(--mono); }
-.t-route { grid-column: 2 / 4; color: var(--muted); font: 12px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.empty { color: var(--faint); font-size: 13px; padding: 4px 2px; }
+/* ── sidebar ───────────────────────────────────────────────────────────── */
+.side { background: var(--side); display: flex; flex-direction: column; min-height: 0; padding: 10px 10px 8px; gap: 8px; }
+.side-top { display: flex; align-items: center; gap: 8px; padding: 2px 4px 4px; }
+.logo-tile { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: #0e1014; color: #5cc8ff; font: 700 13px var(--sans); letter-spacing: -.02em; position: relative; }
+.logo-tile::before { content: "100"; position: absolute; top: 2px; left: 3px; font-size: 5.5px; color: #8a93a3; font-weight: 500; }
+.brand-name { font: 700 17px var(--sans); letter-spacing: -.01em; }
+.brand-name small { font: 600 9.5px var(--mono); letter-spacing: .08em; padding: 1px 5px; margin-left: 6px; border-radius: 4px; background: var(--text); color: var(--bg); vertical-align: 2px; }
+.side-top .icon-btn { margin-left: auto; }
+.new-task { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line-2); font-weight: 600; box-shadow: var(--shadow); }
+.search { display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line); color: var(--faint); }
+.search input { flex: 1; border: 0; background: transparent; padding: 7px 0; outline: none; color: var(--text); min-width: 0; }
+.side-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 0 8px; color: var(--muted); font-size: 13px; }
+.ws-list { flex: 1; overflow-y: auto; min-height: 0; margin: 0 -4px; padding: 0 4px; }
+.ws-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; cursor: pointer; color: var(--text); font-weight: 500; }
+.ws-row:hover { background: var(--hover); }
+.ws-row.sel { background: var(--sel); }
+.ws-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-row .count { color: var(--faint); font-size: 12px; }
+.ws-row .x { visibility: hidden; width: 22px; height: 22px; }
+.ws-row:hover .x { visibility: visible; }
+.ws-row svg { color: var(--accent); }
+.task-row { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 8px; padding: 6px 8px 6px 28px; border-radius: 8px; cursor: pointer; color: var(--muted); }
+.task-row:hover { background: var(--hover); color: var(--text); }
+.task-row.sel { background: var(--sel); color: var(--text); }
+.task-row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-row .time { color: var(--faint); font-size: 11.5px; }
+.st { font: 12px var(--mono); text-align: center; }
+.st.ok { color: var(--ok); } .st.bad { color: var(--bad); } .st.cancel { color: var(--faint); }
 .spin { display: inline-block; animation: spin 1s linear infinite; color: var(--accent); }
 @keyframes spin { to { transform: rotate(360deg); } }
-.ok { color: var(--ok); } .bad { color: var(--bad); } .muted { color: var(--muted); } .faint { color: var(--faint); }
+.more { padding: 3px 8px 6px 28px; font-size: 12px; color: var(--faint); cursor: pointer; }
+.more:hover { color: var(--text); }
+.side-empty { color: var(--faint); font-size: 13px; padding: 8px; }
+.side-foot { border-top: 1px solid var(--line); padding-top: 8px; display: flex; gap: 4px; }
+.side-link { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; padding: 7px 8px; border-radius: 8px; color: var(--muted); flex: 1; text-align: left; }
+.side-link:hover { background: var(--hover); color: var(--text); }
 
-/* composer */
-#composer { padding: 16px 18px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
-#prompt { width: 100%; min-height: 76px; max-height: 40vh; resize: vertical; padding: 12px 14px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--panel); }
-#prompt:focus { outline: none; border-color: var(--accent); }
-.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
-label.f { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
-label.f.grow { flex: 1; min-width: 180px; }
-select, input[type=text] { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); min-width: 130px; }
-.hint { color: var(--faint); font-size: 12px; }
-.err { color: var(--bad); font-size: 13px; min-height: 0; }
+/* ── center ────────────────────────────────────────────────────────────── */
+.center { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.tabs { display: flex; align-items: center; gap: 2px; padding: 6px 8px 0; border-bottom: 1px solid var(--line); min-height: 42px; overflow-x: auto; }
+.tab { display: flex; align-items: center; gap: 7px; padding: 7px 10px; border-radius: 8px 8px 0 0; border: 1px solid transparent; border-bottom: 0; cursor: pointer; color: var(--muted); white-space: nowrap; max-width: 220px; position: relative; top: 1px; }
+.tab:hover { color: var(--text); background: var(--panel-2); }
+.tab.on { color: var(--text); background: var(--panel); border-color: var(--line); }
+.tab .label { overflow: hidden; text-overflow: ellipsis; }
+.tab .close { width: 18px; height: 18px; border-radius: 4px; display: grid; place-items: center; color: var(--faint); }
+.tab .close:hover { background: var(--hover); color: var(--text); }
+.tab .close svg { width: 12px; height: 12px; }
+.tab .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+.tabs .spacer { flex: 1; }
+.view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
-/* output */
-#output { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.out-head { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); min-height: 52px; }
-#out-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#out-route { font: 12px var(--mono); }
-#log { flex: 1; overflow: auto; padding: 14px 18px 30px; font: 13px/1.55 var(--mono); }
-.ev { white-space: pre-wrap; overflow-wrap: anywhere; }
-.ev.text { font-family: var(--sans); font-size: 14px; line-height: 1.6; margin: 6px 0 10px; }
-.ev.user { font-family: var(--sans); font-size: 14px; line-height: 1.55; background: color-mix(in srgb, var(--accent) 9%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 12px; padding: 9px 13px; margin: 18px 0 10px; max-width: 88%; }
+/* chat */
+.chat-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+.hero { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 24px 24px; gap: 20px; }
+.hero-title { display: flex; align-items: center; gap: 14px; font: 600 30px var(--sans); letter-spacing: -.02em; }
+.hero-title .logo-tile { width: 44px; height: 44px; border-radius: 11px; font-size: 21px; }
+.hero-title .logo-tile::before { font-size: 8px; top: 3px; left: 5px; }
+.badge { font: 500 11px var(--mono); color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 2px 7px; }
+.badge.plain { color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); }
+.hero-sub { color: var(--muted); margin-top: -10px; }
+.convo { max-width: 860px; margin: 0 auto; padding: 22px 28px 30px; }
+.convo-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.convo-head .title { font-weight: 600; font-size: 16px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.route { font: 12px var(--mono); color: var(--muted); }
+.ev { white-space: pre-wrap; overflow-wrap: anywhere; font: 12.5px/1.6 var(--mono); }
+.ev.user { font: 14px/1.55 var(--sans); background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; padding: 10px 14px; margin: 22px 0 12px auto; max-width: 85%; width: fit-content; }
 .ev.user:first-child { margin-top: 0; }
-#reply { display: flex; gap: 10px; align-items: flex-end; padding: 12px 18px; border-top: 1px solid var(--line); background: var(--panel); }
-#reply-text { flex: 1; min-height: 46px; max-height: 30vh; resize: vertical; padding: 10px 12px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--bg); }
-#reply-text:focus { outline: none; border-color: var(--accent); }
+.ev.text { font: 14.5px/1.65 var(--sans); margin: 8px 0 12px; }
 .ev.meta { color: var(--meta); }
-.ev.tool { color: var(--tool); }
+.ev.tool { color: var(--tool); padding-left: 2px; }
 .ev.warn { color: var(--warn); }
 .ev.ok { color: var(--ok); margin-top: 8px; }
 .ev.bad { color: var(--bad); margin-top: 8px; }
 .ev.dim { color: var(--faint); }
-.ev.art { color: var(--ok); }
+.ev.art { color: var(--ok); cursor: pointer; text-decoration: underline dotted; }
 .waiting { display: flex; gap: 18px; align-items: center; color: var(--muted); margin-top: 14px; }
 .waiting pre { margin: 0; color: var(--accent); font: 12px/1.15 var(--mono); }
-.welcome { max-width: 620px; color: var(--muted); font-family: var(--sans); font-size: 14px; }
-.welcome h3 { color: var(--text); margin: 4px 0 10px; font-size: 18px; }
-.welcome ol { padding-left: 20px; } .welcome li { margin: 4px 0; }
-code { font: 12.5px var(--mono); background: var(--panel-2); border: 1px solid var(--line); padding: 1px 5px; border-radius: 5px; }
 
-/* profiles */
-.prof { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
-.prof:hover { background: var(--panel-2); border-color: var(--line); }
-.p-name { font-weight: 600; display: flex; gap: 6px; align-items: center; }
-.p-meta { grid-column: 1 / 3; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.p-edit { color: var(--faint); font-size: 12px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 10px; font-size: 13px; color: var(--text); cursor: pointer; user-select: none; }
-.chip input { margin: 0; accent-color: var(--accent); }
-.chip:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.chip.check { align-self: start; }
-.chip .faint { font-size: 11.5px; }
-.model-group { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; margin: 8px 0 5px; }
-textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); font: 13px var(--mono); }
-.push-left { margin-right: auto; }
+/* composer */
+.composer-wrap { padding: 0 24px 18px; width: 100%; max-width: 900px; margin: 0 auto; }
+.hero .composer-wrap { padding: 0; max-width: 820px; }
+.ws-pick { display: flex; align-items: center; gap: 8px; margin: 0 0 8px 6px; }
+.composer { border: 1px solid var(--line-2); border-radius: 18px; background: var(--panel); box-shadow: var(--shadow); padding: 12px 12px 10px 16px; }
+.composer:focus-within { border-color: var(--accent); }
+.composer textarea { width: 100%; border: 0; outline: none; resize: none; background: transparent; min-height: 52px; max-height: 40vh; padding: 2px 0 6px; font-size: 15px; line-height: 1.5; }
+.composer-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.composer-bar .spacer { flex: 1; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 0 4px 0 9px; height: 30px; border-radius: 8px; color: var(--muted); position: relative; }
+.chip:hover { background: var(--hover); color: var(--text); }
+.chip select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; padding: 0 18px 0 0; height: 30px; cursor: pointer; font-weight: 500; color: inherit; outline: none; max-width: 240px; field-sizing: content; }
+.chip select option, .chip select optgroup { color: var(--text); background: var(--panel); }
+.chip::after { content: ""; position: absolute; right: 8px; top: 12px; width: 5px; height: 5px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(45deg); pointer-events: none; opacity: .7; }
+.chip.bold select { font-weight: 600; color: var(--text); }
+.chip.quiet select { font-weight: 400; color: var(--faint); }
+.send { width: 36px; height: 36px; border-radius: 50%; padding: 0; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); border: 0; }
+.send svg { width: 18px; height: 18px; stroke-width: 2.2; }
+.send:disabled { opacity: .35; }
+.round { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line-2); display: grid; place-items: center; padding: 0; background: transparent; color: var(--muted); }
+.composer-note { font-size: 12px; color: var(--faint); margin: 6px 0 0 6px; min-height: 1em; }
+.composer-note.err { color: var(--bad); }
+
+/* file view */
+.file-head { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1px solid var(--line); min-height: 44px; }
+.file-head .crumb { font: 12.5px var(--mono); color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.editor { flex: 1; display: flex; min-height: 0; background: var(--code-bg); }
+.gutter { margin: 0; padding: 12px 10px 40px 14px; text-align: right; color: var(--faint); font: 13px/1.55 var(--mono); overflow: hidden; user-select: none; border-right: 1px solid var(--line); min-width: 52px; }
+#code { flex: 1; border: 0; outline: none; resize: none; background: transparent; padding: 12px 16px 40px; font: 13px/1.55 var(--mono); white-space: pre; tab-size: 4; overflow: auto; }
+.img-view { flex: 1; display: grid; place-items: center; overflow: auto; padding: 24px;
+  background-color: var(--panel-2); background-image: linear-gradient(45deg, var(--line) 25%, transparent 25%), linear-gradient(-45deg, var(--line) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--line) 75%), linear-gradient(-45deg, transparent 75%, var(--line) 75%);
+  background-size: 18px 18px; background-position: 0 0, 0 9px, 9px -9px, -9px 0; }
+.img-view img { max-width: 100%; max-height: 100%; box-shadow: var(--shadow); }
+.file-msg { flex: 1; display: grid; place-content: center; text-align: center; color: var(--muted); gap: 6px; }
+
+/* settings */
+.settings { flex: 1; overflow-y: auto; padding: 26px 32px 40px; }
+.settings h2 { font-size: 18px; margin: 0 0 4px; }
+.settings .sub { color: var(--muted); margin: 0 0 14px; font-size: 13px; }
+.settings section { max-width: 920px; margin: 0 auto 34px; }
+.sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.acct { display: grid; grid-template-columns: 12px 1fr auto; gap: 4px 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+.dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 6px; background: var(--ok); }
+.dot.off { background: transparent; border: 2px solid var(--faint); }
+.dot.busy { background: var(--accent); }
+.dot.limited { background: var(--bad); }
+.dot.checking { background: var(--faint); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+.a-id { font-weight: 600; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.a-who { color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.a-who.bad { color: var(--bad); }
+.bar { height: 4px; border-radius: 3px; background: var(--line); margin-top: 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--ok); }
+.bar i.hi { background: var(--warn); } .bar i.full { background: var(--bad); }
+.a-meta { color: var(--faint); font-size: 11.5px; margin-top: 4px; }
 .a-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
 .linkish { background: none; border: 0; padding: 2px 4px; font-size: 11.5px; color: var(--faint); }
-.linkish:hover { color: var(--bad); }
+.linkish:hover { color: var(--bad); background: none; }
+.prof { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 12px 14px; border-radius: var(--r); cursor: pointer; border: 1px solid var(--line); background: var(--panel); margin-bottom: 8px; }
+.prof:hover { border-color: var(--line-2); background: var(--panel-2); }
+.p-name { font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.p-meta { grid-column: 1 / 3; color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-edit { color: var(--faint); font-size: 12px; }
 
-/* dialog + toast */
-dialog { border: 1px solid var(--line-2); border-radius: 14px; background: var(--panel); color: var(--text); padding: 22px; width: min(460px, 92vw); max-height: 90vh; }
+/* ── files panel ───────────────────────────────────────────────────────── */
+.files { background: var(--side); display: flex; flex-direction: column; min-height: 0; }
+.files-head { display: flex; align-items: center; gap: 4px; padding: 8px 8px 6px 14px; }
+.files-head .name { flex: 1; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.find { margin: 0 10px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line); color: var(--faint); }
+.find input { flex: 1; border: 0; background: transparent; padding: 7px 0; outline: none; color: var(--text); min-width: 0; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; margin: 8px 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; padding: 2px; }
+.seg button { border: 0; background: transparent; border-radius: 7px; padding: 4px; font-size: 12.5px; color: var(--muted); }
+.seg button.on { background: var(--panel); color: var(--text); font-weight: 600; box-shadow: var(--shadow); }
+.tree { flex: 1; overflow: auto; padding: 2px 6px 20px; min-height: 0; font-size: 13px; }
+.node { display: flex; align-items: center; gap: 5px; padding: 3px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; color: var(--text); }
+.node:hover { background: var(--hover); }
+.node.on { background: var(--sel); }
+.node .chev { width: 12px; height: 12px; color: var(--faint); transition: transform .1s; }
+.node .chev.open { transform: rotate(90deg); }
+.node .ic { width: 15px; height: 15px; color: var(--faint); }
+.node .ic.folder { color: var(--accent); }
+.node .nm { overflow: hidden; text-overflow: ellipsis; }
+.node .at { margin-left: auto; visibility: hidden; color: var(--faint); font: 12px var(--mono); padding: 0 4px; border-radius: 4px; }
+.node:hover .at { visibility: visible; }
+.node .at:hover { background: var(--panel); color: var(--accent); }
+.hit { padding: 5px 8px; border-radius: 6px; cursor: pointer; }
+.hit:hover { background: var(--hover); }
+.hit .p { font: 12px var(--mono); color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hit .s { font: 11.5px var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files-empty { color: var(--faint); text-align: center; padding: 30px 16px; font-size: 13px; }
+
+/* ── status bar ────────────────────────────────────────────────────────── */
+.status { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; padding: 0 12px; border-top: 1px solid var(--line); background: var(--side); font-size: 12px; color: var(--muted); overflow: hidden; white-space: nowrap; }
+.status .acc { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.status .acc:hover { color: var(--text); }
+.status .mini { width: 46px; height: 4px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
+.status .mini i { display: block; height: 100%; background: var(--ok); }
+.status .mini i.hi { background: var(--warn); } .status .mini i.full { background: var(--bad); }
+.status .sdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.status .sdot.off { background: var(--faint); } .status .sdot.bad { background: var(--bad); }
+.status .spacer { flex: 1; }
+
+/* ── dialogs, toast ────────────────────────────────────────────────────── */
+dialog { border: 1px solid var(--line-2); border-radius: 16px; background: var(--panel); color: var(--text); padding: 22px; width: min(460px, 92vw); max-height: 90vh; box-shadow: var(--shadow); }
 dialog.wide { width: min(680px, 94vw); }
-dialog::backdrop { background: rgba(0,0,0,.5); }
+dialog::backdrop { background: rgba(0,0,0,.35); }
 dialog h3 { margin: 0 0 4px; }
 dialog form { display: grid; gap: 12px; }
-dialog label.f input, dialog label.f select { width: 100%; }
+label.f { display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+label.f input, label.f select, dialog select { width: 100%; }
+input[type=text], dialog select { padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel); }
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+.row > * { flex: 1; min-width: 150px; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
-#toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; transition: .2s; background: var(--panel-2); border: 1px solid var(--line-2); padding: 10px 16px; border-radius: 10px; max-width: min(640px, 92vw); z-index: 20; }
+.push-left { margin-right: auto; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line-2); border-radius: 8px; padding: 5px 10px; font-size: 13px; color: var(--text); cursor: pointer; user-select: none; }
+.pick input { margin: 0; accent-color: var(--accent); }
+.pick:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.pick .faint { font-size: 11.5px; color: var(--faint); }
+.model-group { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .06em; margin: 8px 0 5px; }
+textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel); font: 13px var(--mono); }
+.err { color: var(--bad); font-size: 13px; }
+.muted { color: var(--muted); } .faint { color: var(--faint); }
+.qo-list { max-height: 50vh; overflow: auto; margin: 0 -8px; }
+.qo-list .hit.on { background: var(--sel); }
+#toast { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; transition: .2s; background: var(--panel); border: 1px solid var(--line-2); padding: 10px 16px; border-radius: 12px; max-width: min(640px, 92vw); z-index: 60; box-shadow: var(--shadow); pointer-events: none; }
 #toast.show { opacity: 1; transform: translateX(-50%); }
 #toast.bad { border-color: var(--bad); }
 
-@media (max-width: 820px) {
-  .body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  aside { border-right: 0; border-bottom: 1px solid var(--line); max-height: 45vh; }
-  header .where { display: none; }
+@media (max-width: 900px) {
+  .app, .app.no-files { grid-template-columns: 0 minmax(0, 1fr) 0; }
+  .side, .files { display: none; }
 }
 </style>
 </head>
 <body>
 
 <div id="splash">
-<pre id="fermi-art">
+<pre>
             ,;;;;;;;;;;;;;;,
          ,;;;;;;;;;;;;;;;;;;;;,
         ;;;;;''''      ''''';;;;
@@ -193,83 +301,130 @@ dialog label.f input, dialog label.f select { width: 100%; }
          /        \  V  /        \
         /    |     \ | /     |    \
 </pre>
-  <div class="brand">FERMI</div>
+  <div class="brand-big">FERMI</div>
   <div class="quote">“Where is everybody?” · Enrico Fermi, 1901–1954</div>
   <div id="splash-status">connecting…</div>
 </div>
 
-<div id="app" hidden>
-  <header>
-    <div class="logo">fer<span>mi</span></div>
-    <div class="where" id="where"></div>
-    <div class="spacer"></div>
-    <span id="running" class="muted"></span>
-    <span id="conn" class="pill">live</span>
-  </header>
-  <div class="body">
-    <aside>
-      <section>
-        <div class="sec-head"><h2>Accounts</h2><button id="add-acct" class="small">+ Add account</button></div>
-        <div id="accounts"></div>
-      </section>
-      <section>
-        <div class="sec-head"><h2>Profiles</h2><button id="add-profile" class="small">+ New profile</button></div>
-        <div id="profiles"></div>
-      </section>
-      <section class="grow">
-        <div class="sec-head"><h2>Tasks</h2></div>
-        <div id="tasks"></div>
-      </section>
-    </aside>
-    <main>
-      <form id="composer" autocomplete="off">
-        <textarea id="prompt" placeholder="What should fermi do?  (Ctrl+Enter to run)"></textarea>
-        <div class="row">
-          <label class="f">Profile <select id="f-profile"></select></label>
-          <label class="f">Model <select id="f-model"></select></label>
-          <label class="f">Effort <select id="f-effort"></select></label>
-          <label class="f">Account <select id="f-account"></select></label>
-          <label class="f grow">Folder <input type="text" id="f-cwd" spellcheck="false"></label>
-          <button type="submit" class="primary" id="run">Run</button>
+<div id="app" class="app" hidden>
+  <!-- sidebar -->
+  <aside class="side">
+    <div class="side-top">
+      <span class="logo-tile">Fm</span><span class="brand-name">fermi<small>HARNESS</small></span>
+      <button class="icon-btn" id="hide-side" title="Hide sidebar (Ctrl+B)" data-i="panelLeft"></button>
+    </div>
+    <button class="new-task" id="new-task"><span data-i="plusCircle"></span>New task</button>
+    <label class="search"><span data-i="search"></span><input id="search" placeholder="Search tasks" autocomplete="off"></label>
+    <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder" data-i="folderPlus"></button></div>
+    <nav class="ws-list" id="ws-list"></nav>
+    <div class="side-foot">
+      <button class="side-link" id="open-settings"><span data-i="gear"></span>Settings</button>
+    </div>
+  </aside>
+
+  <!-- center -->
+  <main class="center">
+    <div class="tabs" id="tabs"></div>
+
+    <section class="view" id="view-chat">
+      <div class="chat-scroll" id="chat-scroll">
+        <div class="hero" id="hero">
+          <div class="hero-title"><span class="logo-tile">Fm</span>What should we build?<span class="badge">Preview</span></div>
+          <div class="hero-sub" id="hero-sub"></div>
+          <div id="hero-slot" class="composer-wrap"></div>
         </div>
-        <div class="err" id="form-err"></div>
-      </form>
-      <section id="output">
-        <div class="out-head">
-          <div id="out-title">Output</div>
-          <div id="out-route" class="muted"></div>
-          <div class="spacer"></div>
-          <button id="cancel" class="small danger" hidden>Cancel task</button>
-          <button id="delete-task" class="small ghost" hidden>Delete</button>
+        <div class="convo" id="convo" hidden>
+          <div class="convo-head">
+            <div class="title" id="convo-title"></div>
+            <button class="small danger" id="cancel" hidden>Cancel</button>
+            <button class="small ghost" id="delete-task" hidden>Delete</button>
+          </div>
+          <div class="route" id="convo-route"></div>
+          <div id="log" style="margin-top:14px"></div>
         </div>
-        <div id="log"></div>
-        <form id="reply" hidden autocomplete="off">
-          <textarea id="reply-text" placeholder="Reply to continue this conversation…  (Ctrl+Enter)"></textarea>
-          <button type="submit" class="primary" id="reply-send">Reply</button>
+      </div>
+      <div id="dock-slot" class="composer-wrap"></div>
+      <!-- the composer moves between hero-slot and dock-slot -->
+      <div id="composer-box">
+        <div class="ws-pick">
+          <label class="chip bold" title="Folder the task runs in"><span data-i="folder"></span><select id="f-ws"></select></label>
+          <span class="faint" id="ws-profile"></span>
+        </div>
+        <form class="composer" id="composer" autocomplete="off">
+          <textarea id="prompt" rows="2" placeholder="Describe what you want to build… (Ctrl+Enter)"></textarea>
+          <div class="composer-bar">
+            <button type="button" class="round" id="attach" title="Mention a file (Ctrl+P)" data-i="plus"></button>
+            <label class="chip new-only" title="What the agent may do"><span data-i="shield"></span><select id="f-perm"></select></label>
+            <label class="chip new-only" title="Profile"><span data-i="layers"></span><select id="f-profile"></select></label>
+            <label class="chip new-only" title="Account"><span data-i="key"></span><select id="f-account"></select></label>
+            <span class="spacer"></span>
+            <span class="route reply-only" id="reply-route"></span>
+            <label class="chip bold new-only" title="Model"><select id="f-model"></select></label>
+            <label class="chip quiet new-only" title="Reasoning effort"><select id="f-effort"></select></label>
+            <button type="submit" class="send" id="send" title="Send (Ctrl+Enter)" data-i="arrowUp"></button>
+          </div>
         </form>
-      </section>
-    </main>
-  </div>
+        <div class="composer-note" id="composer-note"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-file" hidden>
+      <div class="file-head">
+        <span data-i="file"></span>
+        <span class="crumb" id="file-path"></span>
+        <span class="faint" id="file-info"></span>
+        <button class="small ghost" id="file-mention" title="Mention this file in the chat">@ Mention</button>
+        <button class="small primary" id="file-save" title="Save (Ctrl+S)">Save</button>
+      </div>
+      <div class="editor" id="file-editor"><pre class="gutter" id="gutter"></pre><textarea id="code" spellcheck="false" wrap="off"></textarea></div>
+      <div class="img-view" id="file-image"><img id="file-img" alt=""></div>
+      <div class="file-msg" id="file-msg"></div>
+    </section>
+
+    <section class="view" id="view-settings" hidden>
+      <div class="settings">
+        <section>
+          <div class="sec-head"><div><h2>Accounts</h2><p class="sub">Each account has its own login. Tasks use the accounts of their profile.</p></div><button class="primary small" id="add-acct">+ Add account</button></div>
+          <div class="cards" id="accounts"></div>
+        </section>
+        <section>
+          <div class="sec-head"><div><h2>Profiles</h2><p class="sub">Group accounts (work, personal…), bind them to folders, and choose models and permissions.</p></div><button class="small" id="add-profile">+ New profile</button></div>
+          <div id="profiles"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <!-- files -->
+  <aside class="files">
+    <div class="files-head">
+      <span class="name" id="files-name">Files</span>
+      <button class="icon-btn" id="files-collapse" title="Collapse folders" data-i="collapse"></button>
+      <button class="icon-btn" id="files-refresh" title="Refresh" data-i="refresh"></button>
+      <button class="icon-btn" id="hide-files" title="Hide files" data-i="panelRight"></button>
+    </div>
+    <label class="find"><span data-i="filter"></span><input id="find" placeholder="Find files" autocomplete="off"></label>
+    <div class="seg"><button id="find-names" class="on">Names</button><button id="find-contents">Contents</button></div>
+    <div class="tree" id="tree"></div>
+  </aside>
+
+  <footer class="status" id="status"></footer>
 </div>
 
+<!-- dialogs -->
 <dialog id="dlg-add">
   <form id="add-form" method="dialog">
     <div><h3>Add an account</h3><div class="muted">Each account gets its own separate login, so work and personal never mix.</div></div>
     <label class="f">Name <input type="text" name="id" placeholder="claude-work" required pattern="[A-Za-z0-9_\-]+" title="letters, digits, - or _"></label>
     <label class="f">Provider
-      <select name="provider"><option value="claude">Claude</option><option value="openai">OpenAI (ChatGPT / Codex)</option><option value="gemini">Gemini (Google)</option></select>
-    </label>
+      <select name="provider"><option value="claude">Claude</option><option value="openai">OpenAI (ChatGPT / Codex)</option><option value="gemini">Gemini (Google)</option></select></label>
     <label class="f">How it signs in
-      <select name="login"><option value="cli">Subscription login (Pro, Max, Team, Plus…)</option><option value="api">API key from an environment variable</option></select>
-    </label>
+      <select name="login"><option value="cli">Subscription login (Pro, Max, Team, Plus…)</option><option value="api">API key from an environment variable</option></select></label>
     <label class="f" id="key-row" hidden>Environment variable with the key <input type="text" name="api_key_env" placeholder="ANTHROPIC_API_KEY"></label>
     <label class="f">Profile <input type="text" name="profile" list="profile-names" placeholder="personal"></label>
     <datalist id="profile-names"></datalist>
     <div class="err" id="add-err"></div>
-    <div class="actions">
-      <button type="button" class="ghost" id="add-cancel">Cancel</button>
-      <button type="submit" class="primary" id="add-save">Save and log in</button>
-    </div>
+    <div class="actions"><button type="button" class="ghost" id="add-cancel">Cancel</button><button type="submit" class="primary" id="add-save">Save and log in</button></div>
   </form>
 </dialog>
 
@@ -278,26 +433,16 @@ dialog label.f input, dialog label.f select { width: 100%; }
     <div><h3 id="prof-title">New profile</h3><div class="muted">A profile is a set of accounts. Tasks only ever use their profile's accounts, so work and personal never mix.</div></div>
     <label class="f">Name <input type="text" name="name" placeholder="work" required pattern="[A-Za-z0-9_\-]+" title="letters, digits, - or _"></label>
     <div class="f"><span>Accounts <span class="faint">(tried in this order)</span></span><div class="chips" id="prof-accounts"></div></div>
-    <label class="f">Project folders <span class="faint">one per line; tasks started in these folders use this profile</span>
+    <label class="f">Project folders <span class="faint">one per line; tasks in these folders use this profile</span>
       <textarea class="paths" name="paths" spellcheck="false" placeholder="C:\work"></textarea></label>
     <div class="row">
       <label class="f">Model choice
-        <select name="mode">
-          <option value="auto">Auto: best model for each task</option>
-          <option value="pinned">Only the models I pick</option>
-          <option value="single">Always one model</option>
-        </select></label>
+        <select name="mode"><option value="auto">Auto: best model for each task</option><option value="pinned">Only the models I pick</option><option value="single">Always one model</option></select></label>
       <label class="f">Default effort <select name="effort"></select></label>
-      <label class="f">What agents may do
-        <select name="permission_mode">
-          <option value="acceptEdits">Edit files freely (recommended)</option>
-          <option value="bypassPermissions">Anything, without asking</option>
-          <option value="plan">Plan only, change nothing</option>
-          <option value="">Ask first (unanswered asks are skipped)</option>
-        </select></label>
+      <label class="f">What agents may do <select name="permission_mode"></select></label>
     </div>
     <div class="f" id="prof-models-row"><span id="prof-models-label">Models</span><div id="prof-models"></div></div>
-    <label class="chip check"><input type="checkbox" name="default"> Default profile, used when no folder matches</label>
+    <label class="pick" style="justify-self:start"><input type="checkbox" name="default"> Default profile, used when no folder matches</label>
     <div class="err" id="prof-err"></div>
     <div class="actions">
       <button type="button" class="ghost danger push-left" id="prof-delete">Delete profile</button>
@@ -307,22 +452,66 @@ dialog label.f input, dialog label.f select { width: 100%; }
   </form>
 </dialog>
 
+<dialog id="dlg-ws">
+  <form id="ws-form" method="dialog">
+    <div><h3>Add a workspace</h3><div class="muted">A project folder. Its files show in the Files panel and tasks can run in it.</div></div>
+    <label class="f">Folder path <input type="text" name="path" placeholder="C:\code\my-project" required spellcheck="false"></label>
+    <div class="err" id="ws-err"></div>
+    <div class="actions"><button type="button" class="ghost" id="ws-cancel">Cancel</button><button type="submit" class="primary">Add</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-open" class="wide">
+  <form id="open-form" method="dialog">
+    <div><h3 id="open-title">Open file</h3></div>
+    <label class="find" style="margin:0"><span data-i="search"></span><input id="open-q" placeholder="Type part of a file name" autocomplete="off"></label>
+    <div class="qo-list" id="open-list"></div>
+  </form>
+</dialog>
+
 <div id="toast"></div>
 
 <script>
 "use strict";
-const $ = (s) => document.querySelector(s);
+const $ = (s, r = document) => r.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const MINI = "  ,;;;;;;,\n ;' o  o ';\n ;   __   ;\n  '-....-'";
 
-// The access key arrives in the URL fragment (never sent to the server or in
-// referrers), then lives in sessionStorage so a reload keeps working.
+// ── icons (static markup only) ──────────────────────────────────────────────
+const I = {
+  panelLeft: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+  panelRight: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+  plusCircle: '<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  folderPlus: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/>',
+  layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/>',
+  arrowUp: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+  file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/>',
+  code: '<path d="m8 8-5 4 5 4M16 8l5 4-5 4"/>',
+  chat: '<path d="M4 5h16v11H8l-4 4z"/>',
+  chev: '<path d="m9 6 6 6-6 6"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  filter: '<path d="M4 5h16M7 12h10M10 19h4"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.7-4.4L3 9M4 13a8 8 0 0 0 14.7 4.4L21 15"/><path d="M3 4v5h5M21 20v-5h-5"/>',
+  collapse: '<path d="m7 15 5-5 5 5"/>',
+};
+const svg = (name) => `<svg viewBox="0 0 24 24">${I[name] || ""}</svg>`;
+const icon = (name, cls) => { const s = el("span", cls); s.innerHTML = svg(name); s.style.display = "inline-grid"; return s; };
+document.querySelectorAll("[data-i]").forEach((n) => n.insertAdjacentHTML("afterbegin", svg(n.dataset.i)));
+
+// ── access key and API ──────────────────────────────────────────────────────
+// The key arrives in the URL fragment (never sent to the server or in
+// referrers) and is kept in sessionStorage so reloads keep working.
 const token = (() => {
   const m = location.hash.match(/t=([0-9a-f]+)/);
   if (m) { sessionStorage.setItem("fermi-token", m[1]); history.replaceState(null, "", location.pathname + location.search); }
   return sessionStorage.getItem("fermi-token");
 })();
-
 async function api(path, body) {
   const opts = { headers: { "x-fermi-token": token || "" } };
   if (body !== undefined) { opts.method = "POST"; opts.headers["content-type"] = "application/json"; opts.body = JSON.stringify(body); }
@@ -331,119 +520,599 @@ async function api(path, body) {
   if (!r.ok) throw new Error(data.error || r.statusText);
   return data;
 }
+const q = (o) => new URLSearchParams(o).toString();
 
-const S = { state: null, tasks: new Map(), logs: new Map(), sel: null, connected: false };
+// Per-viewer UI preferences; storage may be unavailable.
+const pref = {
+  get(k, d) { try { const v = localStorage.getItem("fermi." + k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
+  set(k, v) { try { localStorage.setItem("fermi." + k, JSON.stringify(v)); } catch (_) {} },
+};
 
-// ── toast ──────────────────────────────────────────────────────────────────
+const S = {
+  state: null, tasks: new Map(), logs: new Map(), sel: null,
+  ws: pref.get("ws", null), tabs: [], active: "chat",
+  tree: new Map(), open: new Set(pref.get("open", [])), findMode: "names", expandedWs: new Set(pref.get("expandedWs", [])),
+};
+
+// ── helpers ─────────────────────────────────────────────────────────────────
+const norm = (p) => (p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+const baseName = (p) => (p || "").replace(/[\\/]+$/, "").split(/[\\/]/).pop() || p;
+const relTo = (root, p) => {
+  const r = norm(root), x = norm(p);
+  return root && x.startsWith(r + "/") ? p.slice(root.replace(/[\\/]+$/, "").length + 1).replace(/\\/g, "/") : p;
+};
+const fmtDur = (s) => s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}m` : `${Math.floor(s / 86400)}d`;
+const fmtTok = (n) => n < 1e3 ? `${n}` : n < 1e6 ? `${(n / 1e3).toFixed(1)}k` : `${(n / 1e6).toFixed(1)}M`;
+const fmtSize = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(1)} MB`;
+const nowS = () => Math.floor(Date.now() / 1000);
+const IMG = /\.(png|jpe?g|gif|webp|svg|ico|bmp|avif)$/i;
+const PROVIDER = { claude: "Claude", openai: "OpenAI", gemini: "Gemini" };
+const PERM_LABEL = { acceptEdits: "Edit files", bypassPermissions: "Full access", plan: "Plan only", default: "Ask first" };
+const PERM_LONG = { acceptEdits: "Edit files freely (recommended)", bypassPermissions: "Anything, without asking", plan: "Plan only, change nothing", default: "Ask first (unanswered asks are skipped)" };
+
 let toastTimer;
 function toast(msg, bad) {
   const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.className = ""), 5000);
 }
+function confirmClick(btn, armedText, action) {
+  let armed = null; const label = btn.textContent;
+  return (e) => {
+    e?.stopPropagation();
+    if (armed) { clearTimeout(armed); armed = null; btn.textContent = label; action(); return; }
+    btn.textContent = armedText;
+    armed = setTimeout(() => { armed = null; btn.textContent = label; }, 3000);
+  };
+}
+// Coalesce re-renders to one per frame.
+const dirty = new Set();
+function schedule(...parts) {
+  if (!dirty.size) requestAnimationFrame(() => { const p = [...dirty]; dirty.clear(); for (const x of p) RENDER[x](); });
+  parts.forEach((p) => dirty.add(p));
+}
 
-// ── formatting ─────────────────────────────────────────────────────────────
-const fmtDur = (s) => s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h${String(Math.floor(s % 3600 / 60)).padStart(2, "0")}m`;
-const fmtTok = (n) => n < 1e3 ? `${n}` : n < 1e6 ? `${(n / 1e3).toFixed(1)}k` : `${(n / 1e6).toFixed(1)}M`;
-const nowS = () => Math.floor(Date.now() / 1000);
+// ── workspaces & sidebar ────────────────────────────────────────────────────
+function workspaces() { return S.state?.workspaces || []; }
+function currentWs() { return workspaces().find((w) => norm(w.path) === norm(S.ws)) || null; }
+function selectWs(path) {
+  S.ws = path; pref.set("ws", path);
+  S.expandedWs.add(norm(path)); pref.set("expandedWs", [...S.expandedWs]);
+  schedule("side", "composer", "files");
+}
+function taskGroups() {
+  const groups = new Map();
+  for (const w of workspaces()) groups.set(norm(w.path), { ws: w, tasks: [] });
+  const term = $("#search").value.trim().toLowerCase();
+  for (const t of [...S.tasks.values()].sort((a, b) => b.id - a.id)) {
+    if (term && !t.prompt.toLowerCase().includes(term)) continue;
+    const k = norm(t.cwd);
+    if (!groups.has(k)) groups.set(k, { ws: { path: t.cwd, name: baseName(t.cwd) + (norm(t.cwd) === norm(S.state?.home) ? " (home)" : ""), virtual: true }, tasks: [] });
+    groups.get(k).tasks.push(t);
+  }
+  return [...groups.values()];
+}
+function statusGlyph(t) {
+  if (t.status === "running") return el("span", "st spin", "◐");
+  if (t.status === "done") return el("span", "st ok", "✓");
+  if (t.status === "cancelled") return el("span", "st cancel", "⊘");
+  return el("span", "st bad", "✗");
+}
+function renderSide() {
+  const box = $("#ws-list"); box.replaceChildren();
+  const searching = !!$("#search").value.trim();
+  const groups = taskGroups();
+  if (!groups.length) {
+    const e = el("div", "side-empty", "Add a project folder to get started.");
+    box.append(e);
+  }
+  for (const g of groups) {
+    if (searching && !g.tasks.length) continue;
+    const key = norm(g.ws.path);
+    const row = el("div", "ws-row" + (key === norm(S.ws) && S.sel == null && S.active === "chat" ? " sel" : ""));
+    row.append(icon("folder"), el("span", "name", g.ws.name));
+    if (g.tasks.length) row.append(el("span", "count", String(g.tasks.length)));
+    if (g.ws.added) {
+      const x = el("button", "icon-btn x"); x.innerHTML = svg("x"); x.title = "Remove from workspaces (files stay on disk)";
+      x.onclick = async (e) => { e.stopPropagation(); try { await api("/api/workspaces/remove", { path: g.ws.path }); } catch (err) { toast(err.message, true); } };
+      row.append(x);
+    }
+    row.onclick = () => {
+      if (!g.ws.virtual) selectWs(g.ws.path);
+      if (S.expandedWs.has(key) && S.sel == null) S.expandedWs.delete(key); else S.expandedWs.add(key);
+      pref.set("expandedWs", [...S.expandedWs]);
+      newTask(false);
+    };
+    box.append(row);
+    if (!(searching || S.expandedWs.has(key) || g.tasks.some((t) => t.id === S.sel))) continue;
+    const limit = searching ? 50 : g.showAll ? 200 : 6;
+    for (const t of g.tasks.slice(0, limit)) {
+      const r = el("div", "task-row" + (t.id === S.sel && S.active === "chat" ? " sel" : ""));
+      r.title = t.prompt;
+      const secs = (t.ended || nowS()) - t.started;
+      r.append(statusGlyph(t), el("span", "t", t.prompt), el("span", "time", fmtDur(Math.max(0, secs))));
+      r.onclick = () => selectTask(t.id);
+      box.append(r);
+    }
+    if (g.tasks.length > limit) {
+      const m = el("div", "more", `Show ${g.tasks.length - limit} more`);
+      m.onclick = () => { g.showAll = true; renderSide(); };
+      box.append(m);
+    }
+  }
+}
 
-// ── accounts ───────────────────────────────────────────────────────────────
+// ── tabs ─────────────────────────────────────────────────────────────────────
+function renderTabs() {
+  const bar = $("#tabs"); bar.replaceChildren();
+  if (document.getElementById("app").classList.contains("no-side")) {
+    const b = el("button", "icon-btn"); b.innerHTML = svg("panelLeft"); b.title = "Show sidebar (Ctrl+B)"; b.onclick = toggleSide; bar.append(b);
+  }
+  const mk = (id, label, ic, closable, dirtyDot) => {
+    const t = el("div", "tab" + (S.active === id ? " on" : ""));
+    t.append(icon(ic), el("span", "label", label));
+    if (dirtyDot) t.append(el("span", "dot"));
+    if (closable) {
+      const c = el("span", "close"); c.innerHTML = svg("x"); c.title = "Close";
+      c.onclick = (e) => { e.stopPropagation(); closeTab(id); };
+      t.append(c);
+    }
+    t.onclick = () => activate(id);
+    t.onauxclick = (e) => { if (e.button === 1 && closable) closeTab(id); };
+    bar.append(t);
+  };
+  const chatLabel = S.sel != null ? (S.tasks.get(S.sel)?.prompt || "Chat") : "New task";
+  mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
+  if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
+  for (const f of S.tabs.filter((t) => t.id !== "settings")) mk(f.id, f.name, IMG.test(f.name) ? "image" : "code", true, f.dirty);
+  bar.append(el("span", "spacer"));
+  if (document.getElementById("app").classList.contains("no-files")) {
+    const b = el("button", "icon-btn"); b.innerHTML = svg("panelRight"); b.title = "Show files"; b.onclick = toggleFiles; bar.append(b);
+  }
+}
+function activate(id) {
+  S.active = id;
+  $("#view-chat").hidden = id !== "chat";
+  $("#view-settings").hidden = id !== "settings";
+  $("#view-file").hidden = id === "chat" || id === "settings";
+  if (id !== "chat" && id !== "settings") showFile(S.tabs.find((t) => t.id === id));
+  if (id === "settings") renderSettings();
+  schedule("tabs", "side");
+  if (id === "chat") setTimeout(() => $("#prompt").focus(), 0);
+}
+function closeTab(id) {
+  const t = S.tabs.find((x) => x.id === id);
+  if (t?.dirty && !confirm(`${t.name} has unsaved changes. Close anyway?`)) return;
+  S.tabs = S.tabs.filter((x) => x.id !== id);
+  if (S.active === id) activate(S.tabs.length ? S.tabs[S.tabs.length - 1].id : "chat"); else renderTabs();
+}
+
+// ── chat ─────────────────────────────────────────────────────────────────────
+function newTask(focus = true) {
+  S.sel = null; activate("chat"); renderChat(); schedule("side", "composer");
+  if (focus) $("#prompt").focus();
+}
+async function selectTask(id) {
+  S.sel = id; activate("chat");
+  const t = S.tasks.get(id);
+  if (t && norm(t.cwd) !== norm(S.ws) && workspaces().some((w) => norm(w.path) === norm(t.cwd))) { S.ws = t.cwd; pref.set("ws", t.cwd); schedule("files"); }
+  if (!S.logs.has(id)) {
+    try { const full = await api(`/api/tasks/${id}`); S.logs.set(id, full.events); const { events, ...rest } = full; S.tasks.set(id, rest); }
+    catch (e) { toast(e.message, true); return; }
+  }
+  renderChat(); schedule("side", "composer");
+}
+function evNode(ev) {
+  switch (ev.type) {
+    case "user": return el("div", "ev user", ev.text);
+    case "routed": return el("div", "ev meta", `▸ ${ev.label || ev.model}${ev.effort ? " · effort " + ev.effort : ""} @ ${ev.account}   [${ev.profile}]   ${ev.why}`);
+    case "text": return el("div", "ev text", ev.text);
+    case "tool": return el("div", "ev tool", `· ${ev.name} ${ev.detail}`);
+    case "limit":
+      if (ev.blocked) return el("div", "ev warn", `! ${ev.account} hit its usage limit`);
+      if (ev.utilization != null && ev.utilization >= 0.8) return el("div", "ev warn", `! ${ev.account} at ${Math.round(ev.utilization * 100)}% of its window`);
+      return null;
+    case "failover": return el("div", "ev warn", `↷ ${ev.account}: ${ev.reason}, trying the next account`);
+    case "artifact": { const n = el("div", "ev art", `⇒ ${ev.path}`); n.title = "Open"; n.onclick = () => openFile(ev.path); return n; }
+    case "log": return el("div", "ev dim", ev.line);
+    case "done": return el("div", "ev " + (ev.ok ? "ok" : "bad"), `${ev.ok ? "✓" : "✗"} ${ev.summary}`);
+  }
+  return null;
+}
+const MINI = "  ,;;;;;;,\n ;' o  o ';\n ;   __   ;\n  '-....-'";
+function syncWaiting(t) {
+  const busy = t.status === "running" && !(S.logs.get(t.id) || []).slice((S.logs.get(t.id) || []).map((e) => e.type).lastIndexOf("user")).some((e) => e.type === "text" || e.type === "tool");
+  let w = $("#waiting");
+  if (busy && !w) {
+    w = el("div", "waiting"); w.id = "waiting";
+    const right = el("div"); right.append(el("div", null, "thinking…"), el("div", "faint", ""));
+    w.append(el("pre", null, MINI), right); $("#log").append(w);
+  }
+  if (!busy && w) w.remove();
+  if (busy && w) w.querySelector(".faint").textContent = t.route || "routing…";
+}
+function renderChat() {
+  const t = S.tasks.get(S.sel);
+  $("#hero").hidden = !!t; $("#convo").hidden = !t;
+  // The composer sits in the hero for a new task, docked below a conversation.
+  (t ? $("#dock-slot") : $("#hero-slot")).append($("#composer-box"));
+  if (!t) {
+    const w = currentWs();
+    $("#hero-sub").textContent = w ? `in ${w.name}${w.profile ? " · profile " + w.profile : ""}` : "Claude, GPT and Gemini on your own accounts";
+    return;
+  }
+  $("#convo-title").textContent = t.prompt;
+  $("#convo-route").textContent = [t.route, relTo("", t.cwd)].filter(Boolean).join("   ·   ");
+  $("#cancel").hidden = t.status !== "running";
+  $("#delete-task").hidden = t.status === "running"; $("#delete-task").textContent = "Delete";
+  const log = $("#log"); log.replaceChildren();
+  for (const ev of S.logs.get(t.id) || []) { const n = evNode(ev); if (n) log.append(n); }
+  if (t.status === "cancelled") log.append(el("div", "ev bad", "⊘ cancelled"));
+  syncWaiting(t);
+  const sc = $("#chat-scroll"); sc.scrollTop = sc.scrollHeight;
+}
+function appendEvent(id, ev) {
+  if (id !== S.sel || S.active !== "chat") return;
+  const sc = $("#chat-scroll"); const stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
+  $("#waiting")?.remove();
+  const n = evNode(ev); if (n) $("#log").append(n);
+  const t = S.tasks.get(id);
+  $("#convo-route").textContent = [t.route, t.cwd].filter(Boolean).join("   ·   ");
+  $("#cancel").hidden = t.status !== "running"; $("#delete-task").hidden = t.status === "running";
+  syncWaiting(t);
+  if (stick) sc.scrollTop = sc.scrollHeight;
+}
+
+// ── composer ────────────────────────────────────────────────────────────────
+function opt(v, label) { const o = el("option", null, label); o.value = v; return o; }
+function fillSelect(sel, items) {
+  const prev = sel.value;
+  sel.replaceChildren(...items.map((x) => (x instanceof HTMLElement ? x : opt(x[0], x[1]))));
+  if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
+}
+function modelOptions() {
+  const groups = new Map();
+  for (const m of S.state.models) {
+    const g = PROVIDER[m.provider] || m.provider;
+    if (!groups.has(g)) { const og = el("optgroup"); og.label = g; groups.set(g, og); }
+    groups.get(g).append(opt(m.id, `${m.label} · ${m.caps.includes("image") ? "images" : m.tier_name}`));
+  }
+  return [opt("", "Auto model"), ...groups.values()];
+}
+function composerMode() {
+  const t = S.tasks.get(S.sel);
+  if (!t) return "new";
+  if (t.status === "running") return "busy";
+  return t.resumable ? "reply" : "closed";
+}
+function renderComposer() {
+  const st = S.state; if (!st) return;
+  const w = currentWs();
+  const wsItems = workspaces().map((x) => [x.path, x.name]);
+  fillSelect($("#f-ws"), [...(wsItems.length ? wsItems : [[st.home || st.cwd, "Home folder"]]), ["__add", "Add folder…"]]);
+  if (w) $("#f-ws").value = w.path;
+  $("#ws-profile").textContent = w?.profile ? `profile ${w.profile}` : "";
+  fillSelect($("#f-perm"), [["", "Profile default"], ...st.permissions.map((p) => [p, PERM_LABEL[p] || p])]);
+  fillSelect($("#f-profile"), [["", `Auto profile${w?.profile ? " (" + w.profile + ")" : ""}`], ...st.profiles.map((p) => [p.name, p.name])]);
+  fillSelect($("#f-account"), [["", "Any account"], ...st.accounts.map((a) => [a.id, a.id])]);
+  fillSelect($("#f-model"), modelOptions());
+  fillSelect($("#f-effort"), [["", "Auto effort"], ...st.efforts.map((e) => [e, e])]);
+  const mode = composerMode(); const t = S.tasks.get(S.sel);
+  document.querySelectorAll(".new-only").forEach((n) => (n.hidden = mode !== "new"));
+  document.querySelectorAll(".reply-only").forEach((n) => (n.hidden = mode !== "reply"));
+  $(".ws-pick").hidden = mode !== "new";
+  $("#reply-route").textContent = mode === "reply" ? `continuing on ${t.route || ""}` : "";
+  const p = $("#prompt");
+  p.disabled = mode === "busy" || mode === "closed";
+  p.placeholder = { new: "Describe what you want to build… (Ctrl+Enter)", reply: "Reply to continue this conversation… (Ctrl+Enter)", busy: "Working… you can reply once it finishes.", closed: "This task can't be continued. Start a new task from the sidebar." }[mode];
+  $("#send").disabled = p.disabled;
+}
+function insertMention(path) {
+  const w = currentWs();
+  const rel = w ? relTo(w.path, path) : path;
+  const p = $("#prompt");
+  if (p.disabled) { newTask(false); }
+  const pre = p.value && !/\s$/.test(p.value) ? " " : "";
+  p.value += `${pre}@${rel} `;
+  activate("chat"); p.focus();
+}
+$("#f-ws").onchange = () => {
+  if ($("#f-ws").value === "__add") { $("#f-ws").value = S.ws || ""; openWsDialog(); return; }
+  selectWs($("#f-ws").value);
+  renderChat();
+};
+$("#composer").onsubmit = async (e) => {
+  e.preventDefault();
+  const prompt = $("#prompt").value.trim();
+  const note = $("#composer-note"); note.textContent = ""; note.className = "composer-note";
+  if (!prompt) return;
+  const mode = composerMode();
+  $("#send").disabled = true;
+  try {
+    if (mode === "reply") {
+      await api(`/api/tasks/${S.sel}/reply`, { prompt });
+    } else {
+      const w = currentWs();
+      const r = await api("/api/tasks", {
+        prompt, cwd: w ? w.path : (S.state.home || S.state.cwd),
+        profile: $("#f-profile").value, model: $("#f-model").value, account: $("#f-account").value,
+        effort: $("#f-effort").value, permission: $("#f-perm").value,
+      });
+      if (!S.tasks.has(r.id)) S.tasks.set(r.id, { id: r.id, prompt, cwd: w ? w.path : S.state.home, status: "running", started: nowS() });
+      S.logs.set(r.id, S.logs.get(r.id) || [{ type: "user", text: prompt }]);
+      S.sel = r.id;
+      if (w) { S.expandedWs.add(norm(w.path)); pref.set("expandedWs", [...S.expandedWs]); }
+    }
+    $("#prompt").value = "";
+    renderChat(); schedule("side", "composer", "tabs");
+  } catch (err) { note.textContent = err.message; note.className = "composer-note err"; }
+  finally { $("#send").disabled = false; renderComposer(); }
+};
+$("#prompt").onkeydown = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("#composer").requestSubmit(); } };
+$("#prompt").oninput = () => { const p = $("#prompt"); p.style.height = "auto"; p.style.height = Math.min(p.scrollHeight, window.innerHeight * 0.4) + "px"; };
+$("#attach").onclick = () => openQuick("mention");
+$("#cancel").onclick = async () => { if (S.sel != null) { try { await api(`/api/tasks/${S.sel}/cancel`, {}); } catch (e) { toast(e.message, true); } } };
+$("#delete-task").onclick = confirmClick($("#delete-task"), "Click again to delete", async () => {
+  if (S.sel == null) return;
+  try { await api(`/api/tasks/${S.sel}/delete`, {}); } catch (e) { toast(e.message, true); }
+});
+$("#new-task").onclick = () => newTask();
+
+// ── files panel ─────────────────────────────────────────────────────────────
+async function loadDir(path) {
+  try { S.tree.set(norm(path), await api(`/api/fs/list?${q({ path })}`)); }
+  catch (e) { S.tree.set(norm(path), { error: e.message }); }
+}
+function fileIcon(name) { return IMG.test(name) ? "image" : /\.(rs|ts|tsx|js|jsx|py|go|java|c|cpp|h|cs|rb|php|swift|kt|toml|json|yaml|yml|html|css|sh|ps1|sql|md)$/i.test(name) ? "code" : "file"; }
+function renderTree() {
+  const box = $("#tree"); const w = currentWs();
+  $("#files-name").textContent = w ? w.name : "Files";
+  if ($("#find").value.trim()) return; // results view owns the panel
+  box.replaceChildren();
+  if (!w) { box.append(el("div", "files-empty", "Pick or add a workspace folder to browse its files.")); const b = el("button", "small", "Add folder"); b.onclick = openWsDialog; box.lastChild.append(el("br"), el("br"), b); return; }
+  const walk = (dir, depth) => {
+    const entries = S.tree.get(norm(dir));
+    if (!entries) { loadDir(dir).then(() => schedule("files")); box.append(el("div", "files-empty", "Loading…")); return; }
+    if (entries.error) { box.append(el("div", "files-empty", entries.error)); return; }
+    if (!entries.length && depth === 0) box.append(el("div", "files-empty", "No files in this workspace"));
+    for (const e of entries) {
+      const n = el("div", "node" + (S.active === e.path ? " on" : ""));
+      n.style.paddingLeft = 6 + depth * 14 + "px";
+      const isOpen = S.open.has(norm(e.path));
+      if (e.dir) { const c = icon("chev", "chev" + (isOpen ? " open" : "")); n.append(c, icon("folder", "ic folder")); }
+      else { const sp = el("span"); sp.style.width = "12px"; n.append(sp, icon(fileIcon(e.name), "ic")); }
+      n.append(el("span", "nm", e.name));
+      n.title = e.dir ? e.path : `${e.path} · ${fmtSize(e.size)}`;
+      const at = el("span", "at", "@"); at.title = "Mention in chat"; at.onclick = (ev) => { ev.stopPropagation(); insertMention(e.path); };
+      n.append(at);
+      n.onclick = () => {
+        if (e.dir) { isOpen ? S.open.delete(norm(e.path)) : S.open.add(norm(e.path)); pref.set("open", [...S.open].slice(-300)); renderTree(); }
+        else openFile(e.path);
+      };
+      box.append(n);
+      if (e.dir && isOpen) walk(e.path, depth + 1);
+    }
+  };
+  walk(w.path, 0);
+}
+let findTimer = null, findSeq = 0;
+async function runFind() {
+  const text = $("#find").value.trim(); const w = currentWs(); const box = $("#tree");
+  if (!text) { renderTree(); return; }
+  if (!w) return;
+  const seq = ++findSeq;
+  box.replaceChildren(el("div", "files-empty", "Searching…"));
+  try {
+    const hits = await api(`/api/fs/search?${q({ root: w.path, q: text, mode: S.findMode })}`);
+    if (seq !== findSeq) return;
+    box.replaceChildren();
+    if (!hits.length) box.append(el("div", "files-empty", "No matches"));
+    for (const h of hits) {
+      const r = el("div", "hit"); r.append(el("div", "p", h.rel));
+      if (h.text) r.append(el("div", "s", `${h.line}: ${h.text}`));
+      r.onclick = () => openFile(h.path); box.append(r);
+    }
+  } catch (e) { box.replaceChildren(el("div", "files-empty", e.message)); }
+}
+$("#find").oninput = () => { clearTimeout(findTimer); findTimer = setTimeout(runFind, 220); };
+$("#find-names").onclick = () => { S.findMode = "names"; $("#find-names").className = "on"; $("#find-contents").className = ""; runFind(); };
+$("#find-contents").onclick = () => { S.findMode = "contents"; $("#find-contents").className = "on"; $("#find-names").className = ""; runFind(); };
+$("#files-refresh").onclick = () => { S.tree.clear(); renderTree(); };
+$("#files-collapse").onclick = () => { S.open.clear(); pref.set("open", []); renderTree(); };
+
+// ── file tabs: editor and image viewer ──────────────────────────────────────
+async function openFile(path) {
+  let tab = S.tabs.find((t) => norm(t.id) === norm(path));
+  if (!tab) {
+    tab = { id: path, name: baseName(path), kind: IMG.test(path) ? "image" : "text" };
+    if (tab.kind === "text") {
+      try {
+        const f = await api(`/api/fs/read?${q({ path })}`);
+        tab.size = f.size;
+        if (f.text != null) { tab.text = f.text; tab.orig = f.text; }
+        else tab.kind = f.too_large ? "large" : "binary";
+      } catch (e) { toast(e.message, true); return; }
+    }
+    S.tabs.push(tab);
+  }
+  activate(tab.id);
+}
+function setGutter(text) {
+  const n = text.split("\n").length;
+  const g = $("#gutter");
+  if (g.dataset.n !== String(n)) { g.textContent = Array.from({ length: n }, (_, i) => i + 1).join("\n"); g.dataset.n = n; }
+}
+function showFile(tab) {
+  if (!tab) return;
+  const w = currentWs();
+  $("#file-path").textContent = w ? relTo(w.path, tab.id) : tab.id;
+  $("#file-editor").hidden = tab.kind !== "text";
+  $("#file-image").hidden = tab.kind !== "image";
+  $("#file-msg").hidden = tab.kind === "text" || tab.kind === "image";
+  $("#file-save").hidden = tab.kind !== "text";
+  $("#file-info").textContent = tab.size != null ? fmtSize(tab.size) : "";
+  if (tab.kind === "text") {
+    const c = $("#code"); c.value = tab.text; setGutter(tab.text);
+    c.scrollTop = tab.scroll || 0; $("#gutter").scrollTop = c.scrollTop;
+    $("#file-save").disabled = !tab.dirty;
+    setTimeout(() => c.focus(), 0);
+  } else if (tab.kind === "image") {
+    $("#file-img").src = `/api/fs/raw?${q({ path: tab.id, t: token })}`;
+  } else {
+    $("#file-msg").replaceChildren(el("div", null, tab.kind === "large" ? "This file is too large to edit here." : "This is a binary file."), el("div", "faint", tab.id));
+  }
+}
+const activeTab = () => S.tabs.find((t) => t.id === S.active);
+$("#code").oninput = () => {
+  const tab = activeTab(); if (!tab) return;
+  tab.text = $("#code").value; const was = tab.dirty; tab.dirty = tab.text !== tab.orig;
+  setGutter(tab.text); $("#file-save").disabled = !tab.dirty;
+  if (was !== tab.dirty) renderTabs();
+};
+$("#code").onscroll = () => { $("#gutter").scrollTop = $("#code").scrollTop; const t = activeTab(); if (t) t.scroll = $("#code").scrollTop; };
+$("#code").onkeydown = (e) => {
+  if (e.key === "Tab" && !e.ctrlKey) {
+    e.preventDefault();
+    const c = e.target, s = c.selectionStart, end = c.selectionEnd;
+    c.setRangeText("    ", s, end, "end"); c.dispatchEvent(new Event("input"));
+  }
+};
+async function saveActive() {
+  const tab = activeTab(); if (!tab || tab.kind !== "text" || !tab.dirty) return;
+  try {
+    const r = await api("/api/fs/write", { path: tab.id, text: tab.text });
+    tab.orig = tab.text; tab.dirty = false; tab.size = r.size;
+    $("#file-save").disabled = true; $("#file-info").textContent = fmtSize(r.size);
+    renderTabs(); toast(`Saved ${tab.name}`);
+  } catch (e) { toast(e.message, true); }
+}
+$("#file-save").onclick = saveActive;
+$("#file-mention").onclick = () => { const t = activeTab(); if (t) insertMention(t.id); };
+
+// ── quick open (Ctrl+P) / mention ───────────────────────────────────────────
+let quickMode = "open", quickHits = [], quickIdx = 0, quickTimer = null;
+function openQuick(mode) {
+  const w = currentWs();
+  if (!w) { toast("Pick a workspace folder first.", true); return; }
+  quickMode = mode; quickHits = []; quickIdx = 0;
+  $("#open-title").textContent = mode === "mention" ? `Mention a file from ${w.name}` : `Open a file in ${w.name}`;
+  $("#open-q").value = ""; $("#open-list").replaceChildren(el("div", "files-empty", "Type to search file names"));
+  $("#dlg-open").showModal(); $("#open-q").focus();
+}
+function renderQuick() {
+  const box = $("#open-list"); box.replaceChildren();
+  if (!quickHits.length) { box.append(el("div", "files-empty", "No matches")); return; }
+  quickHits.forEach((h, i) => {
+    const r = el("div", "hit" + (i === quickIdx ? " on" : "")); r.append(el("div", "p", h.rel));
+    r.onclick = () => pickQuick(i); box.append(r);
+  });
+}
+function pickQuick(i) {
+  const h = quickHits[i]; if (!h) return;
+  $("#dlg-open").close();
+  quickMode === "mention" ? insertMention(h.path) : openFile(h.path);
+}
+$("#open-q").oninput = () => {
+  clearTimeout(quickTimer);
+  quickTimer = setTimeout(async () => {
+    const text = $("#open-q").value.trim(); const w = currentWs();
+    if (!text || !w) return;
+    try { quickHits = (await api(`/api/fs/search?${q({ root: w.path, q: text, mode: "names" })}`)).slice(0, 60); quickIdx = 0; renderQuick(); } catch (_) {}
+  }, 150);
+};
+$("#open-q").onkeydown = (e) => {
+  if (e.key === "ArrowDown") { e.preventDefault(); quickIdx = Math.min(quickIdx + 1, quickHits.length - 1); renderQuick(); }
+  if (e.key === "ArrowUp") { e.preventDefault(); quickIdx = Math.max(quickIdx - 1, 0); renderQuick(); }
+  if (e.key === "Enter") { e.preventDefault(); pickQuick(quickIdx); }
+};
+$("#open-form").onsubmit = (e) => e.preventDefault();
+
+// ── workspaces dialog ───────────────────────────────────────────────────────
+function openWsDialog() { $("#ws-form").reset(); $("#ws-err").textContent = ""; $("#dlg-ws").showModal(); $("#ws-form").path.focus(); }
+$("#add-ws").onclick = openWsDialog;
+$("#ws-cancel").onclick = () => $("#dlg-ws").close();
+$("#ws-form").onsubmit = async (e) => {
+  e.preventDefault();
+  try { const r = await api("/api/workspaces", { path: $("#ws-form").path.value.trim() }); $("#dlg-ws").close(); selectWs(r.path); toast(`Added ${baseName(r.path)}`); }
+  catch (err) { $("#ws-err").textContent = err.message; }
+};
+
+// ── settings: accounts & profiles ───────────────────────────────────────────
+function renderSettings() { if (S.state) { renderAccounts(); renderProfiles(); } }
 function renderAccounts() {
   const box = $("#accounts"); box.replaceChildren();
   const accts = S.state.accounts;
-  if (!accts.length) { box.append(el("div", "empty", "No accounts yet. Add one to start.")); return; }
+  if (!accts.length) { box.append(el("div", "faint", "No accounts yet. Add one to start.")); return; }
   for (const a of accts) {
     const card = el("div", "acct");
     const limited = a.limited_until && a.limited_until > nowS();
     const dot = el("span", "dot " + (a.checking && a.logged_in == null ? "checking" : limited ? "limited" : a.logged_in === false ? "off" : a.running ? "busy" : ""));
     const main = el("div");
-    const id = el("div", "a-id", a.id);
-    id.append(el("span", "badge", a.provider));
-    main.append(id);
+    const id = el("div", "a-id", a.id); id.append(el("span", "badge plain", PROVIDER[a.provider] || a.provider)); main.append(id);
     if (limited) main.append(el("div", "a-who bad", `limited · resets in ${fmtDur(a.limited_until - nowS())}`));
     else if (a.logged_in === false) main.append(el("div", "a-who bad", a.auth === "api" ? `${a.key_env || "key"} is not set` : "not logged in"));
     else if (a.checking && a.logged_in == null) main.append(el("div", "a-who", "checking login…"));
     else main.append(el("div", "a-who", [a.email || (a.auth === "api" ? "API key" : "logged in"), a.auth === "cli" ? a.plan : null].filter(Boolean).join(" · ")));
     if (a.utilization != null) {
       const pct = Math.round(a.utilization * 100);
-      const bar = el("div", "bar"); const fill = el("i", pct >= 95 ? "full" : pct >= 75 ? "hi" : "");
-      fill.style.width = Math.min(100, pct) + "%"; bar.append(fill); main.append(bar);
+      const bar = el("div", "bar"); const fill = el("i", pct >= 95 ? "full" : pct >= 75 ? "hi" : ""); fill.style.width = Math.min(100, pct) + "%"; bar.append(fill); main.append(bar);
     }
     const meta = [];
-    if (a.utilization != null) meta.push(`${Math.round(a.utilization * 100)}% of usage window`);
-    if (a.running) meta.push(`${a.running} running`);
+    if (a.utilization != null) meta.push(`${Math.round(a.utilization * 100)}% of usage window${a.resets_at ? " · resets in " + fmtDur(Math.max(0, a.resets_at - nowS())) : ""}`);
     if (a.tasks) meta.push(`${a.tasks} tasks · ${fmtTok(a.tokens)} tokens`);
     if (meta.length) main.append(el("div", "a-meta", meta.join(" · ")));
     const actions = el("div", "a-actions");
     if (a.auth === "cli") {
-      const b = el("button", "small" + (a.logged_in === false ? " primary" : " ghost"), a.logged_in === false ? "Log in" : "Re-login");
-      b.title = a.logged_in === false ? "Opens a window to sign in" : "Sign in again (e.g. to switch organization)";
-      b.onclick = () => login(a.id);
-      actions.append(b);
+      const b = el("button", "small" + (a.logged_in === false ? " primary" : ""), a.logged_in === false ? "Log in" : "Re-login");
+      b.onclick = () => login(a.id); actions.append(b);
     }
     const rm = el("button", "linkish", "Remove");
-    rm.title = "Remove this account from fermi (its login stays on disk)";
     rm.onclick = confirmClick(rm, "Click again to remove", async () => {
-      try { toast((await api(`/api/accounts/${encodeURIComponent(a.id)}/remove`, {})).message); }
-      catch (e) { toast(e.message, true); }
+      try { toast((await api(`/api/accounts/${encodeURIComponent(a.id)}/remove`, {})).message); } catch (e) { toast(e.message, true); }
     });
     actions.append(rm);
-    card.append(dot, main, actions);
-    box.append(card);
+    card.append(dot, main, actions); box.append(card);
   }
 }
-
-// Destructive buttons need a second click within a few seconds.
-function confirmClick(btn, armedText, action) {
-  let armed = null; const label = btn.textContent;
-  return () => {
-    if (armed) { clearTimeout(armed); armed = null; btn.textContent = label; action(); return; }
-    btn.textContent = armedText;
-    armed = setTimeout(() => { armed = null; btn.textContent = label; }, 3000);
-  };
+async function login(id) {
+  try { toast((await api(`/api/accounts/${encodeURIComponent(id)}/login`, {})).message); } catch (e) { toast(e.message, true); }
 }
-
-// ── profiles ───────────────────────────────────────────────────────────────
 const MODE_NAMES = { auto: "auto", pinned: "picked models", single: "one model" };
 function renderProfiles() {
   const box = $("#profiles"); box.replaceChildren();
-  const list = S.state.profiles;
-  if (!list.length) box.append(el("div", "empty", "No profiles: every task can use every account."));
-  for (const p of list) {
+  if (!S.state.profiles.length) box.append(el("div", "faint", "No profiles: every task can use every account."));
+  for (const p of S.state.profiles) {
     const row = el("div", "prof"); row.onclick = () => openProfile(p);
     const name = el("div", "p-name", p.name);
-    name.append(el("span", "badge", MODE_NAMES[p.mode] || p.mode));
+    name.append(el("span", "badge plain", MODE_NAMES[p.mode] || p.mode));
     if (p.default) name.append(el("span", "badge", "default"));
-    if (p.name === S.state.here) name.append(el("span", "badge", "this folder"));
     row.append(name, el("span", "p-edit", "Edit"));
-    const meta = [`${p.accounts.length} account${p.accounts.length === 1 ? "" : "s"}`];
+    const meta = [`${p.accounts.length} account${p.accounts.length === 1 ? "" : "s"}: ${p.accounts.join(", ")}`];
     if (p.paths.length) meta.push(p.paths.join(", "));
     if (p.effort) meta.push(`effort ${p.effort}`);
+    if (p.permission_mode) meta.push(PERM_LABEL[p.permission_mode] || p.permission_mode);
     row.append(el("div", "p-meta", meta.join(" · ")));
     box.append(row);
   }
 }
-
 const profDlg = $("#dlg-profile"), profForm = $("#prof-form");
 let profEditing = null;
 function openProfile(p) {
   profEditing = p ? p.name : null;
   $("#prof-title").textContent = p ? `Edit profile · ${p.name}` : "New profile";
-  $("#prof-err").textContent = "";
-  $("#prof-delete").hidden = !p;
-  $("#prof-delete").textContent = "Delete profile";
+  $("#prof-err").textContent = ""; $("#prof-delete").hidden = !p; $("#prof-delete").textContent = "Delete profile";
   profForm.name.value = p ? p.name : "";
-  profForm.paths.value = p ? p.paths.join("\n") : "";
+  profForm.paths.value = p ? p.paths.join("\n") : (currentWs()?.path || "");
   profForm.mode.value = p ? p.mode : "auto";
-  profForm.effort.replaceChildren(...[["", "Model default"], ...S.state.efforts.map((e) => [e, e])].map(([v, l]) => { const o = el("option", null, l); o.value = v; return o; }));
+  profForm.effort.replaceChildren(opt("", "Model default"), ...S.state.efforts.map((e) => opt(e, e)));
   profForm.effort.value = p?.effort || "";
+  profForm.permission_mode.replaceChildren(...["acceptEdits", "bypassPermissions", "plan"].map((v) => opt(v, PERM_LONG[v])), opt("", PERM_LONG.default));
   profForm.permission_mode.value = p ? (p.permission_mode || "") : "acceptEdits";
   profForm.default.checked = !!p?.default;
-  // Accounts: the profile's, in its order, then the rest.
   const chosen = p ? p.accounts : [];
   const order = [...chosen, ...S.state.accounts.map((a) => a.id).filter((id) => !chosen.includes(id))];
   $("#prof-accounts").replaceChildren(...order.map((id) => {
     const a = S.state.accounts.find((x) => x.id === id);
-    const chip = el("label", "chip"); const cb = el("input"); cb.type = "checkbox"; cb.value = id; cb.checked = chosen.includes(id);
+    const chip = el("label", "pick"); const cb = el("input"); cb.type = "checkbox"; cb.value = id; cb.checked = chosen.includes(id);
     chip.append(cb, document.createTextNode(id), el("span", "faint", a ? a.provider : "missing"));
     return chip;
   }));
@@ -457,16 +1126,12 @@ function renderProfModels(selected) {
   $("#prof-models-label").textContent = mode === "single" ? "The model to always use" : "Models fermi may pick from (it still picks the best fit per task)";
   const box = $("#prof-models"); box.replaceChildren();
   const groups = new Map();
-  for (const m of S.state.models) {
-    const g = { claude: "Claude", openai: "OpenAI", gemini: "Gemini" }[m.provider] || m.provider;
-    if (!groups.has(g)) groups.set(g, []);
-    groups.get(g).push(m);
-  }
+  for (const m of S.state.models) { const g = PROVIDER[m.provider] || m.provider; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(m); }
   for (const [g, models] of groups) {
     box.append(el("div", "model-group", g));
     const chips = el("div", "chips");
     for (const m of models) {
-      const chip = el("label", "chip"); const inp = el("input");
+      const chip = el("label", "pick"); const inp = el("input");
       inp.type = mode === "single" ? "radio" : "checkbox"; inp.name = "model"; inp.value = m.id; inp.checked = selected.includes(m.id);
       chip.append(inp, document.createTextNode(m.label), el("span", "faint", m.caps.includes("image") ? "images" : m.tier_name));
       chips.append(chip);
@@ -478,308 +1143,159 @@ profForm.mode.onchange = () => renderProfModels([...profForm.querySelectorAll("i
 $("#prof-cancel").onclick = () => profDlg.close();
 $("#add-profile").onclick = () => openProfile(null);
 $("#prof-delete").onclick = confirmClick($("#prof-delete"), "Click again to delete", async () => {
-  try { const r = await api(`/api/profiles/${encodeURIComponent(profEditing)}/delete`, {}); profDlg.close(); toast(r.message); }
-  catch (e) { $("#prof-err").textContent = e.message; }
+  try { const r = await api(`/api/profiles/${encodeURIComponent(profEditing)}/delete`, {}); profDlg.close(); toast(r.message); } catch (e) { $("#prof-err").textContent = e.message; }
 });
 profForm.onsubmit = async (e) => {
   e.preventDefault();
   const body = {
-    original: profEditing,
-    name: profForm.name.value.trim(),
+    original: profEditing, name: profForm.name.value.trim(),
     accounts: [...$("#prof-accounts").querySelectorAll("input:checked")].map((i) => i.value),
     paths: profForm.paths.value.split("\n").map((s) => s.trim()).filter(Boolean),
     mode: profForm.mode.value,
     models: profForm.mode.value === "auto" ? [] : [...profForm.querySelectorAll("input[name=model]:checked")].map((i) => i.value),
-    effort: profForm.effort.value || null,
-    permission_mode: profForm.permission_mode.value || null,
-    default: profForm.default.checked,
+    effort: profForm.effort.value || null, permission_mode: profForm.permission_mode.value || null, default: profForm.default.checked,
   };
   if (!body.accounts.length) { $("#prof-err").textContent = "Pick at least one account."; return; }
   if (body.mode !== "auto" && !body.models.length) { $("#prof-err").textContent = "Pick at least one model, or set Model choice to Auto."; return; }
-  try { const r = await api("/api/profiles", body); profDlg.close(); toast(r.message); }
-  catch (err) { $("#prof-err").textContent = err.message; }
+  try { const r = await api("/api/profiles", body); profDlg.close(); toast(r.message); } catch (err) { $("#prof-err").textContent = err.message; }
 };
-
-async function login(id) {
-  try { const r = await api(`/api/accounts/${encodeURIComponent(id)}/login`, {}); toast(r.message); }
-  catch (e) { toast(e.message, true); }
-}
-
-// ── composer selects ───────────────────────────────────────────────────────
-function fillSelect(sel, items, keep) {
-  const prev = keep ? sel.value : "";
-  sel.replaceChildren(...items.map(([v, label]) => { const o = el("option", null, label); o.value = v; return o; }));
-  if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
-}
-// Models grouped by provider, named with their version and strength.
-function fillModels(sel, models) {
-  const prev = sel.value;
-  const auto = el("option", null, "Auto (best for task)"); auto.value = "";
-  const groups = new Map();
-  for (const m of models) {
-    const name = { claude: "Claude", openai: "OpenAI", gemini: "Gemini" }[m.provider] || m.provider;
-    if (!groups.has(name)) { const g = el("optgroup"); g.label = name; groups.set(name, g); }
-    const o = el("option", null, `${m.label} · ${m.caps.includes("image") ? "images" : m.tier_name}`);
-    o.value = m.id; groups.get(name).append(o);
-  }
-  sel.replaceChildren(auto, ...groups.values());
-  if ([...sel.options].some((o) => o.value === prev)) sel.value = prev;
-}
-function renderComposer() {
-  const st = S.state;
-  fillSelect($("#f-profile"), [["", `Auto (folder → ${st.here || "none"})`], ...st.profiles.map((p) => [p.name, `${p.name} · ${p.mode}`])], true);
-  fillModels($("#f-model"), st.models);
-  fillSelect($("#f-effort"), [["", "Auto (model default)"], ...st.efforts.map((e) => [e, e])], true);
-  fillSelect($("#f-account"), [["", "Auto (with failover)"], ...st.accounts.map((a) => [a.id, a.id])], true);
-  if (!$("#f-cwd").value) $("#f-cwd").value = st.cwd;
-  $("#profile-names").replaceChildren(...st.profiles.map((p) => { const o = el("option"); o.value = p.name; return o; }));
-  $("#where").textContent = `${st.cwd}  ·  profile ${st.here || "—"}`;
-}
-
-// ── tasks ──────────────────────────────────────────────────────────────────
-function statusIcon(t) {
-  if (t.status === "running") return el("span", "t-icon spin", "◐");
-  if (t.status === "done") return el("span", "t-icon ok", "✓");
-  if (t.status === "cancelled") return el("span", "t-icon faint", "⊘");
-  return el("span", "t-icon bad", "✗");
-}
-function renderTasks() {
-  const box = $("#tasks"); box.replaceChildren();
-  const list = [...S.tasks.values()].sort((a, b) => b.id - a.id);
-  if (!list.length) box.append(el("div", "empty", "No tasks yet."));
-  for (const t of list) {
-    const row = el("div", "task" + (t.id === S.sel ? " sel" : ""));
-    row.onclick = () => select(t.id);
-    const secs = (t.ended || nowS()) - t.started;
-    row.append(statusIcon(t), el("div", "t-title", t.prompt), el("div", "t-time", fmtDur(Math.max(0, secs))));
-    const route = t.route || (t.status === "running" ? "routing…" : "");
-    row.append(el("div", "t-route", t.turns > 1 ? `${route} · ${t.turns} turns` : route));
-    box.append(row);
-  }
-  const n = list.filter((t) => t.status === "running").length;
-  $("#running").textContent = n ? `${n} running` : "";
-}
-
-async function select(id) {
-  S.sel = id; renderTasks();
-  if (!S.logs.has(id)) {
-    try { const t = await api(`/api/tasks/${id}`); S.logs.set(id, t.events); S.tasks.set(id, summaryOf(t)); }
-    catch (e) { toast(e.message, true); return; }
-  }
-  renderLog();
-}
-const summaryOf = (t) => { const { events, ...rest } = t; return rest; };
-
-// ── output log ─────────────────────────────────────────────────────────────
-function evNode(ev) {
-  switch (ev.type) {
-    case "user": return el("div", "ev user", ev.text);
-    case "routed": return el("div", "ev meta", `▸ ${ev.label || ev.model}${ev.effort ? " · effort " + ev.effort : ""} @ ${ev.account}   [${ev.profile}]   ${ev.why}`);
-    case "text": return el("div", "ev text", ev.text);
-    case "tool": return el("div", "ev tool", `· ${ev.name} ${ev.detail}`);
-    case "limit":
-      if (ev.blocked) return el("div", "ev warn", `! ${ev.account} hit its usage limit`);
-      if (ev.utilization != null && ev.utilization >= 0.8) return el("div", "ev warn", `! ${ev.account} at ${Math.round(ev.utilization * 100)}% of its window`);
-      return null;
-    case "failover": return el("div", "ev warn", `↷ ${ev.account}: ${ev.reason}, trying the next account`);
-    case "artifact": return el("div", "ev art", `⇒ ${ev.path}`);
-    case "log": return el("div", "ev dim", ev.line);
-    case "done": return el("div", "ev " + (ev.ok ? "ok" : "bad"), `${ev.ok ? "✓" : "✗"} ${ev.summary}`);
-  }
-  return null;
-}
-function waitingNode(t) {
-  const w = el("div", "waiting"); w.id = "waiting";
-  const right = el("div"); right.append(el("div", null, "thinking…"), el("div", "faint", t.route || "routing…"));
-  w.append(el("pre", null, MINI), right);
-  return w;
-}
-const nearBottom = (box) => box.scrollHeight - box.scrollTop - box.clientHeight < 60;
-function renderLog() {
-  const box = $("#log"); box.replaceChildren();
-  const t = S.tasks.get(S.sel);
-  if (!t) { renderWelcome(); return; }
-  $("#out-title").textContent = t.prompt;
-  $("#out-route").textContent = t.route || "";
-  syncTaskControls(t);
-  for (const ev of S.logs.get(t.id) || []) { const n = evNode(ev); if (n) box.append(n); }
-  if (t.status === "cancelled") box.append(el("div", "ev bad", "⊘ cancelled"));
-  syncWaiting(t);
-  box.scrollTop = box.scrollHeight;
-}
-// Cancel while running; Reply and Delete once it has finished.
-function syncTaskControls(t) {
-  const running = t.status === "running";
-  $("#cancel").hidden = !running;
-  $("#delete-task").hidden = running;
-  $("#delete-task").textContent = "Delete";
-  $("#reply").hidden = running || !t.resumable;
-}
-function syncWaiting(t) {
-  const box = $("#log");
-  const busy = t.status === "running" && !(S.logs.get(t.id) || []).some((e) => e.type === "text" || e.type === "tool");
-  const w = $("#waiting");
-  if (busy && !w) box.append(waitingNode(t));
-  if (!busy && w) w.remove();
-  if (busy && w) w.querySelector(".faint").textContent = t.route || "routing…";
-}
-function renderWelcome() {
-  $("#out-title").textContent = "Output"; $("#out-route").textContent = "";
-  $("#cancel").hidden = true; $("#delete-task").hidden = true; $("#reply").hidden = true;
-  const w = el("div", "welcome");
-  w.append(el("h3", null, "Welcome to fermi"));
-  const ol = el("ol");
-  for (const s of [
-    "Describe a task above and press Run (or Ctrl+Enter).",
-    "Start more tasks while others work. They run in parallel, each on its profile's accounts.",
-    "Pick a task on the left to follow its output live.",
-  ]) ol.append(el("li", null, s));
-  w.append(ol);
-  w.append(el("p", null, "Leave Profile, Model and Account on Auto and fermi picks for you: the profile from the folder, the model from the task, the account by availability (with failover when one hits its limit)."));
-  $("#log").replaceChildren(w);
-}
-
-// ── live updates ───────────────────────────────────────────────────────────
-function onMessage(m) {
-  switch (m.kind) {
-    case "task_new": S.tasks.set(m.task.id, m.task); S.logs.set(m.task.id, []); renderTasks(); break;
-    case "task_event": {
-      if (m.task) S.tasks.set(m.id, m.task);
-      const log = S.logs.get(m.id);
-      if (log) log.push(m.event);
-      renderTasks();
-      if (m.id === S.sel && log) {
-        const box = $("#log"); const stick = nearBottom(box);
-        const w = $("#waiting"); if (w) w.remove();
-        const n = evNode(m.event); if (n) box.append(n);
-        const t = S.tasks.get(m.id);
-        $("#out-route").textContent = t.route || ""; syncTaskControls(t);
-        syncWaiting(t);
-        if (stick) box.scrollTop = box.scrollHeight;
-      }
-      break;
-    }
-    case "task_update": S.tasks.set(m.task.id, m.task); renderTasks(); if (m.task.id === S.sel) renderLog(); break;
-    case "task_deleted":
-      S.tasks.delete(m.id); S.logs.delete(m.id);
-      if (S.sel === m.id) { S.sel = null; renderWelcome(); }
-      renderTasks(); break;
-    case "accounts": if (S.state) { S.state.accounts = m.accounts; renderAccounts(); renderSplash(); } break;
-    case "login_ok": toast(`✓ ${m.id} is logged in${m.email ? " as " + m.email : ""}`); break;
-    case "config": case "resync": refresh(); break;
-  }
-}
-
-let retry = 0;
-function connect() {
-  const ws = new WebSocket(`ws://${location.host}/api/ws?t=${token}`);
-  ws.onopen = () => { retry = 0; setConn(true); refresh(); };
-  ws.onmessage = (e) => { try { onMessage(JSON.parse(e.data)); } catch (_) {} };
-  ws.onclose = () => { setConn(false); setTimeout(connect, Math.min(5000, 500 * 2 ** retry++)); };
-}
-function setConn(ok) { S.connected = ok; const c = $("#conn"); c.className = "pill" + (ok ? "" : " off"); c.textContent = ok ? "live" : "reconnecting…"; }
-
-async function refresh() {
-  try {
-    S.state = await api("/api/state");
-    for (const t of S.state.tasks) S.tasks.set(t.id, t);
-    renderAccounts(); renderProfiles(); renderComposer(); renderTasks();
-    const linked = Number(new URLSearchParams(location.search).get("task"));
-    if (S.sel == null && S.tasks.has(linked)) S.sel = linked;
-    if (S.sel != null) { S.logs.delete(S.sel); select(S.sel); } else renderWelcome();
-    renderSplash();
-  } catch (e) { $("#splash-status").textContent = e.message; }
-}
-
-// ── splash ─────────────────────────────────────────────────────────────────
-const opened = Date.now();
-let splashDone = false;
-function renderSplash() {
-  if (splashDone || !S.state) return;
-  const lines = S.state.accounts.map((a) =>
-    a.checking && a.logged_in == null ? `◌ checking ${a.id}…` : a.logged_in === false ? `○ ${a.id} · not logged in` : `✓ ${a.id}${a.email ? " · " + a.email : ""}`);
-  $("#splash-status").textContent = lines.join("\n") || "no accounts yet";
-  const checking = S.state.accounts.some((a) => a.checking && a.logged_in == null);
-  if ((!checking && Date.now() - opened > 900) || Date.now() - opened > 4000) hideSplash();
-  else setTimeout(renderSplash, 200);
-}
-function hideSplash() {
-  if (splashDone) return; splashDone = true;
-  $("#app").hidden = false; $("#splash").classList.add("gone");
-  setTimeout(() => $("#splash").remove(), 300);
-  $("#prompt").focus();
-}
-$("#splash").onclick = () => { if (S.state) hideSplash(); };
-
-// ── actions ────────────────────────────────────────────────────────────────
-$("#composer").onsubmit = async (e) => {
-  e.preventDefault();
-  const prompt = $("#prompt").value.trim();
-  $("#form-err").textContent = "";
-  if (!prompt) { $("#form-err").textContent = "Describe the task first."; return; }
-  $("#run").disabled = true;
-  try {
-    const r = await api("/api/tasks", { prompt, profile: $("#f-profile").value, model: $("#f-model").value, effort: $("#f-effort").value, account: $("#f-account").value, cwd: $("#f-cwd").value });
-    $("#prompt").value = "";
-    if (!S.tasks.has(r.id)) S.tasks.set(r.id, { id: r.id, prompt, status: "running", started: nowS() });
-    if (!S.logs.has(r.id)) S.logs.set(r.id, []);
-    S.sel = r.id; renderTasks(); renderLog();
-  } catch (err) { $("#form-err").textContent = err.message; }
-  finally { $("#run").disabled = false; }
-};
-$("#prompt").onkeydown = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("#composer").requestSubmit(); } };
-$("#reply").onsubmit = async (e) => {
-  e.preventDefault();
-  const prompt = $("#reply-text").value.trim();
-  if (!prompt || S.sel == null) return;
-  $("#reply-send").disabled = true;
-  try { await api(`/api/tasks/${S.sel}/reply`, { prompt }); $("#reply-text").value = ""; }
-  catch (err) { toast(err.message, true); }
-  finally { $("#reply-send").disabled = false; }
-};
-$("#reply-text").onkeydown = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("#reply").requestSubmit(); } };
-$("#delete-task").onclick = confirmClick($("#delete-task"), "Click again to delete", async () => {
-  if (S.sel == null) return;
-  try { await api(`/api/tasks/${S.sel}/delete`, {}); } catch (e) { toast(e.message, true); }
-});
-$("#cancel").onclick = async () => { if (S.sel != null) { try { await api(`/api/tasks/${S.sel}/cancel`, {}); } catch (e) { toast(e.message, true); } } };
-
 const dlg = $("#dlg-add"), addForm = $("#add-form");
 function syncAddForm() {
-  const api = addForm.login.value === "api";
-  $("#key-row").hidden = !api;
+  const isApi = addForm.login.value === "api";
+  $("#key-row").hidden = !isApi;
   addForm.api_key_env.placeholder = { claude: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY", gemini: "GEMINI_API_KEY" }[addForm.provider.value];
-  $("#add-save").textContent = api ? "Save" : "Save and log in";
+  $("#add-save").textContent = isApi ? "Save" : "Save and log in";
 }
 $("#add-acct").onclick = () => {
-  addForm.reset(); $("#add-err").textContent = "";
-  addForm.profile.value = S.state?.here || "";
+  addForm.reset(); $("#add-err").textContent = ""; addForm.profile.value = currentWs()?.profile || "";
+  $("#profile-names").replaceChildren(...S.state.profiles.map((p) => { const o = el("option"); o.value = p.name; return o; }));
   syncAddForm(); dlg.showModal(); addForm.id.focus();
 };
 addForm.provider.onchange = addForm.login.onchange = syncAddForm;
 $("#add-cancel").onclick = () => dlg.close();
 addForm.onsubmit = async (e) => {
   e.preventDefault();
-  const api_ = addForm.login.value === "api";
-  const body = {
-    id: addForm.id.value.trim(), provider: addForm.provider.value, profile: addForm.profile.value.trim(),
-    api_key_env: api_ ? (addForm.api_key_env.value.trim() || addForm.api_key_env.placeholder) : null,
-  };
-  try {
-    const r = await api("/api/accounts", body);
-    dlg.close(); toast(r.message);
-    if (!api_) login(r.id);
-  } catch (err) { $("#add-err").textContent = err.message; }
+  const isApi = addForm.login.value === "api";
+  const body = { id: addForm.id.value.trim(), provider: addForm.provider.value, profile: addForm.profile.value.trim(),
+    api_key_env: isApi ? (addForm.api_key_env.value.trim() || addForm.api_key_env.placeholder) : null };
+  try { const r = await api("/api/accounts", body); dlg.close(); toast(r.message); if (!isApi) login(r.id); } catch (err) { $("#add-err").textContent = err.message; }
 };
-
-// Keep elapsed times ticking while something runs.
-setInterval(() => { if ([...S.tasks.values()].some((t) => t.status === "running")) renderTasks(); }, 1000);
-
-if (!token) {
-  $("#splash-status").textContent = "Open fermi with `fermi ui`. The link it prints includes your access key.";
-} else {
-  connect();
+function openSettings() {
+  if (!S.tabs.some((t) => t.id === "settings")) S.tabs.unshift({ id: "settings", name: "Settings" });
+  activate("settings");
 }
+$("#open-settings").onclick = openSettings;
+
+// ── status bar ──────────────────────────────────────────────────────────────
+function renderStatus() {
+  const bar = $("#status"); bar.replaceChildren();
+  if (!S.state) return;
+  for (const a of S.state.accounts) {
+    const limited = a.limited_until && a.limited_until > nowS();
+    const s = el("span", "acc"); s.title = `${a.id}${a.email ? " · " + a.email : ""}`; s.onclick = openSettings;
+    s.append(el("span", "sdot" + (limited ? " bad" : a.logged_in === false ? " off" : "")), el("span", null, a.id));
+    if (a.utilization != null) {
+      const pct = Math.round(a.utilization * 100);
+      const m = el("span", "mini"); const i = el("i", pct >= 95 ? "full" : pct >= 75 ? "hi" : ""); i.style.width = Math.min(100, pct) + "%"; m.append(i);
+      s.append(m, el("span", null, `${pct}% used${a.resets_at ? " · " + fmtDur(Math.max(0, a.resets_at - nowS())) : ""}`));
+    } else if (limited) s.append(el("span", null, `limited ${fmtDur(a.limited_until - nowS())}`));
+    bar.append(s);
+  }
+  bar.append(el("span", "spacer"));
+  const running = [...S.tasks.values()].filter((t) => t.status === "running").length;
+  if (running) bar.append(el("span", null, `${running} running`));
+  const live = el("span", "acc"); live.append(el("span", "sdot" + (S.connected ? "" : " bad")), el("span", null, S.connected ? "live" : "reconnecting…"));
+  bar.append(live, el("span", "faint", `v${S.state.version}`));
+}
+
+const RENDER = { side: renderSide, tabs: renderTabs, composer: renderComposer, files: renderTree, status: renderStatus, settings: renderSettings };
+
+// ── panels ──────────────────────────────────────────────────────────────────
+function toggleSide() { const a = $("#app"); a.classList.toggle("no-side"); pref.set("noSide", a.classList.contains("no-side")); renderTabs(); }
+function toggleFiles() { const a = $("#app"); a.classList.toggle("no-files"); pref.set("noFiles", a.classList.contains("no-files")); renderTabs(); }
+$("#hide-side").onclick = toggleSide;
+$("#hide-files").onclick = toggleFiles;
+if (pref.get("noSide", false)) $("#app").classList.add("no-side");
+if (pref.get("noFiles", false)) $("#app").classList.add("no-files");
+document.addEventListener("keydown", (e) => {
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === "s" && S.active !== "chat" && S.active !== "settings") { e.preventDefault(); saveActive(); }
+  if (mod && e.key.toLowerCase() === "p") { e.preventDefault(); openQuick(S.active === "chat" ? "mention" : "open"); }
+  if (mod && e.key.toLowerCase() === "b") { e.preventDefault(); toggleSide(); }
+});
+window.addEventListener("beforeunload", (e) => { if (S.tabs.some((t) => t.dirty)) { e.preventDefault(); e.returnValue = ""; } });
+
+// ── live updates ────────────────────────────────────────────────────────────
+function onMessage(m) {
+  switch (m.kind) {
+    case "task_new": S.tasks.set(m.task.id, m.task); if (!S.logs.has(m.task.id)) S.logs.set(m.task.id, [{ type: "user", text: m.task.prompt }]); schedule("side", "status"); break;
+    case "task_event": {
+      if (m.task) S.tasks.set(m.id, m.task);
+      const log = S.logs.get(m.id);
+      // The first user turn is already shown from task_new / submit.
+      if (log && !(m.event.type === "user" && log.length === 1 && log[0].type === "user" && log[0].text === m.event.text)) { log.push(m.event); appendEvent(m.id, m.event); }
+      schedule("side", "status");
+      if (m.id === S.sel) schedule("composer");
+      if (m.event.type === "artifact") S.tree.clear(), schedule("files");
+      break;
+    }
+    case "task_update": S.tasks.set(m.task.id, m.task); if (m.task.id === S.sel) renderChat(); schedule("side", "status", "composer"); break;
+    case "task_deleted": S.tasks.delete(m.id); S.logs.delete(m.id); if (S.sel === m.id) newTask(false); schedule("side", "status"); break;
+    case "accounts": if (S.state) { S.state.accounts = m.accounts; schedule("status"); if (S.active === "settings") schedule("settings"); renderSplash(); } break;
+    case "login_ok": toast(`✓ ${m.id} is logged in${m.email ? " as " + m.email : ""}`); break;
+    case "config": case "resync": refresh(); break;
+  }
+}
+let retry = 0;
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/api/ws?t=${token}`);
+  ws.onopen = () => { retry = 0; S.connected = true; refresh(); };
+  ws.onmessage = (e) => { try { onMessage(JSON.parse(e.data)); } catch (_) {} };
+  ws.onclose = () => { S.connected = false; schedule("status"); setTimeout(connect, Math.min(5000, 500 * 2 ** retry++)); };
+}
+async function refresh() {
+  try {
+    S.state = await api("/api/state");
+    for (const t of S.state.tasks) S.tasks.set(t.id, t);
+    if (!currentWs()) {
+      const ws = workspaces();
+      const here = ws.find((w) => norm(w.path) === norm(S.state.cwd));
+      S.ws = (here || ws[0])?.path || null;
+    }
+    const params = new URLSearchParams(location.search);
+    if (params.get("file") && !S.tabs.length) openFile(params.get("file"));
+    const linked = Number(params.get("task"));
+    if (S.sel == null && S.tasks.has(linked)) { selectTask(linked); }
+    else if (S.sel != null && S.tasks.has(S.sel)) { S.logs.delete(S.sel); selectTask(S.sel); }
+    else renderChat();
+    schedule("side", "tabs", "composer", "files", "status");
+    if (S.active === "settings") schedule("settings");
+    renderSplash();
+  } catch (e) { $("#splash-status").textContent = e.message; }
+}
+
+// ── splash ──────────────────────────────────────────────────────────────────
+const opened = Date.now(); let splashDone = false;
+function renderSplash() {
+  if (splashDone || !S.state) return;
+  const lines = S.state.accounts.map((a) => a.checking && a.logged_in == null ? `◌ checking ${a.id}…` : a.logged_in === false ? `○ ${a.id} · not logged in` : `✓ ${a.id}${a.email ? " · " + a.email : ""}`);
+  $("#splash-status").textContent = lines.join("\n") || "no accounts yet";
+  const checking = S.state.accounts.some((a) => a.checking && a.logged_in == null);
+  if ((!checking && Date.now() - opened > 900) || Date.now() - opened > 4000) hideSplash(); else setTimeout(renderSplash, 200);
+}
+function hideSplash() {
+  if (splashDone) return; splashDone = true;
+  $("#app").hidden = false; $("#splash").classList.add("gone"); setTimeout(() => $("#splash").remove(), 300);
+  $("#prompt").focus();
+}
+$("#splash").onclick = () => { if (S.state) hideSplash(); };
+
+// Keep elapsed times and reset countdowns fresh.
+setInterval(() => { if ([...S.tasks.values()].some((t) => t.status === "running")) schedule("side"); schedule("status"); }, 1000);
+
+renderTabs();
+if (!token) $("#splash-status").textContent = "Open fermi from the app or with `fermi ui`. The link includes your access key.";
+else connect();
 </script>
 </body>
 </html>

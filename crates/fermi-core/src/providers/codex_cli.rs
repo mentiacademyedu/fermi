@@ -28,10 +28,10 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>) -> Result<
         // and quotes would have to survive the npm .cmd shim on Windows.
         args.extend(["--config".into(), format!("model_reasoning_effort={e}")]);
     }
-    if let Some(s) = &ctx.profile.codex_sandbox {
+    if let Some(s) = ctx.codex_sandbox() {
         match resume {
             Some(_) => args.extend(["--config".into(), format!("sandbox_mode={s}")]),
-            None => args.extend(["--sandbox".into(), s.clone()]),
+            None => args.extend(["--sandbox".into(), s.to_string()]),
         }
     }
     args.extend(ctx.profile.codex_args.iter().cloned());
