@@ -10,19 +10,31 @@ use std::path::{Path, PathBuf};
 pub enum Provider {
     Claude,
     Openai,
+    Gemini,
 }
 
 impl Provider {
+    pub const ALL: [Provider; 3] = [Provider::Claude, Provider::Openai, Provider::Gemini];
+
     pub fn as_str(self) -> &'static str {
         match self {
             Provider::Claude => "claude",
             Provider::Openai => "openai",
+            Provider::Gemini => "gemini",
+        }
+    }
+    pub fn display(self) -> &'static str {
+        match self {
+            Provider::Claude => "Claude",
+            Provider::Openai => "OpenAI (ChatGPT / Codex)",
+            Provider::Gemini => "Gemini (Google)",
         }
     }
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_ascii_lowercase().as_str() {
             "claude" | "anthropic" => Some(Provider::Claude),
             "openai" | "chatgpt" | "codex" => Some(Provider::Openai),
+            "gemini" | "google" => Some(Provider::Gemini),
             _ => None,
         }
     }
@@ -75,6 +87,11 @@ impl Account {
             Provider::Claude if cfg!(target_os = "macos") => return None,
             Provider::Claude => (".claude", ".credentials.json"),
             Provider::Openai => (".codex", "auth.json"),
+            // GEMINI_CLI_HOME is a root that holds `.gemini/`, like the user's home.
+            Provider::Gemini => {
+                let root = self.home_dir().or_else(dirs::home_dir)?;
+                return Some(root.join(".gemini").join("oauth_creds.json").is_file());
+            }
         };
         let dir = self.home_dir().or_else(|| dirs::home_dir().map(|h| h.join(default_dir)))?;
         Some(dir.join(file).is_file())
@@ -122,12 +139,15 @@ pub struct Profile {
     pub claude_args: Vec<String>,
     #[serde(default)]
     pub codex_args: Vec<String>,
+    #[serde(default)]
+    pub gemini_args: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Bins {
     pub claude: Option<String>,
     pub codex: Option<String>,
+    pub gemini: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -182,7 +202,7 @@ impl Config {
         let catalog = self.catalog();
         for m in &catalog {
             if m.provider().is_none() {
-                bail!("model `{}` must be `claude:<name>` or `openai:<name>`", m.id);
+                bail!("model `{}` must be `claude:<name>`, `openai:<name>` or `gemini:<name>`", m.id);
             }
         }
         let mut names = HashSet::new();
@@ -272,6 +292,7 @@ impl Config {
                 effort: None,
                 claude_args: vec![],
                 codex_args: vec![],
+                gemini_args: vec![],
             });
         }
         bail!("no profile matches {} and no default_profile is set (use -p <profile>)", cwd.display())

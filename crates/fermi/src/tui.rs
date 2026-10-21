@@ -7,7 +7,7 @@ use fermi::setup;
 use fermi_core::auth::{self, AuthInfo};
 use fermi_core::state::AcctState;
 use fermi_core::util::{fmt_dur, now};
-use fermi_core::{Auth, Engine, Event, Task};
+use fermi_core::{Auth, Engine, Event, Provider, Task};
 use ratatui::crossterm::event::{
     self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event as Input, KeyCode,
     KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -108,7 +108,7 @@ enum Modal {
 struct Form {
     field: usize,
     id: String,
-    openai: bool,
+    provider: Provider,
     api: bool,
     key_env: String,
     profile: String,
@@ -140,11 +140,17 @@ impl Form {
         }
     }
     fn default_key_env(&self) -> &'static str {
-        if self.openai {
-            "OPENAI_API_KEY"
-        } else {
-            "ANTHROPIC_API_KEY"
+        match self.provider {
+            Provider::Claude => "ANTHROPIC_API_KEY",
+            Provider::Openai => "OPENAI_API_KEY",
+            Provider::Gemini => "GEMINI_API_KEY",
         }
+    }
+    /// ←/→ on the provider field.
+    fn cycle_provider(&mut self, delta: isize) {
+        let all = Provider::ALL;
+        let i = all.iter().position(|p| *p == self.provider).unwrap_or(0) as isize;
+        self.provider = all[(i + delta).rem_euclid(all.len() as isize) as usize];
     }
 }
 
@@ -436,7 +442,7 @@ impl App {
                 self.modal = Some(Modal::Add(Form {
                     field: 0,
                     id: String::new(),
-                    openai: false,
+                    provider: Provider::Claude,
                     api: false,
                     key_env: String::new(),
                     profile,
@@ -554,7 +560,7 @@ impl App {
                     KeyCode::BackTab | KeyCode::Up => f.step(-1),
                     KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') if matches!(f.field, 1 | 2) => {
                         if f.field == 1 {
-                            f.openai = !f.openai;
+                            f.cycle_provider(if k.code == KeyCode::Left { -1 } else { 1 });
                         } else {
                             f.api = !f.api;
                         }
@@ -581,7 +587,7 @@ impl App {
     }
 
     fn save_account(&mut self, mut f: Form) -> Act {
-        let provider = if f.openai { "openai" } else { "claude" };
+        let provider = f.provider.as_str();
         let key_env = f.api.then(|| f.key_env.trim().to_string());
         let profile = Some(f.profile.trim()).filter(|p| !p.is_empty());
         let result = setup::add_account(f.id.trim(), provider, key_env.as_deref(), None, profile)
@@ -1114,7 +1120,7 @@ fn draw_form(f: &mut Frame, form: &Form) {
         Line::from(" Add an account. It gets its own separate login.".fg(Color::DarkGray)),
         Line::from(""),
         row(0, "Name", text(&form.id, form.field == 0, "e.g. claude-work"), ""),
-        row(1, "Provider", choice(if form.openai { "OpenAI (ChatGPT / Codex)" } else { "Claude" }), "←→ change"),
+        row(1, "Provider", choice(form.provider.display()), "←→ change"),
         row(2, "Login", choice(if form.api { "API key" } else { "subscription login" }), "←→ change"),
     ];
     if form.api {

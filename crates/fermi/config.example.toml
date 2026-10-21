@@ -6,8 +6,8 @@
 default_profile = "personal"
 
 # ── Accounts ────────────────────────────────────────────────────────────────
-# provider: "claude" | "openai"
-# auth:     "cli" = subscription login through the official CLI (claude / codex)
+# provider: "claude" | "openai" | "gemini"
+# auth:     "cli" = subscription login through the official CLI (claude / codex / gemini)
 #           "api" = API key read from `api_key_env`
 # home:     CLI config dir. Omit for ~/.fermi/accounts/<id> (isolated login);
 #           "default" reuses the CLI's normal login (~/.claude, ~/.codex).
@@ -59,7 +59,9 @@ codex_sandbox = "workspace-write"  # codex exec --sandbox
 # models = ["claude:opus", "claude:sonnet", "openai:image"]
 
 # ── Models ──────────────────────────────────────────────────────────────────
-# Built in: claude:fable claude:opus claude:sonnet claude:haiku openai:gpt openai:image
+# Built in: claude:fable claude:opus claude:sonnet claude:haiku openai:gpt
+# openai:gpt-6.1-sol openai:gpt-6-astra openai:gpt-6-luna openai:image
+# gemini:pro gemini:flash gemini:flash-lite
 # tier: 1 fast, 2 balanced, 3 strongest, 4 premium. auto = false keeps a model
 # out of auto mode (still usable with -m or pinned/single).
 #

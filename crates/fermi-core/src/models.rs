@@ -96,5 +96,9 @@ pub fn builtin() -> Vec<ModelSpec> {
         m("openai:gpt-6-astra", "GPT-6 Astra", &[Code, Reasoning, General], 3, false, Some("gpt-6-astra"), "gpt-6-astra"),
         m("openai:gpt-6-luna", "GPT-6 Luna", &[Code, General, Fast], 1, false, Some("gpt-6-luna"), "gpt-6-luna"),
         m("openai:image", "GPT Image 2.5 Flare", &[Image], 2, true, None, "gpt-image-2.5-flare"),
+        // `pro` resolves to the newest Pro the account can use (3.x preview or 2.5).
+        m("gemini:pro", "Gemini Pro (latest)", &[Code, Reasoning, General], 3, true, Some("pro"), "gemini-2.5-pro"),
+        m("gemini:flash", "Gemini 3.8 Flash", &[Code, General, Fast], 1, true, Some("gemini-3.8-flash"), "gemini-3.8-flash"),
+        m("gemini:flash-lite", "Gemini 3.5 Flash-Lite", &[General, Fast], 1, false, Some("gemini-3.5-flash-lite"), "gemini-3.5-flash-lite"),
     ]
 }

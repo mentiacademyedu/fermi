@@ -114,6 +114,9 @@ pub fn login(id: &str) -> Result<()> {
         Some(home) => println!("logging `{id}` in (its login lives in {})", home.display()),
         None => println!("logging `{id}` in (the CLI's default login)"),
     }
+    if acct.provider == Provider::Gemini {
+        println!("Sign in with Google in the browser. When Gemini's prompt appears, type /quit to finish.\n");
+    }
     let status = login_command(&cfg, acct)?.status()?;
     if !status.success() {
         bail!("login exited with {status}");
@@ -127,6 +130,12 @@ pub fn login_command(cfg: &Config, acct: &fermi_core::Account) -> Result<std::pr
     let (bin, args, var): (_, &[&str], _) = match acct.provider {
         Provider::Claude => (resolve_bin("claude", cfg.bins.claude.as_deref())?, &["auth", "login"], "CLAUDE_CONFIG_DIR"),
         Provider::Openai => (resolve_bin("codex", cfg.bins.codex.as_deref())?, &["login"], "CODEX_HOME"),
+        // Gemini has no login subcommand: its interactive start signs in
+        // (Google is pre-selected), then the window can be closed.
+        Provider::Gemini => {
+            fermi_core::providers::gemini_cli::prepare_login(acct.home_dir().as_deref())?;
+            (resolve_bin("gemini", cfg.bins.gemini.as_deref())?, &[], "GEMINI_CLI_HOME")
+        }
     };
     let mut cmd = std::process::Command::new(bin);
     cmd.args(args);

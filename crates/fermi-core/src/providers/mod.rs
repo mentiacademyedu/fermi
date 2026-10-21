@@ -4,6 +4,7 @@
 mod api;
 mod claude_cli;
 mod codex_cli;
+pub mod gemini_cli;
 mod image;
 mod proc;
 
@@ -75,19 +76,27 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         (Provider::Openai, Auth::Cli) => codex_cli::run(ctx, &ctx.task.prompt, ctx.model.cli.as_deref()).await,
         (Provider::Claude, Auth::Api) => api::anthropic(ctx).await,
         (Provider::Openai, Auth::Api) => api::openai(ctx).await,
+        // The Gemini CLI takes API keys too, so both go through it.
+        (Provider::Gemini, _) => gemini_cli::run(ctx).await,
     }
 }
 
 pub(crate) fn is_limit(msg: &str) -> bool {
     let m = msg.to_lowercase();
-    ["usage limit", "rate limit", "rate_limit", "hit your limit", "limit reached", "quota", "too many requests"]
+    [
+        "usage limit", "rate limit", "rate_limit", "hit your limit", "limit reached", "quota", "too many requests",
+        "resource exhausted", "resource_exhausted", "429",
+    ]
         .iter()
         .any(|w| m.contains(w))
 }
 
 pub(crate) fn is_auth(msg: &str) -> bool {
     let m = msg.to_lowercase();
-    ["/login", "log in", "logged in", "login", "authenticat", "api key", "unauthorized", "401", "credit balance", "not signed in"]
+    [
+        "/login", "log in", "logged in", "login", "authenticat", "api key", "unauthorized", "401", "credit balance",
+        "not signed in", "auth method",
+    ]
         .iter()
         .any(|w| m.contains(w))
 }

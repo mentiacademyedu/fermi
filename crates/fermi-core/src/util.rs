@@ -69,6 +69,7 @@ pub fn resolve_bin(name: &str, overridden: Option<&str>) -> Result<PathBuf> {
         let install = match name {
             "claude" => " Install Claude Code: npm install -g @anthropic-ai/claude-code",
             "codex" => " Install the Codex CLI: npm install -g @openai/codex",
+            "gemini" => " Install the Gemini CLI: npm install -g @google/gemini-cli",
             _ => "",
         };
         anyhow!("`{name}` isn't installed (not found on PATH).{install}  If it's installed somewhere else, set [bins].{name} in the config.")

@@ -1,7 +1,7 @@
 # fermi
 
 A minimal, fast harness that runs coding/AI tasks across several providers
-(Claude, OpenAI) and several accounts per provider: one harness instead of
+(Claude, OpenAI, Gemini) and several accounts per provider: one harness instead of
 separate terminals or machines for work and personal accounts.
 
 Named after Enrico Fermi, who was famous for quick, good-enough estimates
@@ -23,9 +23,9 @@ cheap guess at the right model for each task.
 - **Live usage**: each Claude account's rate-limit window usage is read from
   the CLI stream and shown in `fermi status` and the TUI.
 
-Subscription accounts run through the **official CLIs** (`claude`, `codex`)
+Subscription accounts run through the **official CLIs** (`claude`, `codex`, `gemini`)
 in headless mode, each with its own config dir (`CLAUDE_CONFIG_DIR`,
-`CODEX_HOME`). API-key accounts call the HTTP APIs directly.
+`CODEX_HOME`, `GEMINI_CLI_HOME`). API-key accounts call the HTTP APIs directly.
 
 ## Install
 
@@ -80,7 +80,7 @@ a random local port, so the desktop app and `fermi ui` are the same interface.
 
 ```sh
 cargo run -p fermi-desktop                 # run it
-cargo tauri build -c crates/fermi-desktop  # installers (.msi / .exe) — needs `cargo install tauri-cli`
+cargo tauri build -c crates/fermi-desktop  # installers (.msi / .exe) â€” needs `cargo install tauri-cli`
 ```
 
 The icon is the periodic-table tile of Fermium (Fm, 100), named after Fermi.
@@ -100,9 +100,17 @@ other sites are refused. Ctrl+C stops it and its running tasks.
 
 ## Models
 
-Built in: `claude:fable` (premium, never auto-picked), `claude:opus`,
-`claude:sonnet`, `claude:haiku`, `openai:gpt`, `openai:image`. Override or add
-models with `[[models]]` in the config (capabilities, tier, CLI/API names).
+Built in, shown with their versions in the TUI and dashboard:
+
+| Provider | Auto-routed | Pick by hand |
+| --- | --- | --- |
+| Claude | Opus 5.5, Sonnet 5.5, Haiku 5.5 | Fable 5.1 (premium) |
+| OpenAI | GPT (Codex default), GPT Image 2.5 Flare | GPT-6.1 Sol, GPT-6 Astra, GPT-6 Luna |
+| Gemini | Gemini Pro (latest), Gemini 3.8 Flash | Gemini 3.5 Flash-Lite |
+
+Override or add models with `[[models]]` in the config (capabilities, tier,
+CLI/API names). Reasoning effort (`low` … `max`) can be set per task or as a
+profile default; it's passed to Claude and Codex (Gemini ignores it).
 
 Auto routing is rule-based (no extra model call, no added latency): image
 requests go to an image model, heavy work (refactor, debug, architecture)
@@ -113,11 +121,11 @@ to tier 2.
 
 ```
 crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
-  config.rs        accounts, profiles, folder → profile resolution
+  config.rs        accounts, profiles, folder â†’ profile resolution
   router.rs        task classification + candidate ordering
-  engine.rs        run loop: route → pick account → run → failover
+  engine.rs        run loop: route â†’ pick account â†’ run â†’ failover
   state.rs         per-account usage (~/.fermi/state.json) + usage.jsonl log
-  providers/       claude_cli, codex_cli, api (Anthropic/OpenAI), image
+  providers/       claude_cli, codex_cli, gemini_cli, api (Anthropic/OpenAI), image
   mcp.rs           `fermi mcp` stdio server attached to Claude sessions
   hub.rs           task registry + broadcast for long-lived front ends
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
@@ -130,7 +138,6 @@ Every front end consumes the same serializable `Event` stream.
 
 ## Roadmap
 
-- Gemini (Gemini CLI + API)
 - Profile editing (folders, mode, models) from the TUI and dashboard
 - Bridge for Codex sessions (so GPT can delegate to Claude)
 - Streaming for API-key text tasks

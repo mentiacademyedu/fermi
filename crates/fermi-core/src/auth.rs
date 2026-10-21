@@ -18,6 +18,16 @@ pub async fn probe(cfg: &Config, a: &Account) -> AuthInfo {
     match (a.auth, a.provider) {
         (Auth::Api, _) => AuthInfo { plan: Some("api key".into()), ..fallback },
         (Auth::Cli, Provider::Openai) => fallback,
+        (Auth::Cli, Provider::Gemini) => {
+            // The CLI records the signed-in Google account next to its credentials.
+            let root = a.home_dir().or_else(dirs::home_dir);
+            let email = root
+                .and_then(|r| std::fs::read(r.join(".gemini").join("google_accounts.json")).ok())
+                .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+                .and_then(|v| v["active"].as_str().map(str::to_string));
+            let plan = (fallback.logged_in == Some(true)).then(|| "google".to_string());
+            AuthInfo { email, plan, ..fallback }
+        }
         (Auth::Cli, Provider::Claude) => {
             let Ok(bin) = resolve_bin("claude", cfg.bins.claude.as_deref()) else { return fallback };
             let mut cmd = tokio::process::Command::new(bin);

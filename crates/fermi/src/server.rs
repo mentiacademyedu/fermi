@@ -394,7 +394,12 @@ async fn login(State(s): S, Path(id): Path<String>) -> Response {
     match open_login_window(&e.cfg, a) {
         Ok(()) => {
             s.watch_login(id);
-            Json(json!({ "message": "A sign-in window opened. Finish there and fermi updates by itself." })).into_response()
+            let msg = if a.provider == fermi_core::Provider::Gemini {
+                "A Gemini window opened: sign in with Google, then close it (or type /quit) once Gemini's prompt appears."
+            } else {
+                "A sign-in window opened. Finish there and fermi updates by itself."
+            };
+            Json(json!({ "message": msg })).into_response()
         }
         Err(e) => err(
             StatusCode::INTERNAL_SERVER_ERROR,

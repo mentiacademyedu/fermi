@@ -223,7 +223,7 @@ dialog label.f input, dialog label.f select { width: 100%; }
     <div><h3>Add an account</h3><div class="muted">Each account gets its own separate login, so work and personal never mix.</div></div>
     <label class="f">Name <input type="text" name="id" placeholder="claude-work" required pattern="[A-Za-z0-9_\-]+" title="letters, digits, - or _"></label>
     <label class="f">Provider
-      <select name="provider"><option value="claude">Claude</option><option value="openai">OpenAI (ChatGPT / Codex)</option></select>
+      <select name="provider"><option value="claude">Claude</option><option value="openai">OpenAI (ChatGPT / Codex)</option><option value="gemini">Gemini (Google)</option></select>
     </label>
     <label class="f">How it signs in
       <select name="login"><option value="cli">Subscription login (Pro, Max, Team, Plus…)</option><option value="api">API key from an environment variable</option></select>
@@ -334,7 +334,7 @@ function fillModels(sel, models) {
   const auto = el("option", null, "Auto (best for task)"); auto.value = "";
   const groups = new Map();
   for (const m of models) {
-    const name = m.provider === "openai" ? "OpenAI" : m.provider === "claude" ? "Claude" : m.provider;
+    const name = { claude: "Claude", openai: "OpenAI", gemini: "Gemini" }[m.provider] || m.provider;
     if (!groups.has(name)) { const g = el("optgroup"); g.label = name; groups.set(name, g); }
     const o = el("option", null, `${m.label} · ${m.caps.includes("image") ? "images" : m.tier_name}`);
     o.value = m.id; groups.get(name).append(o);
@@ -536,7 +536,7 @@ const dlg = $("#dlg-add"), addForm = $("#add-form");
 function syncAddForm() {
   const api = addForm.login.value === "api";
   $("#key-row").hidden = !api;
-  addForm.api_key_env.placeholder = addForm.provider.value === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
+  addForm.api_key_env.placeholder = { claude: "ANTHROPIC_API_KEY", openai: "OPENAI_API_KEY", gemini: "GEMINI_API_KEY" }[addForm.provider.value];
   $("#add-save").textContent = api ? "Save" : "Save and log in";
 }
 $("#add-acct").onclick = () => {
