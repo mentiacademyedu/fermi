@@ -45,19 +45,6 @@ fn title_case(s: &str) -> String {
     c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::plan_label;
-
-    #[test]
-    fn plan_labels() {
-        assert_eq!(plan_label("claude_max", "default_claude_max_5x"), "Max 5x");
-        assert_eq!(plan_label("claude_max", "default_claude_max_20x"), "Max 20x");
-        assert_eq!(plan_label("claude_pro", ""), "Pro");
-        assert_eq!(plan_label("claude_team", "default_raven"), "Team");
-    }
-}
-
 pub async fn probe(cfg: &Config, a: &Account) -> AuthInfo {
     let fallback = AuthInfo { logged_in: a.credentials_present(), ..Default::default() };
     match (a.auth, a.provider) {
@@ -93,5 +80,18 @@ pub async fn probe(cfg: &Config, a: &Account) -> AuthInfo {
             let plan = claude_plan(a.home_dir()).or_else(|| s("subscriptionType").map(|p| title_case(&p)));
             AuthInfo { logged_in: v["loggedIn"].as_bool().or(fallback.logged_in), email: s("email"), plan }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::plan_label;
+
+    #[test]
+    fn plan_labels() {
+        assert_eq!(plan_label("claude_max", "default_claude_max_5x"), "Max 5x");
+        assert_eq!(plan_label("claude_max", "default_claude_max_20x"), "Max 20x");
+        assert_eq!(plan_label("claude_pro", ""), "Pro");
+        assert_eq!(plan_label("claude_team", "default_raven"), "Team");
     }
 }
