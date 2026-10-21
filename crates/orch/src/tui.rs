@@ -1,18 +1,23 @@
-//! Terminal UI: run several tasks at once, each in its own profile, and
-//! watch accounts and output live. Thin client over `Engine`, like the
-//! future web dashboard.
+//! Terminal UI: run several tasks at once, each in its own profile, manage
+//! and log in to accounts, and watch everything live. Keyboard and mouse.
+//! Thin client over `Engine`, like the future web dashboard.
 
+use crate::setup;
 use anyhow::Result;
+use orch_core::auth::{self, AuthInfo};
 use orch_core::state::AcctState;
 use orch_core::util::{fmt_dur, now};
-use orch_core::{Engine, Event, Task};
-use ratatui::crossterm::event::{self, DisableBracketedPaste, EnableBracketedPaste, Event as Input, KeyCode, KeyEventKind, KeyModifiers};
+use orch_core::{Auth, Engine, Event, Task};
+use ratatui::crossterm::event::{
+    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event as Input, KeyCode,
+    KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use ratatui::crossterm::execute;
-use ratatui::layout::{Constraint, Layout};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
-use ratatui::Frame;
+use ratatui::widgets::{Block, Clear, Paragraph, Wrap};
+use ratatui::{DefaultTerminal, Frame};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -52,6 +57,97 @@ impl Kind {
     }
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Focus {
+    Accounts,
+    Tasks,
+    Input,
+}
+
+impl Focus {
+    fn next(self) -> Self {
+        match self {
+            Focus::Input => Focus::Accounts,
+            Focus::Accounts => Focus::Tasks,
+            Focus::Tasks => Focus::Input,
+        }
+    }
+    fn prev(self) -> Self {
+        match self {
+            Focus::Input => Focus::Tasks,
+            Focus::Tasks => Focus::Accounts,
+            Focus::Accounts => Focus::Input,
+        }
+    }
+}
+
+/// Things a key, click or button can do.
+#[derive(Clone, Copy, PartialEq)]
+enum Act {
+    None,
+    Quit,
+    Login,
+    /// Top-bar button: asks which account first when there are several.
+    LoginButton,
+    AddAccount,
+    Profile,
+    Help,
+    Cancel,
+    Submit,
+    NextFocus,
+    TypeTask,
+}
+
+enum Modal {
+    Help,
+    ConfirmQuit,
+    Add(Form),
+}
+
+/// Add-account form. Fields: 0 id, 1 provider, 2 login type, 3 key env (API only), 4 profile.
+struct Form {
+    field: usize,
+    id: String,
+    openai: bool,
+    api: bool,
+    key_env: String,
+    profile: String,
+    error: Option<String>,
+}
+
+impl Form {
+    fn fields(&self) -> &'static [usize] {
+        if self.api {
+            &[0, 1, 2, 3, 4]
+        } else {
+            &[0, 1, 2, 4]
+        }
+    }
+    fn step(&mut self, delta: isize) {
+        let f = self.fields();
+        let i = f.iter().position(|x| *x == self.field).unwrap_or(0) as isize;
+        self.field = f[(i + delta).rem_euclid(f.len() as isize) as usize];
+    }
+    fn is_last(&self) -> bool {
+        self.fields().last() == Some(&self.field)
+    }
+    fn text_mut(&mut self) -> Option<&mut String> {
+        match self.field {
+            0 => Some(&mut self.id),
+            3 => Some(&mut self.key_env),
+            4 => Some(&mut self.profile),
+            _ => None,
+        }
+    }
+    fn default_key_env(&self) -> &'static str {
+        if self.openai {
+            "OPENAI_API_KEY"
+        } else {
+            "ANTHROPIC_API_KEY"
+        }
+    }
+}
+
 struct TaskView {
     title: String,
     route: String,
@@ -62,99 +158,481 @@ struct TaskView {
     handle: JoinHandle<()>,
 }
 
+type EvTx = mpsc::UnboundedSender<(usize, Event)>;
+type ProbeTx = mpsc::UnboundedSender<(String, AuthInfo)>;
+
 struct App {
     engine: Arc<Engine>,
     cwd: PathBuf,
+    /// None = pick the profile from the working directory.
     profile: Option<String>,
-    here: String,
     tasks: Vec<TaskView>,
-    sel: usize,
+    sel_task: usize,
+    sel_acct: usize,
+    focus: Focus,
+    modal: Option<Modal>,
     input: String,
     scroll: usize,
     accts: HashMap<String, AcctState>,
+    auth: HashMap<String, AuthInfo>,
+    probing: Vec<String>,
+    note: Option<(Kind, String)>,
+    probe_tx: ProbeTx,
+    // Hit areas from the last draw, for mouse clicks.
+    r_acc: Rect,
+    r_tasks: Rect,
+    r_out: Rect,
+    r_input: Rect,
+    buttons: Vec<(Rect, Act)>,
 }
 
-type EvTx = mpsc::UnboundedSender<(usize, Event)>;
-
 pub async fn run(engine: Arc<Engine>, profile: Option<String>) -> Result<()> {
-    let cwd = std::env::current_dir()?;
-    let here = match engine.cfg.resolve_profile(profile.as_deref(), &cwd) {
-        Ok(p) => format!("{} ({})", p.name, format!("{:?}", p.mode).to_lowercase()),
-        Err(e) => format!("no profile: {e}"),
-    };
-    let mut app = App { accts: engine.store.snapshot(), engine, cwd, profile, here, tasks: vec![], sel: 0, input: String::new(), scroll: 0 };
-
-    let (key_tx, mut key_rx) = mpsc::unbounded_channel();
-    std::thread::spawn(move || {
-        while let Ok(ev) = event::read() {
-            if key_tx.send(ev).is_err() {
-                break;
-            }
-        }
-    });
     let (ev_tx, mut ev_rx) = mpsc::unbounded_channel::<(usize, Event)>();
+    let (probe_tx, mut probe_rx) = mpsc::unbounded_channel();
+    let mut app = App::new(engine, profile, std::env::current_dir()?, probe_tx);
+    app.probe_all();
 
-    let mut terminal = ratatui::init();
-    let _ = execute!(std::io::stdout(), EnableBracketedPaste);
-    let mut tick = tokio::time::interval(Duration::from_millis(1000));
+    let mut term = enter();
+    let mut dirty = true;
+    let mut last_tick = Instant::now();
+    // Single-threaded input polling: nothing else reads the console, so the
+    // TUI can hand the terminal to an interactive login and take it back.
     let res: Result<()> = loop {
-        if let Err(e) = terminal.draw(|f| app.draw(f)) {
-            break Err(e.into());
+        if dirty {
+            if let Err(e) = term.draw(|f| app.draw(f)) {
+                break Err(e.into());
+            }
+            dirty = false;
         }
-        tokio::select! {
-            Some(input) = key_rx.recv() => if app.on_input(input, &ev_tx) { break Ok(()) },
-            Some((id, ev)) = ev_rx.recv() => {
-                app.on_event(id, ev);
-                while let Ok((id, ev)) = ev_rx.try_recv() {
-                    app.on_event(id, ev);
+        match tokio::task::block_in_place(|| event::poll(Duration::from_millis(40))) {
+            Err(e) => break Err(e.into()),
+            Ok(false) => {}
+            Ok(true) => {
+                let input = match event::read() {
+                    Ok(i) => i,
+                    Err(e) => break Err(e.into()),
+                };
+                dirty = true;
+                match app.on_input(input, &ev_tx) {
+                    Act::Quit => break Ok(()),
+                    Act::Login => {
+                        if let Some(id) = app.selected_account() {
+                            leave();
+                            tokio::task::block_in_place(|| login_flow(&id));
+                            term = enter();
+                            app.probe(&id);
+                            app.note = Some((Kind::Dim, format!("checking login for {id}…")));
+                        }
+                    }
+                    _ => {}
                 }
             }
-            _ = tick.tick() => app.accts = app.engine.store.snapshot(),
+        }
+        while let Ok((id, ev)) = ev_rx.try_recv() {
+            app.on_event(id, ev);
+            dirty = true;
+        }
+        while let Ok((id, info)) = probe_rx.try_recv() {
+            app.on_probe(id, info);
+            dirty = true;
+        }
+        if last_tick.elapsed() >= Duration::from_secs(1) {
+            app.accts = app.engine.store.snapshot();
+            last_tick = Instant::now();
+            dirty = true;
         }
     };
-    let _ = execute!(std::io::stdout(), DisableBracketedPaste);
-    ratatui::restore();
+    leave();
     for t in &app.tasks {
         t.handle.abort();
     }
     res
 }
 
+fn enter() -> DefaultTerminal {
+    let t = ratatui::init();
+    let _ = execute!(std::io::stdout(), EnableMouseCapture, EnableBracketedPaste);
+    t
+}
+
+fn leave() {
+    let _ = execute!(std::io::stdout(), DisableMouseCapture, DisableBracketedPaste);
+    ratatui::restore();
+}
+
+/// Runs the provider's own interactive login in the plain terminal.
+fn login_flow(id: &str) {
+    println!("\n── orch · log in `{id}` ─────────────────────────────\n");
+    println!("Follow the steps below (a browser window may open).\n");
+    if let Err(e) = setup::login(id) {
+        println!("\nlogin failed: {e:#}");
+    }
+    println!("\npress Enter to go back to orch…");
+    let _ = std::io::stdin().read_line(&mut String::new());
+}
+
+fn inside(r: Rect, x: u16, y: u16) -> bool {
+    x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
+}
+
 impl App {
-    /// Returns true to quit.
-    fn on_input(&mut self, input: Input, ev_tx: &EvTx) -> bool {
-        let key = match input {
-            Input::Key(k) if k.kind == KeyEventKind::Press => k,
+    fn new(engine: Arc<Engine>, profile: Option<String>, cwd: PathBuf, probe_tx: ProbeTx) -> Self {
+        App {
+            accts: engine.store.snapshot(),
+            engine,
+            cwd,
+            profile,
+            tasks: vec![],
+            sel_task: 0,
+            sel_acct: 0,
+            focus: Focus::Input,
+            modal: None,
+            input: String::new(),
+            scroll: 0,
+            auth: HashMap::new(),
+            probing: vec![],
+            note: None,
+            probe_tx,
+            r_acc: Rect::default(),
+            r_tasks: Rect::default(),
+            r_out: Rect::default(),
+            r_input: Rect::default(),
+            buttons: vec![],
+        }
+    }
+
+    fn profile_label(&self) -> String {
+        match self.engine.cfg.resolve_profile(self.profile.as_deref(), &self.cwd) {
+            Ok(p) => {
+                let how = if self.profile.is_some() { "chosen" } else { "from folder" };
+                format!("{} · {} · {how}", p.name, format!("{:?}", p.mode).to_lowercase())
+            }
+            Err(_) => "none".into(),
+        }
+    }
+
+    fn selected_account(&self) -> Option<String> {
+        self.engine.cfg.accounts.get(self.sel_acct).map(|a| a.id.clone())
+    }
+
+    fn probe(&mut self, id: &str) {
+        let Some(a) = self.engine.cfg.account(id).cloned() else { return };
+        let (cfg, tx, id) = (self.engine.cfg.clone(), self.probe_tx.clone(), id.to_string());
+        self.probing.push(id.clone());
+        tokio::spawn(async move {
+            let info = auth::probe(&cfg, &a).await;
+            let _ = tx.send((id, info));
+        });
+    }
+
+    fn probe_all(&mut self) {
+        let ids: Vec<_> = self.engine.cfg.accounts.iter().map(|a| a.id.clone()).collect();
+        for id in ids {
+            self.probe(&id);
+        }
+    }
+
+    fn on_probe(&mut self, id: String, info: AuthInfo) {
+        let was_pending = self.note.as_ref().is_some_and(|(_, n)| n.contains(&format!("checking login for {id}")));
+        if was_pending {
+            self.note = Some(match (info.logged_in, &info.email) {
+                (Some(true), Some(e)) => (Kind::Good, format!("✓ {id} is logged in as {e}")),
+                (Some(true), None) => (Kind::Good, format!("✓ {id} is logged in")),
+                (Some(false), _) => (Kind::Bad, format!("✗ {id} is still not logged in. Select it and press l to retry")),
+                (None, _) => (Kind::Dim, format!("{id}: login state unknown")),
+            });
+        }
+        self.probing.retain(|p| p != &id);
+        self.auth.insert(id, info);
+    }
+
+    fn running(&self) -> usize {
+        self.tasks.iter().filter(|t| t.st == St::Running).count()
+    }
+
+    // ── input ────────────────────────────────────────────────────────────
+
+    fn on_input(&mut self, input: Input, ev_tx: &EvTx) -> Act {
+        let is_press = matches!(&input, Input::Key(k) if k.kind == KeyEventKind::Press)
+            || matches!(&input, Input::Mouse(m) if matches!(m.kind, MouseEventKind::Down(_)));
+        if is_press && !self.note.as_ref().is_some_and(|(_, n)| n.starts_with("checking login")) {
+            self.note = None;
+        }
+        match input {
+            Input::Key(k) if k.kind == KeyEventKind::Press => {
+                let act = self.on_key(k);
+                self.apply(act, ev_tx)
+            }
+            Input::Mouse(m) => {
+                let act = self.on_mouse(m);
+                self.apply(act, ev_tx)
+            }
             Input::Paste(s) => {
-                self.input.push_str(&s.replace(['\r', '\n'], " "));
-                return false;
+                let s = s.replace(['\r', '\n'], " ");
+                match &mut self.modal {
+                    Some(Modal::Add(f)) => {
+                        if let Some(t) = f.text_mut() {
+                            t.push_str(s.trim());
+                        }
+                    }
+                    None => {
+                        self.focus = Focus::Input;
+                        self.input.push_str(&s);
+                    }
+                    _ => {}
+                }
+                Act::None
             }
-            _ => return false,
-        };
-        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        match key.code {
-            KeyCode::Char('c') if ctrl => return true,
-            KeyCode::Char('x') if ctrl => self.cancel(),
-            KeyCode::Esc if self.input.is_empty() => return true,
-            KeyCode::Esc => self.input.clear(),
-            KeyCode::Enter => self.submit(ev_tx),
-            KeyCode::Backspace => {
-                self.input.pop();
+            _ => Act::None,
+        }
+    }
+
+    /// Acts that change UI state are handled here; Quit and Login go back to
+    /// the main loop.
+    fn apply(&mut self, act: Act, ev_tx: &EvTx) -> Act {
+        match act {
+            Act::Quit if self.running() > 0 && !matches!(self.modal, Some(Modal::ConfirmQuit)) => {
+                self.modal = Some(Modal::ConfirmQuit);
+                Act::None
             }
-            KeyCode::Up => {
-                self.sel = self.sel.saturating_sub(1);
-                self.scroll = 0;
+            Act::Quit => Act::Quit,
+            Act::LoginButton if self.focus != Focus::Accounts && self.engine.cfg.accounts.len() > 1 => {
+                self.focus = Focus::Accounts;
+                self.note = Some((Kind::Meta, "pick the account with ↑↓ or a click, then press l (or click \"log in\" again)".into()));
+                Act::None
             }
-            KeyCode::Down => {
-                self.sel = (self.sel + 1).min(self.tasks.len().saturating_sub(1));
-                self.scroll = 0;
+            Act::Login | Act::LoginButton => {
+                if self.engine.cfg.accounts.get(self.sel_acct).is_some_and(|a| a.auth == Auth::Api) {
+                    let var = self.engine.cfg.accounts[self.sel_acct].api_key_env.clone().unwrap_or_default();
+                    self.note = Some((Kind::Warn, format!("API-key accounts don't log in: set {var} in your environment and restart orch")));
+                    return Act::None;
+                }
+                Act::Login
             }
-            KeyCode::PageUp => self.scroll += 10,
-            KeyCode::PageDown => self.scroll = self.scroll.saturating_sub(10),
-            KeyCode::Char(c) if !ctrl => self.input.push(c),
+            Act::AddAccount => {
+                let profile = self.engine.cfg.resolve_profile(self.profile.as_deref(), &self.cwd).map(|p| p.name).unwrap_or_default();
+                self.modal = Some(Modal::Add(Form {
+                    field: 0,
+                    id: String::new(),
+                    openai: false,
+                    api: false,
+                    key_env: String::new(),
+                    profile,
+                    error: None,
+                }));
+                Act::None
+            }
+            Act::Profile => {
+                let mut names: Vec<Option<String>> = vec![None];
+                names.extend(self.engine.cfg.profiles.iter().map(|p| Some(p.name.clone())));
+                let i = names.iter().position(|n| *n == self.profile).unwrap_or(0);
+                self.profile = names[(i + 1) % names.len()].clone();
+                self.note = Some((Kind::Dim, format!("new tasks use profile: {}", self.profile_label())));
+                Act::None
+            }
+            Act::Help => {
+                self.modal = Some(Modal::Help);
+                Act::None
+            }
+            Act::Cancel => {
+                self.cancel();
+                Act::None
+            }
+            Act::Submit => {
+                self.submit(ev_tx);
+                Act::None
+            }
+            Act::NextFocus => {
+                self.focus = self.focus.next();
+                Act::None
+            }
+            Act::TypeTask => {
+                self.focus = Focus::Input;
+                Act::None
+            }
+            Act::None => Act::None,
+        }
+    }
+
+    fn on_key(&mut self, k: KeyEvent) -> Act {
+        let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+        if ctrl && k.code == KeyCode::Char('c') {
+            return Act::Quit;
+        }
+        if let Some(modal) = self.modal.take() {
+            return self.on_modal_key(modal, k);
+        }
+        match k.code {
+            KeyCode::Tab => return Act::NextFocus,
+            KeyCode::BackTab => {
+                self.focus = self.focus.prev();
+                return Act::None;
+            }
+            KeyCode::F(1) => return Act::Help,
+            KeyCode::PageUp => {
+                self.scroll += 10;
+                return Act::None;
+            }
+            KeyCode::PageDown => {
+                self.scroll = self.scroll.saturating_sub(10);
+                return Act::None;
+            }
             _ => {}
         }
-        false
+        match self.focus {
+            Focus::Input => match k.code {
+                KeyCode::Enter => return Act::Submit,
+                KeyCode::Esc if self.input.is_empty() => self.focus = Focus::Tasks,
+                KeyCode::Esc => self.input.clear(),
+                KeyCode::Backspace => {
+                    self.input.pop();
+                }
+                KeyCode::Up => self.select_task(-1),
+                KeyCode::Down => self.select_task(1),
+                KeyCode::Char(c) if !ctrl => self.input.push(c),
+                _ => {}
+            },
+            Focus::Tasks => match k.code {
+                KeyCode::Up => self.select_task(-1),
+                KeyCode::Down => self.select_task(1),
+                KeyCode::Enter | KeyCode::Esc | KeyCode::Char('i') => return Act::TypeTask,
+                KeyCode::Char('x') | KeyCode::Delete => return Act::Cancel,
+                KeyCode::Char('a') => return Act::AddAccount,
+                KeyCode::Char('p') => return Act::Profile,
+                KeyCode::Char('?') => return Act::Help,
+                KeyCode::Char('q') => return Act::Quit,
+                _ => {}
+            },
+            Focus::Accounts => match k.code {
+                KeyCode::Up => self.sel_acct = self.sel_acct.saturating_sub(1),
+                KeyCode::Down => self.sel_acct = (self.sel_acct + 1).min(self.engine.cfg.accounts.len().saturating_sub(1)),
+                KeyCode::Enter | KeyCode::Char('l') => return Act::Login,
+                KeyCode::Esc | KeyCode::Char('i') => return Act::TypeTask,
+                KeyCode::Char('a') => return Act::AddAccount,
+                KeyCode::Char('p') => return Act::Profile,
+                KeyCode::Char('?') => return Act::Help,
+                KeyCode::Char('q') => return Act::Quit,
+                _ => {}
+            },
+        }
+        Act::None
+    }
+
+    fn on_modal_key(&mut self, modal: Modal, k: KeyEvent) -> Act {
+        match modal {
+            Modal::Help => Act::None, // any key closes
+            Modal::ConfirmQuit => match k.code {
+                KeyCode::Char('y') | KeyCode::Enter => Act::Quit,
+                _ => Act::None,
+            },
+            Modal::Add(mut f) => {
+                match k.code {
+                    KeyCode::Esc => return Act::None,
+                    KeyCode::Tab | KeyCode::Down => f.step(1),
+                    KeyCode::BackTab | KeyCode::Up => f.step(-1),
+                    KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') if matches!(f.field, 1 | 2) => {
+                        if f.field == 1 {
+                            f.openai = !f.openai;
+                        } else {
+                            f.api = !f.api;
+                        }
+                        f.key_env = if f.api { f.default_key_env().into() } else { String::new() };
+                    }
+                    KeyCode::Enter if f.is_last() => return self.save_account(f),
+                    KeyCode::Enter => f.step(1),
+                    KeyCode::Backspace => {
+                        if let Some(t) = f.text_mut() {
+                            t.pop();
+                        }
+                    }
+                    KeyCode::Char(c) => {
+                        if let Some(t) = f.text_mut() {
+                            t.push(c);
+                        }
+                    }
+                    _ => {}
+                }
+                self.modal = Some(Modal::Add(f));
+                Act::None
+            }
+        }
+    }
+
+    fn save_account(&mut self, mut f: Form) -> Act {
+        let provider = if f.openai { "openai" } else { "claude" };
+        let key_env = f.api.then(|| f.key_env.trim().to_string());
+        let profile = Some(f.profile.trim()).filter(|p| !p.is_empty());
+        let result = setup::add_account(f.id.trim(), provider, key_env.as_deref(), None, profile)
+            .and_then(|msg| Ok((msg, Engine::load()?)));
+        match result {
+            Ok((msg, engine)) => {
+                self.engine = engine;
+                self.sel_acct = self.engine.cfg.accounts.iter().position(|a| a.id == f.id.trim()).unwrap_or(0);
+                self.focus = Focus::Accounts;
+                self.note = Some((Kind::Good, msg));
+                let id = f.id.trim().to_string();
+                self.probe(&id);
+                if f.api {
+                    Act::None
+                } else {
+                    Act::Login // log the new account in right away
+                }
+            }
+            Err(e) => {
+                f.error = Some(format!("{e:#}"));
+                self.modal = Some(Modal::Add(f));
+                Act::None
+            }
+        }
+    }
+
+    fn on_mouse(&mut self, m: MouseEvent) -> Act {
+        let (x, y) = (m.column, m.row);
+        match m.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if let Some(Modal::Help) = self.modal {
+                    self.modal = None;
+                    return Act::None;
+                }
+                if self.modal.is_some() {
+                    return Act::None;
+                }
+                if let Some((_, act)) = self.buttons.iter().find(|(r, _)| inside(*r, x, y)) {
+                    return *act;
+                }
+                if inside(self.r_acc, x, y) {
+                    self.focus = Focus::Accounts;
+                    let row = (y.saturating_sub(self.r_acc.y + 1) / 2) as usize;
+                    if row < self.engine.cfg.accounts.len() {
+                        self.sel_acct = row;
+                    }
+                } else if inside(self.r_tasks, x, y) {
+                    self.focus = Focus::Tasks;
+                    let row = y.saturating_sub(self.r_tasks.y + 1) as usize;
+                    if row < self.tasks.len() {
+                        self.sel_task = row;
+                        self.scroll = 0;
+                    }
+                } else if inside(self.r_input, x, y) {
+                    self.focus = Focus::Input;
+                } else if inside(self.r_out, x, y) {
+                    self.focus = Focus::Tasks;
+                }
+            }
+            MouseEventKind::ScrollUp => self.scroll += 3,
+            MouseEventKind::ScrollDown => self.scroll = self.scroll.saturating_sub(3),
+            _ => {}
+        }
+        Act::None
+    }
+
+    fn select_task(&mut self, delta: isize) {
+        if self.tasks.is_empty() {
+            return;
+        }
+        let max = self.tasks.len() as isize - 1;
+        self.sel_task = (self.sel_task as isize + delta).clamp(0, max) as usize;
+        self.scroll = 0;
     }
 
     /// Input syntax: optional leading `@profile`, `m=model`, `a=account`, then the prompt.
@@ -177,6 +655,7 @@ impl App {
             rest = after.trim_start();
         }
         if rest.is_empty() {
+            self.note = Some((Kind::Warn, "type a task first".into()));
             return;
         }
         task.prompt = rest.to_string();
@@ -205,12 +684,13 @@ impl App {
             elapsed: None,
             handle,
         });
-        self.sel = id;
+        self.sel_task = id;
         self.scroll = 0;
+        self.note = None;
     }
 
     fn cancel(&mut self) {
-        if let Some(t) = self.tasks.get_mut(self.sel).filter(|t| t.st == St::Running) {
+        if let Some(t) = self.tasks.get_mut(self.sel_task).filter(|t| t.st == St::Running) {
             t.handle.abort(); // drops the child process (kill_on_drop)
             t.st = St::Failed;
             t.elapsed = Some(t.started.elapsed());
@@ -251,50 +731,130 @@ impl App {
         }
     }
 
-    fn draw(&self, f: &mut Frame) {
-        let [top, main, input, help] =
-            Layout::vertical([Constraint::Length(1), Constraint::Min(5), Constraint::Length(3), Constraint::Length(1)]).areas(f.area());
-        let running = self.tasks.iter().filter(|t| t.st == St::Running).count();
-        f.render_widget(
-            Line::from(vec![
-                " orch ".bold().reversed(),
-                format!("  profile {}  ·  {}  ·  {running} running", self.here, self.cwd.display()).into(),
-            ]),
-            top,
-        );
+    // ── drawing ──────────────────────────────────────────────────────────
 
-        let [side, out] = Layout::horizontal([Constraint::Length(38), Constraint::Min(20)]).areas(main);
-        let n_acc = self.engine.cfg.accounts.len() as u16;
-        let [acc_area, task_area] = Layout::vertical([Constraint::Length(n_acc + 2), Constraint::Min(3)]).areas(side);
+    fn pane(&self, title: &str, focus: Focus) -> Block<'static> {
+        let focused = self.focus == focus && self.modal.is_none();
+        let style = if focused { Style::new().fg(Color::Cyan) } else { Style::new().fg(Color::DarkGray) };
+        let title = if focused { format!(" {title} ").bold() } else { format!(" {title} ").into() };
+        Block::bordered().border_style(style).title(title)
+    }
 
+    fn draw(&mut self, f: &mut Frame) {
+        let [top, main, input, foot] =
+            Layout::vertical([Constraint::Length(1), Constraint::Min(6), Constraint::Length(3), Constraint::Length(1)]).areas(f.area());
+        self.buttons.clear();
+        self.draw_header(f, top);
+
+        let [side, out] = Layout::horizontal([Constraint::Length(44), Constraint::Min(20)]).areas(main);
+        let n_acc = self.engine.cfg.accounts.len().max(1) as u16;
+        let [acc_area, task_area] = Layout::vertical([Constraint::Length(n_acc * 2 + 2), Constraint::Min(3)]).areas(side);
+        (self.r_acc, self.r_tasks, self.r_out, self.r_input) = (acc_area, task_area, out, input);
+
+        self.draw_accounts(f, acc_area);
+        self.draw_tasks(f, task_area);
+        self.draw_output(f, out);
+        self.draw_input(f, input);
+        self.draw_footer(f, foot);
+
+        match &self.modal {
+            Some(Modal::Help) => draw_help(f),
+            Some(Modal::ConfirmQuit) => {
+                let n = self.running();
+                draw_box(f, 52, 5, " quit? ", vec![
+                    Line::from(format!("{n} task(s) still running. Quitting stops them.")),
+                    Line::from(""),
+                    Line::from(vec!["y".bold().cyan(), " quit   ".into(), "any other key".bold().cyan(), " stay".into()]),
+                ]);
+            }
+            Some(Modal::Add(form)) => draw_form(f, form),
+            None => {}
+        }
+    }
+
+    fn draw_header(&mut self, f: &mut Frame, area: Rect) {
+        let left = Line::from(vec![
+            " orch ".bold().reversed(),
+            format!("  profile: {}  ·  {} running", self.profile_label(), self.running()).into(),
+        ]);
+        f.render_widget(left, area);
+        let buttons = [("+ account", Act::AddAccount), ("log in", Act::LoginButton), ("profile", Act::Profile), ("help", Act::Help), ("quit", Act::Quit)];
+        let mut x = area.x + area.width;
+        for (label, act) in buttons.iter().rev() {
+            let w = label.chars().count() as u16 + 2;
+            if x < area.x + w + 30 {
+                break; // too narrow
+            }
+            x -= w + 1;
+            let r = Rect::new(x, area.y, w, 1);
+            f.render_widget(Span::styled(format!(" {label} "), Style::new().fg(Color::Black).bg(Color::Cyan)), r);
+            self.buttons.push((r, *act));
+        }
+    }
+
+    fn draw_accounts(&self, f: &mut Frame, area: Rect) {
         let t = now();
-        let acc_lines: Vec<Line> = self
-            .engine
-            .cfg
-            .accounts
-            .iter()
-            .map(|a| {
-                let s = self.accts.get(&a.id).cloned().unwrap_or_default();
-                let busy = self.engine.store.running(&a.id);
-                let (dot, color, note) = if s.limited(t) {
-                    ("●", Color::Red, format!("limited {}", fmt_dur(s.limited_until.unwrap_or(t) - t)))
-                } else if a.credentials_present() == Some(false) {
-                    ("○", Color::DarkGray, "no login".into())
+        let mut lines: Vec<Line> = vec![];
+        if self.engine.cfg.accounts.is_empty() {
+            lines.push(Line::from("no accounts yet. Press a to add one".fg(Color::DarkGray)));
+        }
+        for (i, a) in self.engine.cfg.accounts.iter().enumerate() {
+            let s = self.accts.get(&a.id).cloned().unwrap_or_default();
+            let info = self.auth.get(&a.id);
+            let busy = self.engine.store.running(&a.id);
+            let probing = self.probing.contains(&a.id);
+            let logged_in = info.and_then(|i| i.logged_in).or(a.credentials_present());
+            let (dot, color) = if s.limited(t) {
+                ("●", Color::Red)
+            } else if logged_in == Some(false) {
+                ("○", Color::DarkGray)
+            } else if busy > 0 {
+                ("●", Color::Cyan)
+            } else {
+                ("●", Color::Green)
+            };
+            let selected = i == self.sel_acct && self.focus == Focus::Accounts;
+            let id_style = if selected { Style::new().add_modifier(Modifier::REVERSED) } else { Style::new().bold() };
+            let mut right = vec![];
+            if let Some(u) = s.utilization {
+                right.push(format!("{:.0}% used", u * 100.0));
+            }
+            if busy > 0 {
+                right.push(format!("{busy} running"));
+            }
+            lines.push(Line::from(vec![
+                Span::styled(format!("{dot} "), Style::new().fg(color)),
+                Span::styled(format!("{} ", a.id), id_style),
+                Span::styled(format!("{} {}", a.provider.as_str(), right.join(" · ")), Style::new().fg(Color::DarkGray)),
+            ]));
+            let detail = if s.limited(t) {
+                Span::styled(format!("  limited, resets in {}", fmt_dur(s.limited_until.unwrap_or(t) - t)), Style::new().fg(Color::Red))
+            } else if probing && info.is_none() {
+                Span::styled("  checking login…", Style::new().fg(Color::DarkGray))
+            } else if logged_in == Some(false) {
+                let hint = if a.auth == Auth::Api {
+                    format!("  {} not set", a.api_key_env.as_deref().unwrap_or("key"))
                 } else {
-                    let u = s.utilization.map(|u| format!("{:.0}%", u * 100.0)).unwrap_or_default();
-                    ("●", if busy > 0 { Color::Cyan } else { Color::Green }, u)
+                    "  not logged in · select + l to log in".into()
                 };
-                Line::from(vec![
-                    Span::styled(format!("{dot} "), Style::new().fg(color)),
-                    Span::raw(format!("{:<18}", a.id)),
-                    Span::styled(format!(" {note}{}", if busy > 0 { format!(" ×{busy}") } else { String::new() }), Style::new().fg(Color::DarkGray)),
-                ])
-            })
-            .collect();
-        f.render_widget(Paragraph::new(acc_lines).block(Block::bordered().title(" accounts ")), acc_area);
+                Span::styled(hint, Style::new().fg(Color::LightRed))
+            } else {
+                let who = match info.map(|i| (&i.email, &i.plan)) {
+                    Some((Some(e), Some(p))) => format!("{e} · {p}"),
+                    Some((Some(e), None)) => e.clone(),
+                    Some((None, Some(p))) => p.clone(),
+                    _ => "logged in".into(),
+                };
+                Span::styled(format!("  {who}"), Style::new().fg(Color::DarkGray))
+            };
+            lines.push(Line::from(detail));
+        }
+        f.render_widget(Paragraph::new(lines).block(self.pane("accounts", Focus::Accounts)), area);
+    }
 
-        let w = task_area.width.saturating_sub(2) as usize;
-        let task_lines: Vec<Line> = self
+    fn draw_tasks(&self, f: &mut Frame, area: Rect) {
+        let w = area.width.saturating_sub(3) as usize;
+        let mut lines: Vec<Line> = self
             .tasks
             .iter()
             .enumerate()
@@ -305,33 +865,81 @@ impl App {
                     St::Failed => ("✗", Color::Red),
                 };
                 let secs = tk.elapsed.unwrap_or_else(|| tk.started.elapsed()).as_secs();
-                let text: String = format!(" #{} {} · {}", i + 1, fmt_dur(secs), tk.title).chars().take(w.saturating_sub(2)).collect();
-                let style = if i == self.sel { Style::new().add_modifier(Modifier::REVERSED) } else { Style::new() };
+                let text: String = format!(" #{} {} · {}", i + 1, fmt_dur(secs), tk.title).chars().take(w).collect();
+                let style = if i == self.sel_task { Style::new().add_modifier(Modifier::REVERSED) } else { Style::new() };
                 Line::from(vec![Span::styled(glyph, Style::new().fg(color)), Span::styled(text, style)])
             })
             .collect();
-        f.render_widget(Paragraph::new(task_lines).block(Block::bordered().title(" tasks ")), task_area);
+        if lines.is_empty() {
+            lines.push(Line::from("no tasks yet".fg(Color::DarkGray)));
+        }
+        f.render_widget(Paragraph::new(lines).block(self.pane("tasks", Focus::Tasks)), area);
+    }
 
-        let (title, body) = match self.tasks.get(self.sel) {
-            Some(tk) => (format!(" {} ", tk.route), self.output_lines(tk, out.width.saturating_sub(2) as usize, out.height.saturating_sub(2) as usize)),
-            None => (" output ".into(), vec![Line::from(Span::styled(
-                "Type a task below. Prefixes: @profile  m=claude:opus  a=account-id",
-                Kind::Dim.style(),
-            ))]),
-        };
-        f.render_widget(Paragraph::new(body).block(Block::bordered().title(title)), out);
+    fn draw_output(&self, f: &mut Frame, area: Rect) {
+        let block = Block::bordered().border_style(Style::new().fg(Color::DarkGray));
+        match self.tasks.get(self.sel_task) {
+            Some(tk) => {
+                let body = self.output_lines(tk, area.width.saturating_sub(2) as usize, area.height.saturating_sub(2) as usize);
+                f.render_widget(Paragraph::new(body).block(block.title(format!(" {} ", tk.route))), area);
+            }
+            None => {
+                let d = Kind::Dim.style();
+                let lines = vec![
+                    Line::from("Welcome to orch.".bold()),
+                    Line::from(""),
+                    Line::from("1. Type a task in the box at the bottom and press Enter."),
+                    Line::from("2. Run more tasks while others work. They run in parallel."),
+                    Line::from("3. Click a task on the left (or use ↑↓) to see its output."),
+                    Line::from(""),
+                    Line::from(Span::styled("Accounts: click one, then \"log in\". Add more with \"+ account\".", d)),
+                    Line::from(Span::styled("Tab moves between panels. F1 or \"help\" shows every key.", d)),
+                    Line::from(""),
+                    Line::from(Span::styled("Optional prefixes: @work (profile)  m=claude:opus (model)  a=claude-work (account)", d)),
+                ];
+                f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block.title(" output ")), area);
+            }
+        }
+    }
 
-        let inner_w = input.width.saturating_sub(2) as usize;
-        let shown: String = {
-            let chars: Vec<char> = self.input.chars().collect();
-            chars[chars.len().saturating_sub(inner_w.saturating_sub(1))..].iter().collect()
+    fn draw_input(&self, f: &mut Frame, area: Rect) {
+        let inner_w = area.width.saturating_sub(2) as usize;
+        let chars: Vec<char> = self.input.chars().collect();
+        let shown: String = chars[chars.len().saturating_sub(inner_w.saturating_sub(1))..].iter().collect();
+        let body = if shown.is_empty() && self.focus != Focus::Input {
+            Line::from("click here or press Tab to type a task".fg(Color::DarkGray))
+        } else {
+            Line::from(shown.clone())
         };
-        f.render_widget(Paragraph::new(shown.as_str()).block(Block::bordered().title(" task ")), input);
-        f.set_cursor_position((input.x + 1 + shown.chars().count() as u16, input.y + 1));
-        f.render_widget(
-            Line::from(" enter run · ↑↓ select · pgup/pgdn scroll · ctrl+x cancel · esc quit").fg(Color::DarkGray),
-            help,
-        );
+        f.render_widget(Paragraph::new(body).block(self.pane("task — Enter to run", Focus::Input)), area);
+        if self.focus == Focus::Input && self.modal.is_none() {
+            f.set_cursor_position((area.x + 1 + shown.chars().count() as u16, area.y + 1));
+        }
+    }
+
+    fn draw_footer(&mut self, f: &mut Frame, area: Rect) {
+        if let Some((kind, note)) = &self.note {
+            f.render_widget(Line::from(Span::styled(format!(" {note}"), kind.style())), area);
+            return;
+        }
+        let hints: &[(&str, &str, Act)] = match self.focus {
+            Focus::Input => &[("Enter", "run", Act::Submit), ("Tab", "next panel", Act::NextFocus), ("Esc", "leave box", Act::None), ("F1", "help", Act::Help)],
+            Focus::Tasks => &[("↑↓", "select", Act::None), ("x", "cancel task", Act::Cancel), ("i", "type", Act::TypeTask), ("Tab", "next panel", Act::NextFocus), ("q", "quit", Act::Quit)],
+            Focus::Accounts => &[("↑↓", "select", Act::None), ("l", "log in", Act::Login), ("a", "add", Act::AddAccount), ("p", "profile", Act::Profile), ("Tab", "next panel", Act::NextFocus), ("q", "quit", Act::Quit)],
+        };
+        let mut x = area.x + 1;
+        let mut spans = vec![Span::raw(" ")];
+        for (key, label, act) in hints {
+            let text_w = (key.chars().count() + label.chars().count() + 2) as u16;
+            spans.push(Span::styled(key.to_string(), Style::new().fg(Color::Cyan).bold()));
+            spans.push(Span::styled(format!(" {label}"), Style::new().fg(Color::DarkGray)));
+            spans.push(Span::raw("  "));
+            if *act != Act::None {
+                self.buttons.push((Rect::new(x, area.y, text_w, 1), *act));
+            }
+            x += text_w + 1;
+        }
+        f.render_widget(Line::from(spans), area);
     }
 
     fn output_lines(&self, tk: &TaskView, width: usize, height: usize) -> Vec<Line<'static>> {
@@ -347,10 +955,202 @@ impl App {
     }
 }
 
+fn centered(f: &Frame, w: u16, h: u16) -> Rect {
+    let a = f.area();
+    let (w, h) = (w.min(a.width), h.min(a.height));
+    Rect::new(a.x + (a.width - w) / 2, a.y + (a.height - h) / 2, w, h)
+}
+
+fn draw_box(f: &mut Frame, w: u16, h: u16, title: &str, lines: Vec<Line>) {
+    let r = centered(f, w, h + 2);
+    f.render_widget(Clear, r);
+    let block = Block::bordered().border_style(Style::new().fg(Color::Cyan)).title(title.to_string().bold());
+    f.render_widget(Paragraph::new(lines).block(block), r);
+}
+
+fn draw_help(f: &mut Frame) {
+    let k = |key: &str, what: &str| Line::from(vec![Span::styled(format!(" {key:<16}"), Style::new().fg(Color::Cyan).bold()), Span::raw(what.to_string())]);
+    let lines = vec![
+        k("Tab / Shift+Tab", "move between panels: accounts, tasks, task box"),
+        k("mouse", "click panels, rows and buttons; wheel scrolls output"),
+        k("Enter", "run the task in the box"),
+        k("Esc", "leave the task box"),
+        k("↑ ↓", "select a task or account"),
+        k("PgUp / PgDn", "scroll the output"),
+        k("x", "cancel the selected task (tasks panel)"),
+        k("l / Enter", "log in the selected account (accounts panel)"),
+        k("a", "add an account"),
+        k("p", "switch the profile for new tasks"),
+        k("Ctrl+C / q", "quit"),
+        Line::from(""),
+        Line::from(" Task prefixes:  @work  m=claude:opus  a=claude-work".fg(Color::DarkGray)),
+        Line::from(" Select text: hold Shift while dragging.".fg(Color::DarkGray)),
+        Line::from(""),
+        Line::from(" any key or click closes this".fg(Color::DarkGray)),
+    ];
+    let n = lines.len() as u16;
+    draw_box(f, 78, n, " help ", lines);
+}
+
+fn draw_form(f: &mut Frame, form: &Form) {
+    let row = |idx: usize, label: &str, value: Span<'static>, hint: &str| {
+        let active = form.field == idx;
+        let marker = if active { "›" } else { " " };
+        Line::from(vec![
+            Span::styled(format!(" {marker} {label:<10}"), if active { Style::new().fg(Color::Cyan).bold() } else { Style::new() }),
+            value,
+            Span::styled(format!("  {hint}"), Style::new().fg(Color::DarkGray)),
+        ])
+    };
+    let text = |s: &str, active: bool, placeholder: &str| {
+        if s.is_empty() && !active {
+            Span::styled(placeholder.to_string(), Style::new().fg(Color::DarkGray))
+        } else {
+            Span::styled(format!("{s}{}", if active { "▏" } else { "" }), Style::new().add_modifier(Modifier::UNDERLINED))
+        }
+    };
+    let choice = |s: &str| Span::styled(format!("‹ {s} ›"), Style::new().fg(Color::Yellow));
+    let mut lines = vec![
+        Line::from(" Add an account. It gets its own separate login.".fg(Color::DarkGray)),
+        Line::from(""),
+        row(0, "Name", text(&form.id, form.field == 0, "e.g. claude-work"), ""),
+        row(1, "Provider", choice(if form.openai { "OpenAI (ChatGPT / Codex)" } else { "Claude" }), "←→ change"),
+        row(2, "Login", choice(if form.api { "API key" } else { "subscription login" }), "←→ change"),
+    ];
+    if form.api {
+        lines.push(row(3, "Key env", text(&form.key_env, form.field == 3, form.default_key_env()), "env var holding the key"));
+    }
+    lines.push(row(4, "Profile", text(&form.profile, form.field == 4, "personal"), "work, personal…"));
+    lines.push(Line::from(""));
+    match &form.error {
+        Some(e) => lines.push(Line::from(Span::styled(format!(" {e}"), Style::new().fg(Color::Red)))),
+        None => lines.push(Line::from(
+            match (form.is_last(), form.api) {
+                (true, false) => " Enter save and log in · Esc cancel",
+                (true, true) => " Enter save · Esc cancel",
+                _ => " Enter next · ↑↓ move · Esc cancel",
+            }
+            .fg(Color::DarkGray),
+        )),
+    }
+    let n = lines.len() as u16;
+    draw_box(f, 72, n, " + account ", lines);
+}
+
 fn wrap(s: &str, width: usize) -> Vec<String> {
     let chars: Vec<char> = s.chars().collect();
     if width == 0 || chars.is_empty() {
         return vec![String::new()];
     }
     chars.chunks(width).map(|c| c.iter().collect()).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use orch_core::config::Config;
+    use orch_core::state::Store;
+    use ratatui::backend::TestBackend;
+    use ratatui::crossterm::event::{KeyEventState, MouseEvent};
+    use ratatui::Terminal;
+
+    const CFG: &str = r#"
+        default_profile = "personal"
+        [[accounts]]
+        id = "claude-personal"
+        provider = "claude"
+        home = "default"
+        [[accounts]]
+        id = "claude-work"
+        provider = "claude"
+        [[profiles]]
+        name = "personal"
+        accounts = ["claude-personal"]
+        [[profiles]]
+        name = "work"
+        accounts = ["claude-work"]
+    "#;
+
+    fn app() -> (App, EvTx) {
+        let cfg = Config::parse(CFG).unwrap();
+        let home = std::env::temp_dir().join(format!("orch-tui-test-{}", std::process::id()));
+        let engine = Arc::new(Engine { catalog: cfg.catalog(), store: Store::open(&home), cfg, home, depth: 0 });
+        let (probe_tx, _) = mpsc::unbounded_channel();
+        let (ev_tx, _) = mpsc::unbounded_channel();
+        let mut a = App::new(engine, None, PathBuf::from("/"), probe_tx);
+        a.auth.insert("claude-personal".into(), AuthInfo { logged_in: Some(true), email: Some("me@example.com".into()), plan: Some("pro".into()) });
+        a.auth.insert("claude-work".into(), AuthInfo { logged_in: Some(false), ..Default::default() });
+        (a, ev_tx)
+    }
+
+    fn key(a: &mut App, tx: &EvTx, code: KeyCode) -> Act {
+        let k = KeyEvent { code, modifiers: KeyModifiers::NONE, kind: KeyEventKind::Press, state: KeyEventState::NONE };
+        a.on_input(Input::Key(k), tx)
+    }
+
+    fn render(a: &mut App) -> String {
+        let mut t = Terminal::new(TestBackend::new(120, 26)).unwrap();
+        t.draw(|f| a.draw(f)).unwrap();
+        let buf = t.backend().buffer().clone();
+        (0..buf.area.height)
+            .map(|y| (0..buf.area.width).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn screens() {
+        let (mut a, tx) = app();
+        let main = render(&mut a);
+        println!("{main}\n");
+        assert!(main.contains("me@example.com · pro"));
+        assert!(main.contains("not logged in"));
+        assert!(main.contains("Welcome to orch"));
+
+        // Tab into accounts, move to the second, log in.
+        key(&mut a, &tx, KeyCode::Tab);
+        assert!(a.focus == Focus::Accounts);
+        key(&mut a, &tx, KeyCode::Down);
+        assert!(key(&mut a, &tx, KeyCode::Char('l')) == Act::Login);
+        assert_eq!(a.selected_account().as_deref(), Some("claude-work"));
+
+        // Add-account form: type a name, flip provider, move through fields.
+        key(&mut a, &tx, KeyCode::Char('a'));
+        for c in "openai-me".chars() {
+            key(&mut a, &tx, KeyCode::Char(c));
+        }
+        key(&mut a, &tx, KeyCode::Enter);
+        key(&mut a, &tx, KeyCode::Right);
+        let form = render(&mut a);
+        println!("{form}\n");
+        assert!(form.contains("openai-me") && form.contains("OpenAI"));
+        key(&mut a, &tx, KeyCode::Esc);
+        assert!(a.modal.is_none());
+
+        // Help opens and any key closes it.
+        key(&mut a, &tx, KeyCode::F(1));
+        println!("{}\n", render(&mut a));
+        key(&mut a, &tx, KeyCode::Char('z'));
+        assert!(a.modal.is_none());
+
+        // Esc in the task box never quits; q in a panel does (no tasks running).
+        key(&mut a, &tx, KeyCode::Char('i'));
+        assert!(a.focus == Focus::Input);
+        assert!(key(&mut a, &tx, KeyCode::Esc) == Act::None);
+        assert!(key(&mut a, &tx, KeyCode::Char('q')) == Act::Quit);
+
+        // Profile cycling: folder → personal → work → folder.
+        key(&mut a, &tx, KeyCode::Char('p'));
+        assert_eq!(a.profile.as_deref(), Some("personal"));
+        key(&mut a, &tx, KeyCode::Char('p'));
+        assert_eq!(a.profile.as_deref(), Some("work"));
+        key(&mut a, &tx, KeyCode::Char('p'));
+        assert_eq!(a.profile, None);
+
+        // Clicking the header "help" button opens help.
+        let (r, _) = *a.buttons.iter().find(|(_, act)| *act == Act::Help).unwrap();
+        let click = MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: r.x + 1, row: r.y, modifiers: KeyModifiers::NONE };
+        a.on_input(Input::Mouse(click), &tx);
+        assert!(matches!(a.modal, Some(Modal::Help)));
+    }
 }

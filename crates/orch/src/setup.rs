@@ -26,7 +26,12 @@ pub fn init(force: bool) -> Result<()> {
     Ok(())
 }
 
-pub fn add_account(id: &str, provider: &str, key_env: Option<&str>, home: Option<&str>, profile: Option<&str>) -> Result<()> {
+/// Adds an account (and optionally puts it in a profile). Returns a message
+/// for the user instead of printing, so the TUI can use it too.
+pub fn add_account(id: &str, provider: &str, key_env: Option<&str>, home: Option<&str>, profile: Option<&str>) -> Result<String> {
+    if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        bail!("account id must be letters, digits, - or _ (e.g. claude-work)");
+    }
     let provider = Provider::parse(provider).with_context(|| format!("unknown provider `{provider}` (claude | openai)"))?;
     let path = Config::path();
     let text = std::fs::read_to_string(&path).with_context(|| format!("reading {} (run `orch init`)", path.display()))?;
@@ -70,11 +75,10 @@ pub fn add_account(id: &str, provider: &str, key_env: Option<&str>, home: Option
     let out = doc.to_string();
     Config::parse(&out).context("the result would be an invalid config")?;
     std::fs::write(&path, out)?;
-    println!("added `{id}` ({})", provider.as_str());
-    if key_env.is_none() {
-        println!("log in with: orch account login {id}");
-    }
-    Ok(())
+    Ok(match key_env {
+        Some(k) => format!("added `{id}` ({}); it reads its key from {k}", provider.as_str()),
+        None => format!("added `{id}` ({}); log in with: orch account login {id}", provider.as_str()),
+    })
 }
 
 fn push_table(doc: &mut DocumentMut, key: &str, t: Table) {
@@ -113,7 +117,20 @@ pub fn login(id: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn status(engine: &Engine) {
+pub async fn status(engine: &Engine) {
+    let probes: Vec<_> = engine
+        .cfg
+        .accounts
+        .iter()
+        .map(|a| {
+            let (cfg, a) = (engine.cfg.clone(), a.clone());
+            tokio::spawn(async move { orch_core::auth::probe(&cfg, &a).await })
+        })
+        .collect();
+    let mut who = vec![];
+    for p in probes {
+        who.push(p.await.unwrap_or_default());
+    }
     let cfg = &engine.cfg;
     let cwd = std::env::current_dir().unwrap_or_default();
     let here = cfg.resolve_profile(None, &cwd).ok().map(|p| p.name);
@@ -130,23 +147,32 @@ pub fn status(engine: &Engine) {
         );
     }
     println!("\nACCOUNTS");
-    println!("   {:<18} {:<7} {:<4} {:<22} {:>6} {:>6} {:>9}", "ID", "PROV", "AUTH", "STATUS", "WINDOW", "TASKS", "TOKENS");
+    println!(
+        "   {:<18} {:<7} {:<4} {:<22} {:>6} {:>6} {:>9}  LOGGED IN AS",
+        "ID", "PROV", "AUTH", "STATUS", "WINDOW", "TASKS", "TOKENS"
+    );
     let snap = engine.store.snapshot();
     let t = now();
-    for a in &cfg.accounts {
+    for (a, info) in cfg.accounts.iter().zip(&who) {
         let s = snap.get(&a.id).cloned().unwrap_or_default();
         let status = if s.limited(t) {
             format!("limited, {} left", fmt_dur(s.limited_until.unwrap_or(t) - t))
         } else {
-            match a.credentials_present() {
+            match info.logged_in {
                 Some(false) if a.auth == Auth::Api => "key env not set".into(),
                 Some(false) => "not logged in".into(),
                 _ => "ready".into(),
             }
         };
+        let identity = match (&info.email, &info.plan) {
+            (Some(e), Some(p)) => format!("{e} ({p})"),
+            (Some(e), None) => e.clone(),
+            (None, Some(p)) => p.clone(),
+            _ => String::new(),
+        };
         let window = s.utilization.map(|u| format!("{:.0}%", u * 100.0)).unwrap_or_else(|| "-".into());
         println!(
-            "   {:<18} {:<7} {:<4} {:<22} {:>6} {:>6} {:>9}",
+            "   {:<18} {:<7} {:<4} {:<22} {:>6} {:>6} {:>9}  {identity}",
             a.id,
             a.provider.as_str(),
             format!("{:?}", a.auth).to_lowercase(),

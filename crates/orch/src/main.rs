@@ -100,10 +100,10 @@ async fn real_main() -> Result<ExitCode> {
     match cli.cmd.unwrap_or(Cmd::Tui { profile: None }) {
         Cmd::Init { force } => setup::init(force)?,
         Cmd::Account(AccountCmd::Add { id, provider, api_key_env, home, profile }) => {
-            setup::add_account(&id, &provider, api_key_env.as_deref(), home.as_deref(), profile.as_deref())?
+            println!("{}", setup::add_account(&id, &provider, api_key_env.as_deref(), home.as_deref(), profile.as_deref())?)
         }
         Cmd::Account(AccountCmd::Login { id }) => setup::login(&id)?,
-        Cmd::Status => setup::status(&*Engine::load()?),
+        Cmd::Status => setup::status(&*Engine::load()?).await,
         Cmd::Route(t) => route(t)?,
         Cmd::Run(t) => return run(t).await,
         Cmd::Tui { profile } => {
