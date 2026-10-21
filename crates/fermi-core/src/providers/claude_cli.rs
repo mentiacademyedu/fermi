@@ -11,7 +11,8 @@ use anyhow::Result;
 pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     let e = ctx.engine;
     let bin = resolve_bin("claude", e.cfg.bins.claude.as_deref())?;
-    let mut args: Vec<String> = ["-p", "--output-format", "stream-json", "--verbose"].map(String::from).to_vec();
+    let mut args: Vec<String> =
+        ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"].map(String::from).to_vec();
     if let Some(m) = &ctx.model.cli {
         args.extend(["--model".into(), m.clone()]);
     }
@@ -54,6 +55,15 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
 
     while let Some(v) = p.next_json().await? {
         match v["type"].as_str().unwrap_or_default() {
+            // Live text of the main conversation (subagents have a parent id).
+            "stream_event" if v["parent_tool_use_id"].is_null() => {
+                let ev = &v["event"];
+                if ev["type"] == "content_block_delta" && ev["delta"]["type"] == "text_delta" {
+                    if let Some(t) = ev["delta"]["text"].as_str() {
+                        emit(ctx.tx, Event::Delta { text: t.to_string() });
+                    }
+                }
+            }
             "assistant" => {
                 for block in v["message"]["content"].as_array().into_iter().flatten() {
                     match block["type"].as_str() {

@@ -185,13 +185,30 @@ async fn run(t: Target) -> Result<ExitCode> {
     });
 
     let mut ok = false;
+    // Text already printed live from deltas, so the finished message isn't repeated.
+    let mut streamed = false;
     while let Some(ev) = rx.recv().await {
+        if streamed && !matches!(ev, Event::Delta { .. } | Event::Text { .. }) {
+            println!();
+            streamed = false;
+        }
         match ev {
             Event::Routed { profile, label, effort, account, why, .. } => {
                 let effort = effort.map(|e| format!(" · effort {e}")).unwrap_or_default();
                 eprintln!("{}", paint("33", format!("▸ {label}{effort} @ {account}  [{profile}]  {why}")))
             }
             Event::User { .. } | Event::Session { .. } => {}
+            Event::Delta { text } => {
+                print!("{text}");
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+                streamed = true;
+            }
+            Event::Text { text } if streamed => {
+                if !text.ends_with('\n') {
+                    println!();
+                }
+                streamed = false;
+            }
             Event::Text { text } => println!("{text}"),
             Event::Tool { name, detail } => eprintln!("{}", paint("36", format!("  · {name} {detail}"))),
             Event::Limit { account, utilization, blocked, .. } => {

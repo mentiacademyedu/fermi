@@ -69,7 +69,11 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
 
     while let Some(v) = p.next_json().await? {
         match v["type"].as_str().unwrap_or_default() {
-            "message" if v["role"] == "assistant" => pending.push_str(v["content"].as_str().unwrap_or_default()),
+            "message" if v["role"] == "assistant" => {
+                let chunk = v["content"].as_str().unwrap_or_default();
+                pending.push_str(chunk);
+                emit(ctx.tx, Event::Delta { text: chunk.to_string() });
+            }
             "tool_use" => {
                 flush(&mut pending, &mut text);
                 emit(ctx.tx, Event::Tool {

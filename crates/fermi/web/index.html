@@ -11,6 +11,7 @@
   --accent: #2f6fed; --accent-soft: #e8efff; --accent-ink: #ffffff;
   --ok: #15915a; --warn: #b26b00; --bad: #d1342f; --meta: #8a6a00; --tool: #1d6fb8;
   --code-bg: #ffffff;
+  --tk-kw: #a626a4; --tk-str: #50a14f; --tk-com: #a0a1a7; --tk-num: #986801; --tk-fn: #4078f2; --tk-type: #c18401;
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Liberation Mono", monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --r: 12px;
@@ -23,6 +24,7 @@
     --accent: #6c9cff; --accent-soft: #24304a; --accent-ink: #0b1020;
     --ok: #3ecf8e; --warn: #f5a524; --bad: #f2615c; --meta: #e3c35a; --tool: #6fc9ef;
     --code-bg: #1a1c21;
+    --tk-kw: #c678dd; --tk-str: #98c379; --tk-com: #6b717d; --tk-num: #d19a66; --tk-fn: #61afef; --tk-type: #e5c07b;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
   }
 }
@@ -132,6 +134,27 @@ button:disabled { opacity: .45; cursor: default; }
 .ev.user:first-child { margin-top: 0; }
 .ev.text { font: 14.5px/1.65 var(--sans); margin: 8px 0 12px; }
 .ev.meta { color: var(--meta); }
+/* markdown replies */
+.ev.md { white-space: normal; }
+.md p { margin: 0 0 10px; white-space: pre-wrap; }
+.md h3, .md h4, .md h5, .md h6 { margin: 16px 0 6px; line-height: 1.3; }
+.md h3 { font-size: 18px; } .md h4 { font-size: 16px; } .md h5, .md h6 { font-size: 14.5px; }
+.md ul, .md ol { margin: 4px 0 10px; padding-left: 22px; }
+.md li { margin: 3px 0; }
+.md code { font: 12.5px var(--mono); background: var(--panel-2); border: 1px solid var(--line); padding: 1px 5px; border-radius: 5px; }
+.md blockquote { margin: 6px 0 10px; padding: 2px 12px; border-left: 3px solid var(--line-2); color: var(--muted); }
+.md table { border-collapse: collapse; margin: 6px 0 12px; font-size: 13.5px; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; }
+.md th { background: var(--panel-2); }
+.md hr { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
+.md .md-link { color: var(--accent); text-decoration: underline dotted; cursor: help; }
+.codeblock { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin: 8px 0 12px; background: var(--code-bg); }
+.cb-head { display: flex; justify-content: space-between; align-items: center; padding: 3px 6px 3px 12px; font: 11.5px var(--mono); color: var(--faint); border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.cb-copy { padding: 2px 8px; font-size: 11.5px; border: 0; background: transparent; color: var(--muted); }
+.codeblock pre { margin: 0; padding: 10px 14px; overflow-x: auto; font: 12.5px/1.55 var(--mono); }
+.codeblock code { background: none; border: 0; padding: 0; font: inherit; }
+.tk-kw { color: var(--tk-kw); } .tk-str { color: var(--tk-str); } .tk-com { color: var(--tk-com); font-style: italic; }
+.tk-num { color: var(--tk-num); } .tk-fn { color: var(--tk-fn); } .tk-type { color: var(--tk-type); }
 .ev.tool { color: var(--tool); padding-left: 2px; }
 .ev.warn { color: var(--warn); }
 .ev.ok { color: var(--ok); margin-top: 8px; }
@@ -169,7 +192,12 @@ button:disabled { opacity: .45; cursor: default; }
 .file-head .crumb { font: 12.5px var(--mono); color: var(--muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
 .editor { flex: 1; display: flex; min-height: 0; background: var(--code-bg); }
 .gutter { margin: 0; padding: 12px 10px 40px 14px; text-align: right; color: var(--faint); font: 13px/1.55 var(--mono); overflow: hidden; user-select: none; border-right: 1px solid var(--line); min-width: 52px; }
-#code { flex: 1; border: 0; outline: none; resize: none; background: transparent; padding: 12px 16px 40px; font: 13px/1.55 var(--mono); white-space: pre; tab-size: 4; overflow: auto; }
+/* The textarea's text is transparent; a highlighted copy sits underneath. */
+.code-wrap { position: relative; flex: 1; min-width: 0; }
+#hl, #code { position: absolute; inset: 0; margin: 0; padding: 12px 16px 40px; font: 13px/1.55 var(--mono); white-space: pre; tab-size: 4; border: 0; letter-spacing: 0; }
+#hl { overflow: hidden; pointer-events: none; color: var(--text); }
+#code { background: transparent; color: transparent; caret-color: var(--text); overflow: auto; resize: none; outline: none; }
+#code::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
 .img-view { flex: 1; display: grid; place-items: center; overflow: auto; padding: 24px;
   background-color: var(--panel-2); background-image: linear-gradient(45deg, var(--line) 25%, transparent 25%), linear-gradient(-45deg, var(--line) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--line) 75%), linear-gradient(-45deg, transparent 75%, var(--line) 75%);
   background-size: 18px 18px; background-position: 0 0, 0 9px, 9px -9px, -9px 0; }
@@ -374,7 +402,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
         <button class="small ghost" id="file-mention" title="Mention this file in the chat">@ Mention</button>
         <button class="small primary" id="file-save" title="Save (Ctrl+S)">Save</button>
       </div>
-      <div class="editor" id="file-editor"><pre class="gutter" id="gutter"></pre><textarea id="code" spellcheck="false" wrap="off"></textarea></div>
+      <div class="editor" id="file-editor"><pre class="gutter" id="gutter"></pre><div class="code-wrap"><pre id="hl" aria-hidden="true"></pre><textarea id="code" spellcheck="false" wrap="off"></textarea></div></div>
       <div class="img-view" id="file-image"><img id="file-img" alt=""></div>
       <div class="file-msg" id="file-msg"></div>
     </section>
@@ -530,7 +558,7 @@ const pref = {
 };
 
 const S = {
-  state: null, tasks: new Map(), logs: new Map(), sel: null,
+  state: null, tasks: new Map(), logs: new Map(), live: new Map(), sel: null,
   ws: pref.get("ws", null), tabs: [], active: "chat",
   tree: new Map(), open: new Set(pref.get("open", [])), findMode: "names", expandedWs: new Set(pref.get("expandedWs", [])),
 };
@@ -689,6 +717,119 @@ function closeTab(id) {
   if (S.active === id) activate(S.tabs.length ? S.tabs[S.tabs.length - 1].id : "chat"); else renderTabs();
 }
 
+// ── syntax highlighting & markdown (DOM nodes only, never innerHTML) ────────
+const KW = new Set(("as async await break case catch class const continue crate def default defer del do dyn elif else enum " +
+  "except export extends false final finally fn for from func function go if impl import in interface is let loop match mod " +
+  "move mut new nil none null of package pass pub raise ref return self Self static struct super switch this throw trait " +
+  "true try type typeof use var void where while with yield None True False lambda unsafe async").split(" "));
+const HASH_LANGS = /^(py|python|sh|bash|zsh|toml|yaml|yml|ps1|powershell|rb|ruby|r|conf|ini|dockerfile|makefile|cmake|gitignore)$/i;
+const CHAR_LANGS = /^(rs|rust|c|h|cpp|hpp|cc|java|cs|go|kt|swift|scala)$/i;
+const langOf = (s) => { const m = /\.([a-z0-9]+)$/i.exec(s || ""); return (m ? m[1] : s || "").toLowerCase(); };
+function highlight(code, lang) {
+  const frag = document.createDocumentFragment();
+  const hash = HASH_LANGS.test(lang);
+  // Single quotes are char literals in C-like languages (and lifetimes in Rust), strings elsewhere.
+  const sq = CHAR_LANGS.test(lang) ? "'(?:\\\\.|[^'\\\\\\n])'" : "'(?:[^'\\\\\\n]|\\\\.)*'";
+  const com = hash ? "#[^\\n]*" : "\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/";
+  const re = new RegExp(`(${com})|("(?:[^"\\\\\\n]|\\\\.)*"|${sq}|\`(?:[^\`\\\\]|\\\\.)*\`)|(\\b\\d[\\d_]*(?:\\.\\d+)?\\b)|([A-Za-z_$][\\w$]*)`, "g");
+  let last = 0, m, plain = "";
+  const push = (cls, text) => { if (plain) { frag.append(plain); plain = ""; } const s = document.createElement("span"); s.className = cls; s.textContent = text; frag.append(s); };
+  while ((m = re.exec(code))) {
+    plain += code.slice(last, m.index); last = re.lastIndex;
+    if (m[1]) push("tk-com", m[1]);
+    else if (m[2]) push("tk-str", m[2]);
+    else if (m[3]) push("tk-num", m[3]);
+    else {
+      const w = m[4];
+      if (KW.has(w)) push("tk-kw", w);
+      else if (code[last] === "(" || (code[last] === "!" && code[last + 1] === "(")) push("tk-fn", w);
+      else if (/^[A-Z][a-z]/.test(w)) push("tk-type", w);
+      else plain += w;
+    }
+  }
+  plain += code.slice(last);
+  if (plain) frag.append(plain);
+  return frag;
+}
+function codeBlock(code, lang) {
+  const wrap = el("div", "codeblock"), head = el("div", "cb-head");
+  const copy = el("button", "cb-copy", "Copy");
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(code); copy.textContent = "Copied"; setTimeout(() => (copy.textContent = "Copy"), 1500); }
+    catch (_) { toast("Couldn't copy to the clipboard", true); }
+  };
+  head.append(el("span", null, lang || "code"), copy);
+  const pre = el("pre"), c = el("code"); c.append(highlight(code, langOf(lang))); pre.append(c);
+  wrap.append(head, pre);
+  return wrap;
+}
+const INLINE = /(`+)([^`]+?)\1|\*\*([^*\n]+)\*\*|__([^_\n]+)__|(?<![\w*])\*([^*\n]+)\*(?![\w*])|(?<![\w])_([^_\n]+)_(?![\w])|\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+function inline(parent, text) {
+  let last = 0, m;
+  INLINE.lastIndex = 0;
+  while ((m = INLINE.exec(text))) {
+    if (m.index > last) parent.append(text.slice(last, m.index));
+    last = INLINE.lastIndex;
+    if (m[2] != null) parent.append(el("code", null, m[2]));
+    else if (m[3] != null || m[4] != null) parent.append(el("strong", null, m[3] ?? m[4]));
+    else if (m[5] != null || m[6] != null) parent.append(el("em", null, m[5] ?? m[6]));
+    else { const a = el("span", "md-link", m[7]); a.title = m[8]; parent.append(a); }
+  }
+  if (last < text.length) parent.append(text.slice(last));
+}
+const LIST = /^(\s*)([-*+]|\d+[.)])\s+/;
+function renderMarkdown(src) {
+  const root = document.createDocumentFragment();
+  const lines = src.replace(/\r\n/g, "\n").split("\n");
+  const para = [];
+  const flush = () => { if (para.length) { const p = el("p"); inline(p, para.join("\n")); root.append(p); para.length = 0; } };
+  let i = 0, m;
+  while (i < lines.length) {
+    const line = lines[i];
+    if ((m = /^\s*(```|~~~)\s*([\w+#.-]*)/.exec(line))) {
+      flush(); const body = []; i++;
+      while (i < lines.length && !lines[i].trim().startsWith(m[1])) body.push(lines[i++]);
+      i++; root.append(codeBlock(body.join("\n"), m[2])); continue;
+    }
+    if ((m = /^(#{1,6})\s+(.*)$/.exec(line))) { flush(); const h = el("h" + Math.min(6, m[1].length + 2)); inline(h, m[2]); root.append(h); i++; continue; }
+    if (LIST.test(line)) {
+      flush();
+      const list = el(/^\s*\d/.test(line) ? "ol" : "ul");
+      while (i < lines.length && LIST.test(lines[i])) {
+        const indent = LIST.exec(lines[i])[1].length;
+        const li = el("li"); if (indent >= 2) li.style.marginLeft = Math.floor(indent / 2) * 16 + "px";
+        inline(li, lines[i].replace(LIST, "").replace(/^\[( |x|X)\]\s/, (_, x) => (x === " " ? "☐ " : "☑ ")));
+        i++;
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !LIST.test(lines[i])) { li.append(" "); inline(li, lines[i].trim()); i++; }
+        list.append(li);
+      }
+      root.append(list); continue;
+    }
+    if (/^\s*>/.test(line)) {
+      flush(); const body = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) body.push(lines[i++].replace(/^\s*>\s?/, ""));
+      const bq = el("blockquote"); bq.append(renderMarkdown(body.join("\n"))); root.append(bq); continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(line) && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1] || "")) {
+      flush();
+      const cells = (l) => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
+      const table = el("table"), head = el("tr");
+      for (const c of cells(line)) { const th = el("th"); inline(th, c); head.append(th); }
+      table.append(head); i += 2;
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        const tr = el("tr"); for (const c of cells(lines[i++])) { const td = el("td"); inline(td, c); tr.append(td); } table.append(tr);
+      }
+      root.append(table); continue;
+    }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { flush(); root.append(el("hr")); i++; continue; }
+    if (!line.trim()) { flush(); i++; continue; }
+    para.push(line); i++;
+  }
+  flush();
+  return root;
+}
+function mdNode(text, id) { const n = el("div", "ev text md"); if (id) n.id = id; n.append(renderMarkdown(text)); return n; }
+
 // ── chat ─────────────────────────────────────────────────────────────────────
 function newTask(focus = true) {
   S.sel = null; activate("chat"); renderChat(); schedule("side", "composer");
@@ -708,7 +849,7 @@ function evNode(ev) {
   switch (ev.type) {
     case "user": return el("div", "ev user", ev.text);
     case "routed": return el("div", "ev meta", `▸ ${ev.label || ev.model}${ev.effort ? " · effort " + ev.effort : ""} @ ${ev.account}   [${ev.profile}]   ${ev.why}`);
-    case "text": return el("div", "ev text", ev.text);
+    case "text": return mdNode(ev.text);
     case "tool": return el("div", "ev tool", `· ${ev.name} ${ev.detail}`);
     case "limit":
       if (ev.blocked) return el("div", "ev warn", `! ${ev.account} hit its usage limit`);
@@ -723,7 +864,7 @@ function evNode(ev) {
 }
 const MINI = "  ,;;;;;;,\n ;' o  o ';\n ;   __   ;\n  '-....-'";
 function syncWaiting(t) {
-  const busy = t.status === "running" && !(S.logs.get(t.id) || []).slice((S.logs.get(t.id) || []).map((e) => e.type).lastIndexOf("user")).some((e) => e.type === "text" || e.type === "tool");
+  const busy = t.status === "running" && !S.live.get(t.id) && !(S.logs.get(t.id) || []).slice((S.logs.get(t.id) || []).map((e) => e.type).lastIndexOf("user")).some((e) => e.type === "text" || e.type === "tool");
   let w = $("#waiting");
   if (busy && !w) {
     w = el("div", "waiting"); w.id = "waiting";
@@ -750,8 +891,24 @@ function renderChat() {
   const log = $("#log"); log.replaceChildren();
   for (const ev of S.logs.get(t.id) || []) { const n = evNode(ev); if (n) log.append(n); }
   if (t.status === "cancelled") log.append(el("div", "ev bad", "⊘ cancelled"));
+  if (S.live.get(t.id)) log.append(mdNode(S.live.get(t.id), "live"));
   syncWaiting(t);
   const sc = $("#chat-scroll"); sc.scrollTop = sc.scrollHeight;
+}
+// Streamed text, redrawn at most once per frame.
+let liveRaf = 0;
+function updateLive() {
+  if (liveRaf) return;
+  liveRaf = requestAnimationFrame(() => {
+    liveRaf = 0;
+    const text = S.live.get(S.sel);
+    if (!text || S.active !== "chat") return;
+    const sc = $("#chat-scroll"); const stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
+    $("#waiting")?.remove();
+    const n = mdNode(text, "live"); const old = $("#live");
+    old ? old.replaceWith(n) : $("#log").append(n);
+    if (stick) sc.scrollTop = sc.scrollHeight;
+  });
 }
 function appendEvent(id, ev) {
   if (id !== S.sel || S.active !== "chat") return;
@@ -939,6 +1096,18 @@ async function openFile(path) {
   }
   activate(tab.id);
 }
+// Highlighted copy under the transparent textarea; big files stay plain.
+let hlRaf = 0;
+function paintHL() {
+  if (hlRaf) return;
+  hlRaf = requestAnimationFrame(() => {
+    hlRaf = 0;
+    const tab = activeTab(); if (!tab || tab.kind !== "text") return;
+    const hl = $("#hl"), text = tab.text + "\n";
+    if (text.length > 300_000) hl.textContent = text; else hl.replaceChildren(highlight(text, langOf(tab.name)));
+    hl.scrollTop = $("#code").scrollTop; hl.scrollLeft = $("#code").scrollLeft;
+  });
+}
 function setGutter(text) {
   const n = text.split("\n").length;
   const g = $("#gutter");
@@ -956,6 +1125,7 @@ function showFile(tab) {
   if (tab.kind === "text") {
     const c = $("#code"); c.value = tab.text; setGutter(tab.text);
     c.scrollTop = tab.scroll || 0; $("#gutter").scrollTop = c.scrollTop;
+    paintHL();
     $("#file-save").disabled = !tab.dirty;
     setTimeout(() => c.focus(), 0);
   } else if (tab.kind === "image") {
@@ -968,10 +1138,14 @@ const activeTab = () => S.tabs.find((t) => t.id === S.active);
 $("#code").oninput = () => {
   const tab = activeTab(); if (!tab) return;
   tab.text = $("#code").value; const was = tab.dirty; tab.dirty = tab.text !== tab.orig;
-  setGutter(tab.text); $("#file-save").disabled = !tab.dirty;
+  setGutter(tab.text); $("#file-save").disabled = !tab.dirty; paintHL();
   if (was !== tab.dirty) renderTabs();
 };
-$("#code").onscroll = () => { $("#gutter").scrollTop = $("#code").scrollTop; const t = activeTab(); if (t) t.scroll = $("#code").scrollTop; };
+$("#code").onscroll = () => {
+  const c = $("#code");
+  $("#gutter").scrollTop = c.scrollTop; $("#hl").scrollTop = c.scrollTop; $("#hl").scrollLeft = c.scrollLeft;
+  const t = activeTab(); if (t) t.scroll = c.scrollTop;
+};
 $("#code").onkeydown = (e) => {
   if (e.key === "Tab" && !e.ctrlKey) {
     e.preventDefault();
@@ -1247,6 +1421,8 @@ function onMessage(m) {
   switch (m.kind) {
     case "task_new": S.tasks.set(m.task.id, m.task); if (!S.logs.has(m.task.id)) S.logs.set(m.task.id, [{ type: "user", text: m.task.prompt }]); schedule("side", "status"); break;
     case "task_event": {
+      if (m.event.type === "delta") { S.live.set(m.id, (S.live.get(m.id) || "") + m.event.text); updateLive(); break; }
+      if (m.event.type !== "user" && m.event.type !== "routed") { S.live.delete(m.id); if (m.id === S.sel) $("#live")?.remove(); }
       if (m.task) S.tasks.set(m.id, m.task);
       const log = S.logs.get(m.id);
       // The first user turn is already shown from task_new / submit.

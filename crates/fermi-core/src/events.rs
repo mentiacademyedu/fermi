@@ -10,6 +10,9 @@ pub enum Event {
     Routed { profile: String, model: String, label: String, effort: Option<String>, account: String, why: String },
     /// The provider session this run belongs to; follow-ups resume it.
     Session { id: String },
+    /// A chunk of assistant text as it's written. The finished message
+    /// follows as `Text`, which replaces the streamed chunks.
+    Delta { text: String },
     Text { text: String },
     Tool { name: String, detail: String },
     Limit { account: String, utilization: Option<f64>, resets_at: Option<u64>, blocked: bool },

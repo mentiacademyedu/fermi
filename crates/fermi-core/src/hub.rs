@@ -236,8 +236,9 @@ impl Hub {
                 }
                 _ => {}
             }
-            // Session ids are bookkeeping, not something to show.
-            if !matches!(ev, Event::Session { .. }) {
+            // Session ids are bookkeeping, and streamed chunks are superseded
+            // by the finished `Text`: neither belongs in the saved history.
+            if !matches!(ev, Event::Session { .. } | Event::Delta { .. }) {
                 t.events.push(ev.clone());
             }
             finished
