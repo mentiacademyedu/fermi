@@ -188,6 +188,18 @@ button:disabled { opacity: .45; cursor: default; }
 .send:disabled { opacity: .35; }
 .round { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line-2); display: grid; place-items: center; padding: 0; background: transparent; color: var(--muted); }
 .composer-note { font-size: 12px; color: var(--faint); margin: 6px 0 0 6px; min-height: 1em; }
+.round.at { font: 600 14px var(--sans); }
+.composer.drag { border-color: var(--accent); background: var(--accent-soft); }
+.attach-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 2px 0 10px; }
+.att { position: relative; display: flex; align-items: center; gap: 7px; border: 1px solid var(--line-2); border-radius: 10px; padding: 4px 10px 4px 4px; background: var(--panel-2); font-size: 12.5px; max-width: 230px; }
+.att img { width: 42px; height: 42px; object-fit: cover; border-radius: 7px; }
+.att > span:first-child:not(.nm) { padding: 0 2px 0 6px; color: var(--muted); }
+.att .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att .rm { position: absolute; top: -7px; right: -7px; width: 19px; height: 19px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel); display: grid; place-items: center; padding: 0; font-size: 12px; line-height: 1; }
+.att.up { opacity: .5; }
+.user-atts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.user-atts img { max-width: 240px; max-height: 170px; border-radius: 8px; border: 1px solid var(--line); cursor: pointer; display: block; }
+.user-atts .chipf { font: 12px var(--mono); border: 1px solid var(--line-2); border-radius: 6px; padding: 3px 8px; cursor: pointer; background: var(--panel); }
 .composer-note.err { color: var(--bad); }
 
 /* file view */
@@ -409,9 +421,12 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
           <span class="faint" id="ws-profile"></span>
         </div>
         <form class="composer" id="composer" autocomplete="off">
+          <div class="attach-row" id="attach-row" hidden></div>
           <textarea id="prompt" rows="2" placeholder="Describe what you want to build… (Ctrl+Enter)"></textarea>
+          <input type="file" id="attach-input" multiple hidden>
           <div class="composer-bar">
-            <button type="button" class="round" id="attach" title="Mention a file (Ctrl+P)" data-i="plus"></button>
+            <button type="button" class="round" id="attach" title="Attach files or images (you can also paste or drop them)" data-i="plus"></button>
+            <button type="button" class="round at" id="mention" title="Mention a workspace file (Ctrl+P)">@</button>
             <label class="chip new-only" title="What the agent may do"><span data-i="shield"></span><select id="f-perm"></select></label>
             <label class="chip new-only" title="Profile"><span data-i="layers"></span><select id="f-profile"></select></label>
             <label class="chip new-only" title="Account"><span data-i="key"></span><select id="f-account"></select></label>
@@ -611,7 +626,7 @@ const pref = {
 };
 
 const S = {
-  state: null, tasks: new Map(), logs: new Map(), live: new Map(), sel: null,
+  state: null, tasks: new Map(), logs: new Map(), live: new Map(), sel: null, attach: [],
   ws: pref.get("ws", null), tabs: [], active: "chat",
   tree: new Map(), open: new Set(pref.get("open", [])), findMode: "names", expandedWs: new Set(pref.get("expandedWs", [])),
 };
@@ -711,9 +726,9 @@ function renderSide() {
     const limit = searching ? 50 : g.showAll ? 200 : 6;
     for (const t of g.tasks.slice(0, limit)) {
       const r = el("div", "task-row" + (t.id === S.sel && S.active === "chat" ? " sel" : ""));
-      r.title = t.prompt;
+      r.title = titleOf(t);
       const secs = (t.ended || nowS()) - t.started;
-      r.append(statusGlyph(t), el("span", "t", t.prompt), el("span", "time", fmtDur(Math.max(0, secs))));
+      r.append(statusGlyph(t), el("span", "t", titleOf(t)), el("span", "time", fmtDur(Math.max(0, secs))));
       r.onclick = () => selectTask(t.id);
       box.append(r);
     }
@@ -744,7 +759,7 @@ function renderTabs() {
     t.onauxclick = (e) => { if (e.button === 1 && closable) closeTab(id); };
     bar.append(t);
   };
-  const chatLabel = S.sel != null ? (S.tasks.get(S.sel)?.prompt || "Chat") : "New task";
+  const chatLabel = S.sel != null ? titleOf(S.tasks.get(S.sel)) : "New task";
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
@@ -897,6 +912,7 @@ function newTask(focus = true) {
   if (focus) $("#prompt").focus();
 }
 async function selectTask(id) {
+  if (S.sel !== id && S.attach.length) clearAttachments(); // they belong to the other conversation's folder
   S.sel = id; activate("chat");
   const t = S.tasks.get(id);
   if (t && norm(t.cwd) !== norm(S.ws) && workspaces().some((w) => norm(w.path) === norm(t.cwd))) { S.ws = t.cwd; pref.set("ws", t.cwd); schedule("files"); }
@@ -906,9 +922,30 @@ async function selectTask(id) {
   }
   renderChat(); schedule("side", "composer");
 }
-function evNode(ev) {
+// A task's title: its first prompt without attachment references.
+const titleOf = (t) => (t?.prompt || "").replace(ATTACH_RE, "").trim() || "Attached files";
+// A user turn: its text, then any attachments as thumbnails or file chips.
+function userNode(text, cwd) {
+  const files = [...text.matchAll(ATTACH_RE)].map((m) => m[1].trim());
+  const n = el("div", "ev user", text.replace(ATTACH_RE, "").trim());
+  if (files.length) {
+    const row = el("div", "user-atts");
+    for (const rel of files) {
+      const abs = cwd ? `${cwd.replace(/[\\/]+$/, "")}/${rel}` : rel;
+      if (IMG.test(rel)) {
+        const im = el("img"); im.alt = baseName(rel); im.title = rel; im.loading = "lazy";
+        im.src = `/api/fs/raw?${q({ path: abs, t: token })}`; im.onclick = () => openFile(abs); row.append(im);
+      } else {
+        const c = el("span", "chipf", baseName(rel)); c.title = rel; c.onclick = () => openFile(abs); row.append(c);
+      }
+    }
+    n.append(row);
+  }
+  return n;
+}
+function evNode(ev, cwd) {
   switch (ev.type) {
-    case "user": return el("div", "ev user", ev.text);
+    case "user": return userNode(ev.text, cwd);
     case "routed": return el("div", "ev meta", `▸ ${ev.label || ev.model}${ev.effort ? " · effort " + ev.effort : ""} @ ${ev.account}   [${ev.profile}]   ${ev.why}`);
     case "text": return mdNode(ev.text);
     case "tool": return el("div", "ev tool", `· ${ev.name} ${ev.detail}`);
@@ -945,12 +982,12 @@ function renderChat() {
     $("#hero-sub").textContent = w ? `in ${w.name}${w.profile ? " · profile " + w.profile : ""}` : "Claude, GPT and Gemini on your own accounts";
     return;
   }
-  $("#convo-title").textContent = t.prompt;
+  $("#convo-title").textContent = titleOf(t);
   $("#convo-route").textContent = [t.route, relTo("", t.cwd)].filter(Boolean).join("   ·   ");
   $("#cancel").hidden = t.status !== "running";
   $("#delete-task").hidden = t.status === "running"; $("#delete-task").textContent = "Delete";
   const log = $("#log"); log.replaceChildren();
-  for (const ev of S.logs.get(t.id) || []) { const n = evNode(ev); if (n) log.append(n); }
+  for (const ev of S.logs.get(t.id) || []) { const n = evNode(ev, t.cwd); if (n) log.append(n); }
   if (t.status === "cancelled") log.append(el("div", "ev bad", "⊘ cancelled"));
   if (S.live.get(t.id)) log.append(mdNode(S.live.get(t.id), "live"));
   syncWaiting(t);
@@ -975,8 +1012,8 @@ function appendEvent(id, ev) {
   if (id !== S.sel || S.active !== "chat") return;
   const sc = $("#chat-scroll"); const stick = sc.scrollHeight - sc.scrollTop - sc.clientHeight < 80;
   $("#waiting")?.remove();
-  const n = evNode(ev); if (n) $("#log").append(n);
   const t = S.tasks.get(id);
+  const n = evNode(ev, t?.cwd); if (n) $("#log").append(n);
   $("#convo-route").textContent = [t.route, t.cwd].filter(Boolean).join("   ·   ");
   $("#cancel").hidden = t.status !== "running"; $("#delete-task").hidden = t.status === "running";
   syncWaiting(t);
@@ -1043,9 +1080,11 @@ $("#f-ws").onchange = () => {
 };
 $("#composer").onsubmit = async (e) => {
   e.preventDefault();
-  const prompt = $("#prompt").value.trim();
   const note = $("#composer-note"); note.textContent = ""; note.className = "composer-note";
-  if (!prompt) return;
+  if (S.attach.some((a) => a.uploading)) { note.textContent = "Wait for the attachments to finish uploading."; return; }
+  let prompt = $("#prompt").value.trim();
+  if (!prompt && !S.attach.length) return;
+  if (S.attach.length) prompt = `${prompt || "See the attached files."}\n\n${S.attach.map((a) => `[Attached file: ${a.rel}]`).join("\n")}`;
   const mode = composerMode();
   $("#send").disabled = true;
   try {
@@ -1063,14 +1102,69 @@ $("#composer").onsubmit = async (e) => {
       S.sel = r.id;
       if (w) { S.expandedWs.add(norm(w.path)); pref.set("expandedWs", [...S.expandedWs]); }
     }
-    $("#prompt").value = "";
+    $("#prompt").value = ""; clearAttachments();
     renderChat(); schedule("side", "composer", "tabs");
   } catch (err) { note.textContent = err.message; note.className = "composer-note err"; }
   finally { $("#send").disabled = false; renderComposer(); }
 };
 $("#prompt").onkeydown = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("#composer").requestSubmit(); } };
 $("#prompt").oninput = () => { const p = $("#prompt"); p.style.height = "auto"; p.style.height = Math.min(p.scrollHeight, window.innerHeight * 0.4) + "px"; };
-$("#attach").onclick = () => openQuick("mention");
+$("#mention").onclick = () => openQuick("mention");
+
+// ── attachments: paste, drop or pick; saved under <folder>/.fermi/attachments ─
+const ATTACH_RE = /\[Attached file: ([^\]\n]+)\]/g;
+function attachCwd() {
+  const t = S.tasks.get(S.sel);
+  return composerMode() === "reply" && t ? t.cwd : (currentWs()?.path || S.state?.home || S.state?.cwd);
+}
+async function addAttachments(files) {
+  for (const f of files) {
+    if (f.size > 25 * 1024 * 1024) { toast(`${f.name} is larger than 25 MB`, true); continue; }
+    const isImg = (f.type || "").startsWith("image/");
+    const a = { name: f.name || "pasted-image.png", img: isImg, preview: isImg ? URL.createObjectURL(f) : null, uploading: true };
+    S.attach.push(a); renderAttach();
+    try {
+      const r = await fetch(`/api/attachments?${q({ cwd: attachCwd(), name: a.name })}`, {
+        method: "POST", headers: { "x-fermi-token": token || "", "content-type": "application/octet-stream" }, body: f,
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || r.statusText);
+      Object.assign(a, { rel: d.rel, path: d.path, uploading: false });
+    } catch (e) {
+      S.attach = S.attach.filter((x) => x !== a);
+      if (a.preview) URL.revokeObjectURL(a.preview);
+      toast(`Couldn't attach ${a.name}: ${e.message}`, true);
+    }
+    renderAttach();
+  }
+}
+function clearAttachments() { for (const a of S.attach) if (a.preview) URL.revokeObjectURL(a.preview); S.attach = []; renderAttach(); }
+function renderAttach() {
+  const row = $("#attach-row"); row.replaceChildren(); row.hidden = !S.attach.length;
+  for (const a of S.attach) {
+    const c = el("div", "att" + (a.uploading ? " up" : ""));
+    c.title = a.uploading ? "Uploading…" : a.rel;
+    if (a.preview) { const im = el("img"); im.src = a.preview; im.alt = ""; c.append(im); } else c.append(icon("file"));
+    c.append(el("span", "nm", a.name));
+    const rm = el("button", "rm", "×"); rm.type = "button"; rm.title = "Remove";
+    rm.onclick = () => { S.attach = S.attach.filter((x) => x !== a); if (a.preview) URL.revokeObjectURL(a.preview); renderAttach(); };
+    c.append(rm); row.append(c);
+  }
+}
+$("#attach").onclick = () => $("#attach-input").click();
+$("#attach-input").onchange = () => { addAttachments([...$("#attach-input").files]); $("#attach-input").value = ""; };
+$("#prompt").onpaste = (e) => {
+  const files = [...(e.clipboardData?.files || [])];
+  if (files.length) { e.preventDefault(); addAttachments(files); }
+};
+const composerEl = $("#composer");
+composerEl.ondragover = (e) => { if ([...(e.dataTransfer?.types || [])].includes("Files")) { e.preventDefault(); composerEl.classList.add("drag"); } };
+composerEl.ondragleave = () => composerEl.classList.remove("drag");
+composerEl.ondrop = (e) => {
+  composerEl.classList.remove("drag");
+  const files = [...(e.dataTransfer?.files || [])];
+  if (files.length) { e.preventDefault(); addAttachments(files); }
+};
 $("#cancel").onclick = async () => { if (S.sel != null) { try { await api(`/api/tasks/${S.sel}/cancel`, {}); } catch (e) { toast(e.message, true); } } };
 $("#delete-task").onclick = confirmClick($("#delete-task"), "Click again to delete", async () => {
   if (S.sel == null) return;

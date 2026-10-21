@@ -29,7 +29,7 @@ const XTERM_JS: &str = include_str!("../web/vendor/xterm.js");
 const XTERM_CSS: &str = include_str!("../web/vendor/xterm.css");
 const XTERM_FIT: &str = include_str!("../web/vendor/addon-fit.js");
 const CSP: &str = "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; \
-                   connect-src 'self'; img-src 'self' data:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'none'";
+                   connect-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; frame-ancestors 'none'; base-uri 'none'";
 
 struct Srv {
     hub: Arc<Hub>,
@@ -164,6 +164,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf) -> Result<Serve
         .route("/api/fs/raw", get(fs_raw))
         .route("/api/fs/write", post(fs_write))
         .route("/api/fs/search", get(fs_search))
+        .route("/api/attachments", post(attach).layer(axum::extract::DefaultBodyLimit::max(25 * 1024 * 1024)))
         .route("/api/git/status", get(git_status))
         .route("/api/git/diff", get(git_diff))
         .route("/api/ws", get(ws))
@@ -661,6 +662,49 @@ async fn fs_search(State(s): S, Query(q): Query<SearchQuery>) -> Response {
     match tokio::task::spawn_blocking(move || files::search(&root, &needle, contents)).await {
         Ok(hits) => Json(hits).into_response(),
         Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
+#[derive(Deserialize)]
+struct AttachQuery {
+    cwd: String,
+    name: String,
+}
+
+/// Saves a pasted or dropped file into `<folder>/.fermi/attachments/` so every
+/// agent can read it from the task's folder. A `.gitignore` there keeps the
+/// folder out of git.
+async fn attach(State(s): S, Query(q): Query<AttachQuery>, body: axum::body::Bytes) -> Response {
+    let mut roots = s.workspaces();
+    roots.extend(dirs_home());
+    let cwd = match files::check(&roots, &q.cwd) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    if body.is_empty() {
+        return err(StatusCode::BAD_REQUEST, "empty file");
+    }
+    let dir = cwd.join(".fermi").join("attachments");
+    let res = (|| -> Result<PathBuf> {
+        std::fs::create_dir_all(&dir)?;
+        let ignore = cwd.join(".fermi").join(".gitignore");
+        if !ignore.exists() {
+            std::fs::write(&ignore, "# fermi's scratch folder (attachments); not part of the project\n*\n")?;
+        }
+        // Keep a safe, short file name; prefix the time so names never collide.
+        let clean: String = q.name.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')).collect();
+        let clean = clean.trim_start_matches('.');
+        let clean = if clean.is_empty() { "file".to_string() } else { clean.chars().rev().take(60).collect::<Vec<_>>().into_iter().rev().collect() };
+        let path = dir.join(format!("{}-{clean}", fermi_core::util::now()));
+        std::fs::write(&path, &body)?;
+        Ok(path)
+    })();
+    match res {
+        Ok(path) => {
+            let rel = path.strip_prefix(&cwd).unwrap_or(&path).to_string_lossy().replace('\\', "/");
+            Json(json!({ "path": path, "rel": rel, "size": body.len() })).into_response()
+        }
+        Err(e) => fs_err(e),
     }
 }
 
