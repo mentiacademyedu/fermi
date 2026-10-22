@@ -60,6 +60,9 @@ pub struct TaskRec {
     pub ran_on: Option<RanOn>,
     #[serde(default)]
     pub session: Option<String>,
+    /// Tool rules the user allowed for this conversation (see `Task::allowed`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed: Vec<String>,
     /// Sessions earlier turns ran in (before a switch to another provider).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub past_sessions: Vec<String>,
@@ -101,6 +104,7 @@ impl TaskRec {
             ran_on: None,
             session: None,
             past_sessions: vec![],
+            allowed: task.allowed.clone(),
             updated: now(),
             via: Some(via.to_string()),
             origin: None,
@@ -378,6 +382,12 @@ pub struct FollowUp {
     pub model: Option<String>,
     /// New effort; None keeps it, `""` goes back to the default.
     pub effort: Option<String>,
+    /// Tool rules to allow from now on (after the agent was blocked).
+    #[serde(default)]
+    pub allow: Vec<String>,
+    /// New permission mode for this conversation (e.g. `bypassPermissions`).
+    #[serde(default)]
+    pub permission: Option<String>,
 }
 
 fn provider_of(model: &str) -> &str {
@@ -387,7 +397,13 @@ fn provider_of(model: &str) -> &str {
 /// The task that continues `t` with `prompt`.
 pub fn continuation(engine: &Engine, t: &TaskRec, prompt: &str, opts: &FollowUp) -> Task {
     let mut task = Task::new(prompt, t.cwd.clone());
-    task.permission = t.permission.clone();
+    task.permission = opts.permission.clone().or_else(|| t.permission.clone());
+    task.allowed = t.allowed.clone();
+    for r in &opts.allow {
+        if !task.allowed.contains(r) {
+            task.allowed.push(r.clone());
+        }
+    }
     task.effort = match &opts.effort {
         Some(e) if e.is_empty() => None,
         Some(e) => Some(e.clone()),
@@ -455,6 +471,7 @@ pub fn transcript(engine: &Engine, t: &TaskRec) -> String {
             }
             Event::Tool { name, detail } => tools.push(if detail.is_empty() { name.clone() } else { format!("{name} {detail}") }),
             Event::Artifact { path } => tools.push(format!("created {path}")),
+            Event::Blocked { tool, detail, .. } => tools.push(format!("{tool} {detail} (blocked: needed approval)")),
             Event::Done { ok: false, summary } => {
                 flush(&mut tools, &mut msgs);
                 msgs.push(format!("(That turn failed: {})", clip(summary, 500)));
@@ -632,6 +649,8 @@ impl Hub {
                 t.model = task.model.clone();
             }
             t.effort = task.effort.clone();
+            t.permission = task.permission.clone();
+            t.allowed = task.allowed.clone();
             t.status = TaskStatus::Running;
             t.ended = None;
             t.via = Some(self.via.clone());
@@ -953,7 +972,7 @@ mod tests {
         ] {
             t.apply(&ev);
         }
-        let opts = |model: Option<&str>| FollowUp { model: model.map(String::from), effort: None };
+        let opts = |model: Option<&str>| FollowUp { model: model.map(String::from), ..Default::default() };
 
         // Same model, or another Claude model: the session carries on.
         let same = continuation(&engine, &t, "and the docs", &opts(None));

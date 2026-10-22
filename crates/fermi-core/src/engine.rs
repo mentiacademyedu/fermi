@@ -35,6 +35,9 @@ pub struct Task {
     /// model switch, or for an imported session). Sent ahead of the prompt;
     /// routing still looks at the prompt alone.
     pub context: Option<String>,
+    /// Extra tool rules the user allowed for this conversation (Claude
+    /// `--allowedTools` syntax, e.g. `Bash(node:*)`).
+    pub allowed: Vec<String>,
 }
 
 /// Permission modes a task may ask for.
@@ -53,6 +56,7 @@ impl Task {
             resume: None,
             permission: None,
             context: None,
+            allowed: vec![],
         }
     }
 

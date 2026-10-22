@@ -17,6 +17,10 @@ pub enum Event {
     Tool { name: String, detail: String },
     Limit { account: String, utilization: Option<f64>, resets_at: Option<u64>, blocked: bool },
     Failover { account: String, reason: String },
+    /// A tool call the agent wasn't allowed to make without approval (the
+    /// CLI runs headless, so nobody could approve it). `rules` would allow it
+    /// on a follow-up, e.g. `Bash(node:*)`.
+    Blocked { tool: String, detail: String, rules: Vec<String> },
     Artifact { path: String },
     Log { line: String },
     Done { ok: bool, summary: String },

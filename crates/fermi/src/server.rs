@@ -476,6 +476,11 @@ struct Reply {
     model: Option<String>,
     /// Empty keeps the effort, "auto" goes back to the default.
     effort: Option<String>,
+    /// Tool rules to allow from now on (after the agent was blocked).
+    #[serde(default)]
+    allow: Vec<String>,
+    /// New permission mode for the conversation.
+    permission: Option<String>,
 }
 
 async fn reply(State(s): S, Path(id): Path<u64>, Json(b): Json<Reply>) -> Response {
@@ -486,6 +491,8 @@ async fn reply(State(s): S, Path(id): Path<u64>, Json(b): Json<Reply>) -> Respon
     let opts = FollowUp {
         model: non_empty(b.model),
         effort: non_empty(b.effort).map(|e| if e == "auto" { String::new() } else { e }),
+        allow: b.allow.into_iter().map(|r| r.trim().to_string()).filter(|r| !r.is_empty() && r.len() < 400).collect(),
+        permission: non_empty(b.permission),
     };
     match s.hub.follow_up(id, prompt, opts) {
         Ok(()) => Json(json!({ "ok": true })).into_response(),

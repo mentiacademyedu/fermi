@@ -632,6 +632,7 @@ pub fn to_rec(engine: &Engine, found: &Found, id: u64) -> Result<TaskRec> {
         ran_on,
         session: native.then(|| found.session.clone()),
         past_sessions: vec![],
+        allowed: vec![],
         updated: now(),
         via: Some(found.source.key().to_string()),
         origin: Some(found.origin()),

@@ -168,6 +168,11 @@ button:disabled { opacity: .45; cursor: default; }
 .tk-num { color: var(--tk-num); } .tk-fn { color: var(--tk-fn); } .tk-type { color: var(--tk-type); }
 .ev.tool { color: var(--tool); padding-left: 2px; }
 .ev.warn { color: var(--warn); }
+.approve { margin: 10px 0 4px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); border-radius: var(--r); background: color-mix(in srgb, var(--warn) 7%, var(--panel)); }
+.approve .h { font-weight: 600; margin-bottom: 6px; }
+.approve ul { margin: 0 0 10px; padding-left: 18px; font: 12.5px/1.6 var(--mono); color: var(--muted); }
+.approve .acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.approve .faint { font-size: 12px; }
 .ev.ok { color: var(--ok); margin-top: 8px; }
 .ev.bad { color: var(--bad); margin-top: 8px; }
 .ev.dim { color: var(--faint); }
@@ -1290,6 +1295,36 @@ async function selectTask(id) {
   }
   renderChat(); schedule("side", "composer");
 }
+// After a turn where the agent was blocked waiting for an approval (it runs
+// headless, so nobody could give it), offer to allow those calls and go on.
+const APPROVED = "You now have permission for what was blocked. Run it and continue the task.";
+function approvalNode(t) {
+  if (t.status === "running") return null;
+  const log = S.logs.get(t.id) || [];
+  const turn = log.slice(log.map((e) => e.type).lastIndexOf("user") + 1);
+  const blocked = turn.filter((e) => e.type === "blocked");
+  if (!blocked.length) return null;
+  const rules = [...new Set(blocked.flatMap((e) => e.rules || []))];
+  const names = [...new Set(rules.map((r) => /\(([^:)]+)(?::\*)?\)$/.exec(r)?.[1] || r))];
+  const box = el("div", "approve");
+  box.append(el("div", "h", `The agent needed your approval for ${blocked.length === 1 ? "this" : `these ${blocked.length}`}:`));
+  const ul = el("ul"); for (const b of blocked.slice(0, 8)) ul.append(el("li", null, `${b.tool} ${b.detail}`)); box.append(ul);
+  const acts = el("div", "acts");
+  const allow = el("button", "small primary", `Allow ${names.slice(0, 4).join(", ")}${names.length > 4 ? "…" : ""} and continue`);
+  allow.title = `Allows ${rules.join(", ")} for the rest of this conversation`;
+  const all = el("button", "small", "Allow everything for this task");
+  all.title = "The agent may run any command and edit any file in this conversation without asking";
+  const go = async (body) => {
+    allow.disabled = all.disabled = true;
+    try { await api(`/api/tasks/${t.id}/reply`, { prompt: APPROVED, ...body }); }
+    catch (e) { toast(e.message, true); allow.disabled = all.disabled = false; }
+  };
+  allow.onclick = () => go({ allow: rules });
+  all.onclick = () => { if (confirm("Let the agent run any command and change any file in this conversation without asking?")) go({ permission: "bypassPermissions" }); };
+  acts.append(allow, all, el("span", "faint", "or reply with what it should do instead"));
+  box.append(acts);
+  return box;
+}
 // A task's title: its first prompt without attachment references.
 const titleOf = (t) => (t?.prompt || "").replace(ATTACH_RE, "").trim() || "Attached files";
 // A user turn: its text, then any attachments as thumbnails or file chips.
@@ -1322,6 +1357,7 @@ function evNode(ev, cwd) {
       if (ev.utilization != null && ev.utilization >= 0.8) return el("div", "ev warn", `! ${ev.account} at ${Math.round(ev.utilization * 100)}% of its window`);
       return null;
     case "failover": return el("div", "ev warn", `↷ ${ev.account}: ${ev.reason}, trying the next account`);
+    case "blocked": return el("div", "ev warn", `⚠ needed your approval: ${ev.tool} ${ev.detail}`);
     case "artifact": { const n = el("div", "ev art", `⇒ ${ev.path}`); n.title = "Open"; n.onclick = () => openFile(ev.path); return n; }
     case "log": return el("div", "ev dim", ev.line);
     case "done": return el("div", "ev " + (ev.ok ? "ok" : "bad"), `${ev.ok ? "✓" : "✗"} ${ev.summary}`);
@@ -1357,6 +1393,7 @@ function renderChat() {
   const log = $("#log"); log.replaceChildren();
   for (const ev of S.logs.get(t.id) || []) { const n = evNode(ev, t.cwd); if (n) log.append(n); }
   if (t.status === "cancelled") log.append(el("div", "ev bad", "⊘ cancelled"));
+  const ap = approvalNode(t); if (ap) log.append(ap);
   if (S.live.get(t.id)) log.append(mdNode(S.live.get(t.id), "live"));
   syncWaiting(t);
   const sc = $("#chat-scroll"); sc.scrollTop = sc.scrollHeight;
@@ -3444,6 +3481,7 @@ function onMessage(m) {
       schedule("side", "status");
       if (m.id === S.sel) schedule("composer");
       if (m.event.type === "artifact") S.tree.clear(), schedule("files");
+      if (m.event.type === "done" && m.id === S.sel && log?.some((e) => e.type === "blocked")) renderChat();
       // A finished task may have changed files: refresh the tree and the changes.
       if (m.event.type === "done" && norm(m.task?.cwd) === norm(S.ws)) { S.tree.clear(); schedule("files"); }
       break;

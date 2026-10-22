@@ -245,6 +245,7 @@ async fn run(t: Target) -> Result<ExitCode> {
                 }
             }
             Event::Failover { account, reason } => eprintln!("{}", paint("31", format!("  ↷ {account}: {reason} — trying next"))),
+            Event::Blocked { tool, detail, .. } => eprintln!("{}", paint("33", format!("  ⚠ needed approval: {tool} {detail}"))),
             Event::Artifact { path } => eprintln!("{}", paint("35", format!("  ⇒ {path}"))),
             Event::Log { line } => eprintln!("{}", paint("2", format!("  {line}"))),
             Event::Done { ok: success, summary } => {

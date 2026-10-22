@@ -31,15 +31,15 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     if let Some(pm) = ctx.permission() {
         args.extend(["--permission-mode".into(), pm.to_string()]);
     }
+    let mut allowed: Vec<String> = ctx.task.allowed.clone();
     if let Some(b) = mcp::bridge_for(e, ctx.profile)? {
-        args.extend([
-            "--mcp-config".into(),
-            b.config_path,
-            "--allowedTools".into(),
-            b.allowed_tools,
-            "--append-system-prompt".into(),
-            b.system_prompt,
-        ]);
+        args.extend(["--mcp-config".into(), b.config_path, "--append-system-prompt".into(), b.system_prompt]);
+        allowed.insert(0, b.allowed_tools);
+    }
+    if !allowed.is_empty() {
+        // One flag, one rule per argument: rules may contain spaces or commas.
+        args.push("--allowedTools".into());
+        args.extend(allowed);
     }
     args.extend(ctx.profile.claude_args.iter().cloned());
 
@@ -107,6 +107,16 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
                     output: n("output_tokens"),
                     cost_usd: v["total_cost_usd"].as_f64(),
                 };
+                // Calls that needed an approval nobody could give (we run headless).
+                let mut seen = std::collections::HashSet::new();
+                for d in v["permission_denials"].as_array().into_iter().flatten() {
+                    let tool = d["tool_name"].as_str().unwrap_or("tool").to_string();
+                    let input = &d["tool_input"];
+                    let rules = allow_rules(&tool, input);
+                    if seen.insert(rules.join(",")) {
+                        emit(ctx.tx, Event::Blocked { detail: brief(input), tool, rules });
+                    }
+                }
                 if v["is_error"].as_bool() == Some(true) {
                     let msg = v["result"].as_str().or(v["subtype"].as_str()).unwrap_or("claude reported an error");
                     error = Some(msg.to_string());
@@ -131,4 +141,46 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     };
     res.usage = usage;
     Ok(res)
+}
+
+/// Rules that let a blocked call through next time: shell commands by the
+/// programs they run (`Bash(node:*)`), anything else by tool name.
+pub fn allow_rules(tool: &str, input: &serde_json::Value) -> Vec<String> {
+    let Some(cmd) = input["command"].as_str().filter(|_| matches!(tool, "Bash" | "PowerShell")) else {
+        return vec![tool.to_string()];
+    };
+    let mut out: Vec<String> = vec![];
+    for seg in cmd.split(['\n', ';', '|', '&']) {
+        // Skip `X=1` environment assignments and PowerShell's call operator.
+        let prog = seg.split_whitespace().find(|w| !w.contains('=') && *w != "&").unwrap_or("");
+        let prog = prog.trim_matches(|c| c == '"' || c == '\'' || c == '(' || c == ')');
+        if prog.is_empty() || !prog.chars().all(|c| c.is_alphanumeric() || "._-/\\:".contains(c)) {
+            continue;
+        }
+        let rule = format!("{tool}({prog}:*)");
+        if !out.contains(&rule) {
+            out.push(rule);
+        }
+    }
+    if out.is_empty() {
+        out.push(format!("{tool}({cmd})"));
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::allow_rules;
+    use serde_json::json;
+
+    #[test]
+    fn rules_for_blocked_calls() {
+        assert_eq!(allow_rules("Bash", &json!({ "command": "node make_slide.js" })), ["Bash(node:*)"]);
+        assert_eq!(
+            allow_rules("PowerShell", &json!({ "command": "cd C:\\pruebasfermi; node make_slide.js && npm test" })),
+            ["PowerShell(cd:*)", "PowerShell(node:*)", "PowerShell(npm:*)"]
+        );
+        assert_eq!(allow_rules("Bash", &json!({ "command": "FOO=1 python x.py | head" })), ["Bash(python:*)", "Bash(head:*)"]);
+        assert_eq!(allow_rules("WebFetch", &json!({ "url": "https://x" })), ["WebFetch"]);
+    }
 }
