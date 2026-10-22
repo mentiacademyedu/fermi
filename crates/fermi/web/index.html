@@ -303,7 +303,7 @@ button:disabled { opacity: .45; cursor: default; }
 #reply-route { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
 
 /* slides */
-.sl-bar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--line); min-width: 0; }
+.sl-bar { display: flex; align-items: center; gap: 6px; row-gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--line); min-width: 0; flex-wrap: wrap; }
 .sl-bar .crumb { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 0 auto; max-width: 240px; }
 .sl-bar .spacer { min-width: 0; }
 .sl-bar .faint { white-space: nowrap; font-size: 12.5px; }
@@ -690,6 +690,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
       <div class="sl-bar">
         <span data-i="slides"></span><span class="crumb" id="sl-path"></span><span class="faint" id="sl-info"></span>
         <span class="spacer" style="flex:1"></span>
+        <button class="small primary" id="sl-topptx" title="Make a designed PowerPoint (.pptx) from these slides">Save as PowerPoint</button>
         <button class="small ghost" id="sl-codebtn">Hide code</button>
         <button class="small ghost" id="sl-text" title="Edit the file as plain text">Text</button>
         <span class="sep"></span>
@@ -2457,6 +2458,7 @@ function fitSlide(node, w, h, maxW, maxH) {
 }
 async function openSlides(tab) {
   tab.kind = "slides"; tab.cur = tab.cur || 0;
+  if (tab.hideCode === undefined) tab.hideCode = true; // slides first; the Markdown is one click away
   if (!S.tabs.includes(tab)) S.tabs.push(tab);
   activate(tab.id);
 }
@@ -2471,7 +2473,7 @@ async function showSlides(tab) {
   const d = tab.deck, md = d.kind === "md";
   $("#sl-code-pane").hidden = !md || tab.hideCode;
   if (md && $("#sl-src").value !== tab.text) $("#sl-src").value = tab.text;
-  for (const [id, show] of [["sl-text", md], ["sl-addslide", md], ["sl-addtext", !md], ["sl-undo", !md], ["sl-codebtn", md]]) $("#" + id).hidden = !show;
+  for (const [id, show] of [["sl-text", md], ["sl-addslide", md], ["sl-addtext", !md], ["sl-undo", !md], ["sl-codebtn", md], ["sl-topptx", md]]) $("#" + id).hidden = !show;
   $("#sl-codebtn").textContent = tab.hideCode ? "Show code" : "Hide code";
   tab.cur = Math.min(tab.cur || 0, Math.max(0, d.count() - 1));
   renderSlides(tab, true);
@@ -2643,6 +2645,51 @@ $("#sl-undo").onclick = () => undoSlides(activeTab());
 $("#sl-save").onclick = () => saveSlides(activeTab());
 $("#sl-present").onclick = () => { const t = activeTab(); if (t?.deck) present(t, t.cur); };
 $("#sl-print").onclick = () => { const t = activeTab(); if (t?.deck) printDeck(t); };
+// A Markdown deck as a deck description for the PowerPoint writer: the first
+// heading is the title, lists become bullets (numbered ones steps), tables,
+// quotes and images get their own layouts, comments become speaker notes.
+function mdToSpec(d) {
+  const plain = (t) => t.replace(/`([^`]*)`/g, "$1").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/__([^_]+)__/g, "**$1**").trim();
+  const slides = d.slides.map((sl, i) => {
+    const out = { notes: sl.notes || undefined };
+    const lines = sl.content.replace(/\r/g, "").split("\n");
+    const bullets = [], numbered = [], rows = [], text = [], quote = [];
+    for (const line of lines) {
+      let m;
+      if ((m = /^\s*!\[([^\]]*)\]\(([^)\s]+)[^)]*\)\s*$/.exec(line))) { out.image ||= m[2]; if (m[1] && !/\bbg\b/.test(m[1])) out.caption ||= m[1]; continue; }
+      if ((m = /^\s*#{1,6}\s+(.*)$/.exec(line))) { if (!out.title) out.title = plain(m[1]); else text.push(plain(m[1])); continue; }
+      if ((m = /^(\s*)\d+[.)]\s+(.*)$/.exec(line))) { numbered.push(plain(m[2])); continue; }
+      if ((m = /^(\s*)[-*+]\s+(.*)$/.exec(line))) { bullets.push((m[1].length >= 2 ? "  " : "") + plain(m[2])); continue; }
+      if (/^\s*\|.*\|\s*$/.test(line)) { if (!/^\s*\|?\s*:?-{2,}/.test(line)) rows.push(line.trim().replace(/^\||\|$/g, "").split("|").map((c) => plain(c))); continue; }
+      if ((m = /^\s*>\s?(.*)$/.exec(line))) { quote.push(plain(m[1])); continue; }
+      if (line.trim()) text.push(plain(line));
+    }
+    const para = text.join(" ").trim();
+    if (rows.length) { out.layout = "table"; out.rows = rows; if (para) out.text = para; }
+    else if (quote.length) { out.layout = "quote"; out.quote = quote.join(" "); if (para) out.author = para.replace(/^[-—–]\s*/, ""); }
+    else if (out.image) { out.layout = "image"; out.bullets = [...bullets, ...numbered]; if (para) out.text = para; }
+    else if (numbered.length && !bullets.length) { out.layout = "steps"; out.steps = numbered.map((t) => { const [a, ...b] = t.split(/:\s+|\s+[—–-]\s+/); return { title: a, text: b.join(" ") }; }); if (para) out.text = para; }
+    else if (!bullets.length && !numbered.length) { out.layout = i === 0 || /\blead\b/.test(sl.info.class || "") ? "title" : "section"; if (para) out.subtitle = para; }
+    else { out.layout = "bullets"; out.bullets = [...bullets, ...numbered]; if (para) out.text = para; }
+    out.title ||= i === 0 ? baseName(d.tab.id).replace(/\.(slides\.)?md$/i, "") : "";
+    return out;
+  });
+  const invert = d.slides.some((sl) => /\binvert\b/.test(sl.info.class || ""));
+  return { title: d.fm.title || slides[0]?.title, theme: invert ? "dark" : d.fm.theme === "gaia" ? "sunset" : "light", slides };
+}
+$("#sl-topptx").onclick = async () => {
+  const tab = activeTab(); if (tab?.deck?.kind !== "md") return;
+  const path = tab.id.replace(/(\.slides)?\.md$/i, "") + ".pptx";
+  const b = $("#sl-topptx"); b.disabled = true;
+  try {
+    const r = await api("/api/slides/create", { path, spec: mdToSpec(tab.deck) });
+    toast(`Saved ${baseName(r.path)} (${r.slides} slides)`);
+    const old = S.tabs.find((t) => norm(t.id) === norm(r.path)); if (old) { old.deck = null; }
+    S.tree.clear(); schedule("files");
+    openFile(r.path);
+  } catch (e) { toast(e.message, true); }
+  finally { b.disabled = false; }
+};
 $("#sl-codebtn").onclick = () => { const t = activeTab(); if (!t) return; t.hideCode = !t.hideCode; showSlides(t); };
 $("#sl-text").onclick = () => { const t = activeTab(); if (!t) return; t.kind = "text"; t.deck = null; activate(t.id); };
 $("#file-slides").onclick = () => { const t = activeTab(); if (!t) return; t.fmt = "md"; t.deck = null; openSlides(t); };

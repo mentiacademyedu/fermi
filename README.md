@@ -145,8 +145,13 @@ Decks open in a slides view (from the file tree, a task's output, or Changes):
   breaks has a *Slides* button.
 
 Both have **Present** (full screen; arrows, space, Esc; F5 starts from the top)
-and **PDF** (print to PDF, one page per slide). Agents are told about the
-viewer, so asking for "a deck" gets a file you can open there.
+and **PDF** (print to PDF, one page per slide). Markdown decks open as slides
+(the code is one click away) and have **Save as PowerPoint**.
+
+Agents make decks with fermi's `create_deck` tool: they describe the slides
+(title, bullets, numbered steps, two columns, image, quote, table, big number,
+speaker notes; six color themes) and fermi writes a designed `.pptx` itself,
+so no script has to run and nothing needs approval.
 
 ## Skills & agents
 

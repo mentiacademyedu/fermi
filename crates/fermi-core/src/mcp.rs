@@ -29,16 +29,14 @@ fn delegates(e: &Engine, profile: &Profile) -> (Vec<ModelSpec>, Vec<ModelSpec>) 
         .partition(|m| !m.image_only())
 }
 
-/// MCP config for a Claude run, or None when there is nothing to delegate to
-/// (or we are already inside a delegated call).
+/// MCP config for a Claude run, or None inside a delegated call. The bridge
+/// always offers `create_deck`, plus delegation when the profile has other
+/// providers.
 pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
     if e.depth > 0 {
         return Ok(None);
     }
     let (text, image) = delegates(e, profile);
-    if text.is_empty() && image.is_empty() {
-        return Ok(None);
-    }
     let exe = std::env::current_exe()?;
     let cfg = json!({ "mcpServers": { "fermi": {
         "type": "stdio",
@@ -53,10 +51,11 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
         std::fs::write(&path, body)?;
     }
 
-    let mut tools = vec![];
+    let mut tools = vec!["mcp__fermi__create_deck"];
     let mut prompt = format!(
-        "You are running inside the fermi harness, profile {}. Slide decks you make as .pptx files or as Marp Markdown \
-         (front matter `marp: true`, slides separated by --- lines) open in fermi's slides viewer, where the user can present and edit them.",
+        "You are running inside the fermi harness, profile {}. For slides or a presentation, call the fermi create_deck tool: \
+         it writes a designed PowerPoint (.pptx) directly, with no code to run, and the file opens in fermi's slides viewer \
+         where the user can present and edit it. Use it instead of writing a script or a Markdown deck, unless the user asks for those.",
         profile.name
     );
     if !image.is_empty() {
@@ -76,7 +75,13 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
 
 fn tool_list(e: &Engine, profile: &Profile) -> Value {
     let (text, image) = delegates(e, profile);
-    let mut tools = vec![];
+    let mut tools = vec![json!({
+        "name": "create_deck",
+        "description": "Create a PowerPoint deck (.pptx) from slide content, with a designed layout per slide. \
+            No code needed. Keep slides short: a title and a few points each; use steps for processes, two_columns for comparisons, \
+            table for data, image for pictures, stat for a key number, section to separate parts. Put details in notes.",
+        "inputSchema": crate::deck::schema(),
+    })];
     if !image.is_empty() {
         tools.push(json!({
             "name": "generate_image",
@@ -105,6 +110,15 @@ async fn call_tool(e: &Engine, profile: &Profile, name: &str, args: &Value) -> R
     let (text, image) = delegates(e, profile);
     let prompt = args["prompt"].as_str().unwrap_or_default().to_string();
     let cwd = std::env::current_dir()?;
+    if name == "create_deck" {
+        let spec: crate::deck::DeckSpec = serde_json::from_value(args.clone()).map_err(|err| anyhow::anyhow!("bad deck description: {err}"))?;
+        let mut out = cwd.join(args["path"].as_str().unwrap_or("deck.pptx"));
+        if !out.extension().is_some_and(|x| x.eq_ignore_ascii_case("pptx")) {
+            out.set_extension("pptx");
+        }
+        let n = crate::deck::write(&spec, &out, &cwd)?;
+        return Ok(format!("Wrote {} ({n} slides). It opens in fermi's slides viewer.", out.display()));
+    }
     let mut task = Task::new(prompt, cwd);
     task.profile = Some(profile.name.clone());
     match name {

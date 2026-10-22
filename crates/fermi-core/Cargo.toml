@@ -14,3 +14,4 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 base64 = "0.22"
 dirs = "6"
 getrandom = "0.3"
+zip = { version = "9", default-features = false, features = ["deflate"] }

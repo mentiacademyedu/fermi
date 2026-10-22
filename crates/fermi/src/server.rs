@@ -185,6 +185,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/skills/upload", post(skills_upload).layer(axum::extract::DefaultBodyLimit::max(100 * 1024 * 1024)))
         .route("/api/slides/pptx", get(pptx_read))
         .route("/api/slides/media", get(pptx_media))
+        .route("/api/slides/create", post(deck_create))
         .route("/api/slides/save", post(pptx_save).layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
         .route("/api/attachments", post(attach).layer(axum::extract::DefaultBodyLimit::max(25 * 1024 * 1024)))
         .route("/api/usage", get(usage))
@@ -985,6 +986,32 @@ async fn pptx_media(State(s): S, Query(q): Query<MediaQuery>) -> Response {
             .into_response(),
         Ok(Err(e)) => fs_err(e),
         Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "couldn't read the deck"),
+    }
+}
+
+#[derive(Deserialize)]
+struct DeckCreate {
+    path: String,
+    spec: fermi_core::deck::DeckSpec,
+}
+
+/// Writes a designed .pptx (e.g. from a Markdown deck). Images resolve next to it.
+async fn deck_create(State(s): S, Json(b): Json<DeckCreate>) -> Response {
+    let path = match files::check_new(&s.workspaces(), &b.path) {
+        Ok(p) if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pptx")) => p,
+        Ok(_) => return err(StatusCode::BAD_REQUEST, "the file must end in .pptx"),
+        Err(e) => return fs_err(e),
+    };
+    let out = path.clone();
+    let res = tokio::task::spawn_blocking(move || {
+        let base = out.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        fermi_core::deck::write(&b.spec, &out, &base)
+    })
+    .await;
+    match res {
+        Ok(Ok(n)) => Json(json!({ "path": path, "slides": n })).into_response(),
+        Ok(Err(e)) => fs_err(e),
+        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "couldn't write the deck"),
     }
 }
 

@@ -5,6 +5,7 @@
 
 pub mod auth;
 pub mod config;
+pub mod deck;
 pub mod engine;
 pub mod events;
 pub mod hub;
