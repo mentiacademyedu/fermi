@@ -383,6 +383,32 @@ button:disabled { opacity: .45; cursor: default; }
   .pr-page > .slide { transform: none !important; }
 }
 
+/* skills & agents */
+#sk-kind { grid-template-columns: repeat(3, auto); }
+.sk-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
+.sk-row:first-child { border-top: 0; }
+.sk-row > input { grid-row: 1 / 3; margin: 0; }
+.sk-row .ttl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.sk-row .ttl .d { font-weight: 400; color: var(--muted); margin-left: 8px; }
+.sk-row .kind { font-size: 11px; font-weight: 400; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); margin-right: 8px; }
+.sk-row .act { grid-row: 1 / 3; grid-column: 3; }
+.sk-row .where { grid-column: 2; display: flex; gap: 6px; flex-wrap: wrap; }
+.sk-chip { font-size: 11.5px; padding: 1px 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.sk-chip.diff { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); color: var(--warn); }
+.sk-panel { grid-column: 2 / 4; margin-top: 6px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel-2); }
+.sk-panel .h { font-size: 12px; color: var(--faint); margin: 2px 0 6px; }
+.sk-dests { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 14px; margin-bottom: 10px; }
+.sk-dests label { display: flex; gap: 6px; align-items: center; font-size: 13px; min-width: 0; }
+.sk-dests label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sk-dests label.off { color: var(--faint); }
+.sk-panel .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sk-panel .rm { display: flex; gap: 6px 12px; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--muted); align-items: center; }
+.sk-review { border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: var(--r); padding: 12px 14px; margin-bottom: 12px; background: color-mix(in srgb, var(--accent) 5%, var(--panel)); }
+.sk-review .items { display: flex; flex-direction: column; gap: 3px; margin: 6px 0 10px; }
+.sk-review .items label { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+.sk-drop { outline: 2px dashed var(--accent); outline-offset: -8px; }
+.sk-hint { margin-top: 10px; font-size: 12.5px; }
+
 /* usage */
 #usage-range { grid-template-columns: repeat(3, auto); margin: 0 0 14px; }
 #usage-range button { padding: 4px 12px; white-space: nowrap; }
@@ -570,6 +596,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
     <label class="search"><span data-i="search"></span><input id="search" placeholder="Search tasks" autocomplete="off"></label>
     <button class="side-link" id="open-trending" style="flex:none"><span data-i="trend"></span>Trending repos</button>
     <button class="side-link" id="open-import" style="flex:none" title="Bring in conversations from Claude Code, Codex and the Gemini CLI"><span data-i="download"></span>Import sessions</button>
+    <button class="side-link" id="open-skills" style="flex:none" title="Skills and subagents of your accounts: copy, import and export them"><span data-i="spark"></span>Skills &amp; agents</button>
     <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder (opens a folder picker)" data-i="folderPlus"></button></div>
     <nav class="ws-list" id="ws-list"></nav>
     <div class="side-foot">
@@ -685,6 +712,30 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
           <div class="sl-stage" id="sl-stage"></div>
           <div class="sl-notes"><div class="sl-notes-h">Speaker notes</div><textarea id="sl-notes"></textarea></div>
         </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-skills" hidden>
+      <div class="settings">
+        <section style="max-width:1100px">
+          <div class="sec-head">
+            <div><h2>Skills &amp; agents</h2><p class="sub">Skills and subagents of Claude Code, Codex and the Gemini CLI. Each fermi account keeps its own, so copy them to the accounts and projects that need them, or export and import them as a .zip.</p></div>
+            <div class="tr-controls">
+              <div class="seg" id="sk-kind"><button data-k="">All</button><button data-k="skill">Skills</button><button data-k="agent">Agents</button></div>
+              <button class="icon-btn" id="sk-refresh" title="Look again" data-i="refresh"></button>
+            </div>
+          </div>
+          <div class="im-tools">
+            <label class="search"><span data-i="search"></span><input id="sk-filter" placeholder="Filter by name or description" autocomplete="off"></label>
+            <span class="spacer" style="flex:1"></span>
+            <button class="small" id="sk-import" title="A .zip or .skill archive, or a .md agent">Import…</button>
+            <button class="small ghost" id="sk-import-dir" title="A folder with skills (SKILL.md) or agents">Import folder…</button>
+            <button class="small primary" id="sk-export" disabled>Export selected…</button>
+          </div>
+          <div id="sk-review"></div>
+          <div class="im-list" id="sk-list"></div>
+          <div class="faint sk-hint">You can also drop a .zip, .skill or .md file on this page. Removed and replaced items go to ~/.fermi/trash.</div>
+        </section>
       </div>
     </section>
 
@@ -902,6 +953,7 @@ const I = {
   trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
   slides: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/>',
+  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   play: '<path d="M8 5v14l11-7z"/>',
   arrowDown: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
@@ -1093,7 +1145,7 @@ function renderTabs() {
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
-    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
+    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
     mk(f.id, f.name, ic, true, f.dirty);
   }
   const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
@@ -1106,7 +1158,7 @@ function renderTabs() {
 function activate(id) {
   S.active = id;
   const tab = S.tabs.find((t) => t.id === id);
-  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides";
+  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
   $("#view-term").hidden = !isTerm;
@@ -1114,12 +1166,14 @@ function activate(id) {
   $("#view-preview").hidden = !isPreview;
   $("#view-import").hidden = !isImport;
   $("#view-slides").hidden = !isSlides;
-  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides;
+  $("#view-skills").hidden = !isSkills;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills;
   if (isTerm) showTerm(tab);
   else if (isTrend) loadTrending();
   else if (isPreview) showPreview();
   else if (isImport) loadImport();
   else if (isSlides) showSlides(tab);
+  else if (isSkills) loadSkills();
   else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
@@ -2665,6 +2719,188 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "End") gotoSlide(tab, tab.deck.count() - 1, true);
 });
 
+// ── skills & agents ─────────────────────────────────────────────────────────
+S.sk = { data: null, kind: pref.get("skKind", ""), picked: new Set(), open: null, review: null, busy: false };
+function openSkills() {
+  if (!S.tabs.some((t) => t.id === "skills")) S.tabs.unshift({ id: "skills", name: "Skills", kind: "skills" });
+  activate("skills");
+}
+async function loadSkills(refresh = false) {
+  if (S.sk.data && !S.sk.data.error && !refresh) { renderSkills(); return; }
+  if (!S.sk.data || S.sk.data.error) { S.sk.data = null; renderSkills(); }
+  try { S.sk.data = await api("/api/skills"); } catch (e) { S.sk.data = { error: e.message }; }
+  renderSkills();
+}
+const skKey = (x) => `${x.kind}:${x.name}`;
+const skPlace = (id) => S.sk.data?.places.find((p) => p.id === id) || S.sk.review?.place;
+// Destinations a kind can go to: accounts and CLI folders, plus this workspace's projects.
+function skDests(kind) {
+  const ws = norm(currentWs()?.path);
+  return (S.sk.data?.places || []).filter((p) => (kind !== "agent" || p.agents) && (p.scope !== "project" || (ws && norm(p.id.split(":").slice(2).join(":")) === ws)));
+}
+function skGroups() {
+  const groups = new Map();
+  for (const it of S.sk.data?.items || []) {
+    const k = skKey(it);
+    if (!groups.has(k)) groups.set(k, { kind: it.kind, name: it.name, title: it.title, description: it.description, installs: [] });
+    const g = groups.get(k); g.installs.push(it); if (!g.description) g.description = it.description;
+  }
+  return [...groups.values()].sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+}
+function renderSkills() {
+  document.querySelectorAll("#sk-kind button").forEach((b) => (b.className = b.dataset.k === S.sk.kind ? "on" : ""));
+  renderSkReview();
+  const list = $("#sk-list"), d = S.sk.data; list.replaceChildren();
+  if (!d) { list.append(el("div", "im-empty faint", "Looking for skills and agents…")); syncSkExport(); return; }
+  if (d.error) { list.append(el("div", "im-empty err", d.error)); syncSkExport(); return; }
+  const term = $("#sk-filter").value.trim().toLowerCase();
+  const rows = skGroups().filter((g) => (!S.sk.kind || g.kind === S.sk.kind) && (!term || g.name.toLowerCase().includes(term) || g.description.toLowerCase().includes(term)));
+  if (!rows.length) list.append(el("div", "im-empty faint", d.items.length ? "Nothing matches." : "No skills or subagents yet. Import some, or ask an agent to write one."));
+  for (const g of rows) {
+    const key = skKey(g), row = el("div", "sk-row");
+    const cb = el("input"); cb.type = "checkbox"; cb.checked = S.sk.picked.has(key); cb.title = "Select for export";
+    cb.onchange = () => { cb.checked ? S.sk.picked.add(key) : S.sk.picked.delete(key); syncSkExport(); };
+    const ttl = el("div", "ttl"); ttl.append(el("span", "kind", g.kind === "skill" ? "Skill" : "Agent"), g.name);
+    if (g.description) ttl.append(el("span", "d", g.description));
+    ttl.title = `${g.name}${g.title ? ` (${g.title})` : ""}\n${g.description}`;
+    const where = el("div", "where");
+    const hashes = new Set(g.installs.map((i) => i.hash));
+    for (const i of g.installs) {
+      const c = el("span", "sk-chip" + (hashes.size > 1 ? " diff" : ""), skPlace(i.place)?.label || i.place);
+      c.title = i.path + (hashes.size > 1 ? "\nThe copies aren't all the same" : "");
+      where.append(c);
+    }
+    const act = el("button", "small act", S.sk.open === key ? "Close" : "Copy to…");
+    act.onclick = () => { S.sk.open = S.sk.open === key ? null : key; renderSkills(); };
+    row.append(cb, ttl, act, where);
+    if (S.sk.open === key) row.append(skPanel(g));
+    list.append(row);
+  }
+  syncSkExport();
+}
+function skPanel(g) {
+  const box = el("div", "sk-panel"), installed = new Map(g.installs.map((i) => [i.place, i]));
+  const src = g.installs[0];
+  box.append(el("div", "h", g.installs.length > 1 ? `Copy from ${skPlace(src.place)?.label} to:` : "Copy to:"));
+  const dests = el("div", "sk-dests"), boxes = [];
+  for (const p of skDests(g.kind)) {
+    const have = installed.get(p.id), same = have && have.hash === src.hash;
+    const l = el("label", same ? "off" : ""), c = el("input"); c.type = "checkbox"; c.disabled = !!same; c.value = p.id;
+    l.title = same ? "Already has this exact copy" : have ? "Has a different version: tick “Replace” to overwrite it" : p.skills;
+    l.append(c, el("span", null, p.label + (same ? " · has it" : have ? " · differs" : "")));
+    boxes.push(c); dests.append(l);
+  }
+  box.append(dests);
+  const acts = el("div", "acts");
+  const rep = el("label", "faint"); const rc = el("input"); rc.type = "checkbox"; rep.append(rc, " Replace different versions");
+  const go = el("button", "small primary", "Copy");
+  go.onclick = async () => {
+    const to = boxes.filter((c) => c.checked).map((c) => c.value);
+    if (!to.length) { toast("Pick where to copy it", true); return; }
+    go.disabled = true;
+    try { skReport(await api("/api/skills/copy", { kind: g.kind, name: g.name, from: src.place, to, replace: rc.checked })); S.sk.open = null; await loadSkills(true); }
+    catch (e) { toast(e.message, true); go.disabled = false; }
+  };
+  acts.append(go, rep);
+  box.append(acts);
+  const rm = el("div", "rm"); rm.append("Remove from:");
+  for (const i of g.installs) {
+    const b = el("button", "linkish", skPlace(i.place)?.label || i.place); b.title = `Move ${i.path} to ~/.fermi/trash`;
+    b.onclick = async () => {
+      if (!confirm(`Remove ${g.name} from ${skPlace(i.place)?.label}? It goes to ~/.fermi/trash.`)) return;
+      try { await api("/api/skills/remove", { kind: g.kind, name: g.name, place: i.place }); toast(`Removed ${g.name}`); loadSkills(true); }
+      catch (e) { toast(e.message, true); }
+    };
+    rm.append(b);
+  }
+  box.append(rm);
+  return box;
+}
+function skReport(r) {
+  const ok = r.results.filter((x) => x.ok), bad = r.results.filter((x) => !x.ok);
+  const notes = [...new Set(ok.map((x) => x.note).filter(Boolean))];
+  if (ok.length) toast(`Copied to ${ok.length} place${ok.length === 1 ? "" : "s"}${notes.length ? ` (${notes.join("; ")})` : ""}`);
+  if (bad.length) toast(bad.map((x) => x.error).join("; "), true);
+}
+function syncSkExport() {
+  const n = S.sk.picked.size, b = $("#sk-export");
+  b.disabled = !n; b.textContent = n ? `Export ${n} selected…` : "Export selected…";
+}
+$("#sk-export").onclick = async () => {
+  const groups = skGroups().filter((g) => S.sk.picked.has(skKey(g)));
+  const items = groups.map((g) => ({ kind: g.kind, name: g.name, place: g.installs[0].place }));
+  try {
+    const r = await api("/api/skills/export", { items });
+    if (!r.cancelled) toast(`Exported ${r.count} to ${r.path}`);
+  } catch (e) { toast(e.message, true); }
+};
+async function skImport(folder) {
+  try { const r = await api("/api/skills/import", { folder }); if (!r.cancelled) { S.sk.review = r; renderSkills(); } }
+  catch (e) { toast(e.message, true); }
+}
+$("#sk-import").onclick = () => skImport(false);
+$("#sk-import-dir").onclick = () => skImport(true);
+// Reviewing an import: what's in it, and where it goes.
+function renderSkReview() {
+  const host = $("#sk-review"), r = S.sk.review; host.replaceChildren();
+  if (!r) return;
+  const box = el("div", "sk-review");
+  box.append(el("div", null, `From ${r.place.label}: ${r.items.length} item${r.items.length === 1 ? "" : "s"}`));
+  const items = el("div", "items"), picks = [];
+  for (const it of r.items) {
+    const l = el("label"), c = el("input"); c.type = "checkbox"; c.checked = true; c._it = it;
+    l.append(c, el("span", "sk-chip", it.kind === "skill" ? "Skill" : "Agent"), el("b", null, it.name), el("span", "faint", it.description || ""));
+    picks.push(c); items.append(l);
+  }
+  box.append(items, el("div", "faint", "Install to:"));
+  const dests = el("div", "sk-dests"), boxes = [];
+  const agentsToo = r.items.some((i) => i.kind === "agent");
+  for (const p of skDests("")) {
+    const l = el("label"), c = el("input"); c.type = "checkbox"; c.value = p.id;
+    l.title = p.skills + (agentsToo && !p.agents ? "\n(skills only: Codex has no subagents)" : "");
+    l.append(c, el("span", null, p.label + (agentsToo && !p.agents ? " · skills only" : "")));
+    boxes.push(c); dests.append(l);
+  }
+  box.append(dests);
+  const acts = el("div", "acts");
+  const rep = el("label", "faint"); const rc = el("input"); rc.type = "checkbox"; rep.append(rc, " Replace existing ones with the same name");
+  const go = el("button", "small primary", "Install"), cancel = el("button", "small ghost", "Cancel");
+  go.onclick = async () => {
+    const to = boxes.filter((c) => c.checked).map((c) => c.value), chosen = picks.filter((c) => c.checked).map((c) => c._it);
+    if (!to.length || !chosen.length) { toast("Pick what to install and where", true); return; }
+    go.disabled = true;
+    const all = { results: [] };
+    for (const it of chosen) {
+      const dests = to.filter((id) => it.kind !== "agent" || skPlace(id)?.agents);
+      if (!dests.length) continue;
+      try { const res = await api("/api/skills/copy", { kind: it.kind, name: it.name, from: r.place.id, to: dests, replace: rc.checked }); all.results.push(...res.results); }
+      catch (e) { all.results.push({ ok: false, error: e.message }); }
+    }
+    skReport(all); S.sk.review = null; loadSkills(true);
+  };
+  cancel.onclick = () => { S.sk.review = null; renderSkills(); };
+  acts.append(go, cancel, rep);
+  box.append(acts);
+  host.append(box);
+}
+// Dropping a file on the page imports it.
+$("#view-skills").addEventListener("dragover", (e) => { if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === "file")) { e.preventDefault(); $("#view-skills").classList.add("sk-drop"); } });
+$("#view-skills").addEventListener("dragleave", (e) => { if (e.target === $("#view-skills")) $("#view-skills").classList.remove("sk-drop"); });
+$("#view-skills").addEventListener("drop", async (e) => {
+  e.preventDefault(); $("#view-skills").classList.remove("sk-drop");
+  const f = e.dataTransfer?.files?.[0]; if (!f) return;
+  try {
+    const r = await fetch(`/api/skills/upload?${q({ name: f.name })}`, { method: "POST", headers: { "x-fermi-token": token || "", "content-type": "application/octet-stream" }, body: f });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || r.statusText);
+    S.sk.review = d; renderSkills();
+  } catch (err) { toast(err.message, true); }
+});
+document.querySelectorAll("#sk-kind button").forEach((b) => (b.onclick = () => { S.sk.kind = b.dataset.k; pref.set("skKind", S.sk.kind); renderSkills(); }));
+$("#sk-filter").oninput = () => renderSkills();
+$("#sk-refresh").onclick = () => loadSkills(true);
+$("#open-skills").onclick = openSkills;
+
 // ── sessions from other tools (Claude Code, Codex, Gemini CLI) ─────────────
 S.im = { data: null, source: pref.get("imSource", ""), hideKnown: pref.get("imHideKnown", false), picked: new Set(), busy: false };
 function openImport() {
@@ -3525,6 +3761,7 @@ async function refresh() {
     if (params.get("view") === "settings" && S.active !== "settings") openSettings();
     if (params.get("view") === "trending" && S.active !== "trending") openTrending();
     if (params.get("view") === "import" && S.active !== "import") openImport();
+    if (params.get("view") === "skills" && S.active !== "skills") openSkills();
     if (params.get("view") === "preview" && S.active !== "preview") openPreview(params.get("url") || undefined);
     if (params.get("term") && !S.tabs.some((t) => t.kind === "term")) newTerm();
     if (params.get("diff") && !S.tabs.length) { const p = params.get("diff"); openDiff({ path: p, rel: relTo(currentWs()?.path, p), status: "M" }); }

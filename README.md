@@ -148,6 +148,35 @@ Both have **Present** (full screen; arrows, space, Esc; F5 starts from the top)
 and **PDF** (print to PDF, one page per slide). Agents are told about the
 viewer, so asking for "a deck" gets a file you can open there.
 
+## Skills & agents
+
+Every fermi account keeps its own config folder, so skills you installed in
+`~/.claude` aren't visible to an isolated account. The *Skills & agents* page
+(or `fermi skills list`) shows every skill (`skills/<name>/SKILL.md`) and
+subagent (`agents/<name>.md`) across your Claude Code, Codex and Gemini CLI
+accounts, the CLIs' own folders and your projects' `.claude` / `.codex` /
+`.gemini` folders, and where copies differ.
+
+- **Copy** a skill or agent to other accounts and projects. Subagents copied
+  between Claude Code and the Gemini CLI are converted (name, description and
+  instructions carry over; tool lists and models don't). Codex has no
+  subagents.
+- **Export** a selection to a `.zip` (`skills/…`, `agents/…`), or
+  `fermi skills export out.zip [names]`.
+- **Import** a `.zip` / `.skill` archive (a fermi export, a Claude plugin, a
+  skill download), a folder or a `.md` agent: review what's in it, pick where it
+  goes. Or drop the file on the page, or `fermi skills import <path> --to <place>`.
+
+Replaced and removed items are moved to `~/.fermi/trash`, never deleted.
+
+## Approvals
+
+The CLIs run headless, so a tool call that needs approval (by default, shell
+commands under `acceptEdits`) can't stop to ask and gets denied. fermi shows
+what was blocked under the turn, with **Allow … and continue** (allows those
+programs, e.g. `Bash(node:*)`, for the rest of the conversation) and **Allow
+everything for this task**.
+
 ## Models
 
 Built in, shown with their versions in the TUI and dashboard:
@@ -182,6 +211,7 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
   slides.rs        .pptx parts in and out (the dashboard renders and edits the XML)
+  skills.rs        skills and subagents: find, copy/convert, export and import bundles
   web/index.html   the dashboard (single file, no build step, embedded in the binary)
 crates/fermi-desktop  native window around the dashboard (Tauri)
 ```

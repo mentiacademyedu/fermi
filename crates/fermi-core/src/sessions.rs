@@ -81,15 +81,16 @@ impl Found {
     }
 }
 
-/// A session's folder root and the account that owns it (if any).
-struct Root {
-    dir: PathBuf,
-    account: Option<String>,
+/// A CLI config folder (`~/.claude`, an account's own folder…) and the
+/// configured account that uses it, if any.
+pub struct Root {
+    pub dir: PathBuf,
+    pub account: Option<String>,
 }
 
 /// Config folders of each provider: every CLI account's own, plus the
 /// CLI's default when no account uses it.
-fn roots(cfg: &Config, provider: Provider) -> Vec<Root> {
+pub fn roots(cfg: &Config, provider: Provider) -> Vec<Root> {
     let home = dirs::home_dir().unwrap_or_default();
     let default = match provider {
         Provider::Claude => std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).unwrap_or_else(|| home.join(".claude")),

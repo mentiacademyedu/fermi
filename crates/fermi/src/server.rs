@@ -3,6 +3,7 @@
 //! puts in the URL it opens, and the Host header must be local, so other
 //! sites in the browser can't drive it (CSRF / DNS rebinding).
 
+use crate::skills::{self, Kind, Place};
 use crate::{files, setup, slides};
 use anyhow::{bail, Result};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
@@ -44,6 +45,8 @@ struct Srv {
     added: Mutex<Vec<PathBuf>>,
     /// Trending results by (period, language), with the time fetched.
     trending: Mutex<HashMap<String, (u64, Value)>>,
+    /// Imports being reviewed (unpacked under `~/.fermi/staging`), by place id.
+    staged: Mutex<HashMap<String, Place>>,
 }
 
 type S = State<Arc<Srv>>;
@@ -142,11 +145,13 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         probing: Mutex::new(HashSet::new()),
         added: Mutex::new(vec![]),
         trending: Mutex::new(HashMap::new()),
+        staged: Mutex::new(HashMap::new()),
     });
     let saved: Vec<String> =
         std::fs::read(srv.workspaces_file()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
     *srv.added.lock().unwrap() = saved.into_iter().map(PathBuf::from).collect();
     srv.probe_all();
+    let _ = std::fs::remove_dir_all(srv.hub.engine().home.join("staging")); // reviews from an earlier run
     tokio::spawn(push_accounts_loop(srv.clone()));
 
     let app = Router::new()
@@ -172,6 +177,12 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/fs/raw", get(fs_raw))
         .route("/api/fs/write", post(fs_write))
         .route("/api/fs/search", get(fs_search))
+        .route("/api/skills", get(skills_list))
+        .route("/api/skills/copy", post(skills_copy))
+        .route("/api/skills/remove", post(skills_remove))
+        .route("/api/skills/export", post(skills_export))
+        .route("/api/skills/import", post(skills_import))
+        .route("/api/skills/upload", post(skills_upload).layer(axum::extract::DefaultBodyLimit::max(100 * 1024 * 1024)))
         .route("/api/slides/pptx", get(pptx_read))
         .route("/api/slides/media", get(pptx_media))
         .route("/api/slides/save", post(pptx_save).layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
@@ -733,6 +744,198 @@ async fn fs_write(State(s): S, Json(b): Json<WriteBody>) -> Response {
     match res {
         Ok(p) => Json(json!({ "path": p, "size": b.text.len() })).into_response(),
         Err(e) => fs_err(e),
+    }
+}
+
+// ── skills and subagents ─────────────────────────────────────────────────────
+
+impl Srv {
+    fn skill_places(&self) -> Vec<Place> {
+        let mut all = skills::places(&self.hub.engine().cfg, &self.workspaces());
+        all.extend(self.staged.lock().unwrap().values().cloned());
+        all
+    }
+    fn skill_place(&self, id: &str) -> Result<Place> {
+        match self.skill_places().into_iter().find(|p| p.id == id) {
+            Some(p) => Ok(p),
+            None => bail!("unknown place {id}"),
+        }
+    }
+    /// Unpacks an import for review and returns what's in it.
+    fn stage_import(&self, src: &std::path::Path) -> Result<Value> {
+        let id = format!("{:x}", now_ms());
+        let dir = self.hub.engine().home.join("staging").join(&id);
+        let place = skills::stage(src, &dir, &id).inspect_err(|_| {
+            let _ = std::fs::remove_dir_all(&dir);
+        })?;
+        let items = skills::scan(&place);
+        self.staged.lock().unwrap().insert(place.id.clone(), place.clone());
+        Ok(json!({ "place": place, "items": items }))
+    }
+}
+
+fn now_ms() -> u128 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)
+}
+
+async fn skills_list(State(s): S) -> Response {
+    let places: Vec<Place> = s.skill_places().into_iter().filter(|p| p.scope != "import").collect();
+    let res = tokio::task::spawn_blocking(move || {
+        let items: Vec<skills::Item> = places.iter().flat_map(skills::scan).collect();
+        json!({ "places": places, "items": items })
+    })
+    .await;
+    match res {
+        Ok(v) => Json(v).into_response(),
+        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "couldn't read the skill folders"),
+    }
+}
+
+#[derive(Deserialize)]
+struct SkillCopy {
+    kind: Kind,
+    name: String,
+    from: String,
+    to: Vec<String>,
+    #[serde(default)]
+    replace: bool,
+}
+
+async fn skills_copy(State(s): S, Json(b): Json<SkillCopy>) -> Response {
+    let from = match s.skill_place(&b.from) {
+        Ok(p) => p,
+        Err(e) => return err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    };
+    let targets: Vec<Result<Place>> = b.to.iter().map(|id| s.skill_place(id)).collect();
+    let results = tokio::task::spawn_blocking(move || {
+        b.to.iter()
+            .zip(targets)
+            .map(|(id, t)| match t.and_then(|t| skills::copy(&from, b.kind, &b.name, &t, b.replace)) {
+                Ok(note) => json!({ "to": id, "ok": true, "note": note }),
+                Err(e) => json!({ "to": id, "ok": false, "error": format!("{e:#}") }),
+            })
+            .collect::<Vec<_>>()
+    })
+    .await
+    .unwrap_or_default();
+    Json(json!({ "results": results })).into_response()
+}
+
+#[derive(Deserialize)]
+struct SkillRef {
+    kind: Kind,
+    name: String,
+    place: String,
+}
+
+async fn skills_remove(State(s): S, Json(b): Json<SkillRef>) -> Response {
+    match s.skill_place(&b.place).and_then(|p| skills::remove(&p, b.kind, &b.name)) {
+        Ok(trashed) => Json(json!({ "trashed": trashed })).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct SkillExport {
+    items: Vec<SkillRef>,
+}
+
+static DIALOG_OPEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Runs one native file dialog at a time.
+async fn with_dialog<T>(f: impl std::future::Future<Output = T>) -> Option<T> {
+    if DIALOG_OPEN.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return None;
+    }
+    let out = f.await;
+    DIALOG_OPEN.store(false, std::sync::atomic::Ordering::SeqCst);
+    Some(out)
+}
+
+async fn skills_export(State(s): S, Json(b): Json<SkillExport>) -> Response {
+    if b.items.is_empty() {
+        return err(StatusCode::BAD_REQUEST, "pick something to export");
+    }
+    let mut picked = vec![];
+    for r in &b.items {
+        match s.skill_place(&r.place) {
+            Ok(p) => picked.push((p, r.kind, r.name.clone())),
+            Err(e) => return err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+        }
+    }
+    let default = if picked.len() == 1 { format!("{}.zip", picked[0].2) } else { "skills-and-agents.zip".into() };
+    let dialog = rfd::AsyncFileDialog::new().set_title("Export skills and agents").set_file_name(&default).add_filter("Zip archive", &["zip"]);
+    let Some(chosen) = with_dialog(dialog.save_file()).await else { return err(StatusCode::CONFLICT, "a file dialog is already open") };
+    let Some(file) = chosen else { return Json(json!({ "cancelled": true })).into_response() };
+    let mut out = file.path().to_path_buf();
+    if out.extension().is_none() {
+        out.set_extension("zip");
+    }
+    let target = out.clone();
+    let res = tokio::task::spawn_blocking(move || {
+        let refs: Vec<(&Place, Kind, String)> = picked.iter().map(|(p, k, n)| (p, *k, n.clone())).collect();
+        skills::export(&refs, &target)
+    })
+    .await;
+    match res {
+        Ok(Ok(n)) => Json(json!({ "path": out, "count": n })).into_response(),
+        Ok(Err(e)) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "export failed"),
+    }
+}
+
+#[derive(Deserialize)]
+struct SkillImport {
+    #[serde(default)]
+    folder: bool,
+}
+
+/// Picks a bundle, archive, folder or .md with the native dialog and stages it for review.
+async fn skills_import(State(s): S, Json(b): Json<SkillImport>) -> Response {
+    let dialog = rfd::AsyncFileDialog::new().set_title("Import skills and agents");
+    let picked = if b.folder {
+        with_dialog(dialog.pick_folder()).await
+    } else {
+        with_dialog(dialog.add_filter("Skills and agents", &["zip", "skill", "md"]).pick_file()).await
+    };
+    let Some(picked) = picked else { return err(StatusCode::CONFLICT, "a file dialog is already open") };
+    let Some(src) = picked else { return Json(json!({ "cancelled": true })).into_response() };
+    let src = src.path().to_path_buf();
+    let s2 = s.clone();
+    match tokio::task::spawn_blocking(move || s2.stage_import(&src)).await {
+        Ok(Ok(v)) => Json(v).into_response(),
+        Ok(Err(e)) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "import failed"),
+    }
+}
+
+#[derive(Deserialize)]
+struct UploadQuery {
+    name: String,
+}
+
+/// A file dropped on the page: saved, then staged like a picked one.
+async fn skills_upload(State(s): S, Query(q): Query<UploadQuery>, body: axum::body::Bytes) -> Response {
+    let name: String = q.name.chars().filter(|c| c.is_alphanumeric() || "._- ".contains(*c)).collect();
+    let lower = name.to_lowercase();
+    if !(lower.ends_with(".zip") || lower.ends_with(".skill") || lower.ends_with(".md")) {
+        return err(StatusCode::BAD_REQUEST, "drop a .zip or .skill archive, or a .md file");
+    }
+    let dir = s.hub.engine().home.join("staging").join(format!("upload-{:x}", now_ms()));
+    let file = dir.join(if name.trim().is_empty() { "upload.zip".to_string() } else { name });
+    let s2 = s.clone();
+    let res = tokio::task::spawn_blocking(move || -> Result<Value> {
+        std::fs::create_dir_all(&dir)?;
+        std::fs::write(&file, &body)?;
+        let v = s2.stage_import(&file);
+        let _ = std::fs::remove_dir_all(&dir);
+        v
+    })
+    .await;
+    match res {
+        Ok(Ok(v)) => Json(v).into_response(),
+        Ok(Err(e)) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "import failed"),
     }
 }
 

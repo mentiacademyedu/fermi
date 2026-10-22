@@ -67,6 +67,9 @@ enum Cmd {
         #[arg(short = 'n', long, default_value_t = 30)]
         limit: usize,
     },
+    /// Skills and subagents of your accounts: list, export to a .zip, import
+    #[command(subcommand)]
+    Skills(SkillsCmd),
     /// Interactive terminal UI (default)
     Tui {
         #[arg(short, long)]
@@ -85,6 +88,27 @@ enum Cmd {
     Mcp {
         #[arg(long)]
         profile: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum SkillsCmd {
+    /// Where skills and agents live, and what's in each place
+    List,
+    /// Write skills and agents (all, or the names given) to a .zip
+    Export {
+        out: PathBuf,
+        names: Vec<String>,
+    },
+    /// Install from a .zip / .skill archive, a folder, or a .md agent
+    Import {
+        src: PathBuf,
+        /// Place ids or account names (see `fermi skills list`); repeat for several
+        #[arg(long, required = true)]
+        to: Vec<String>,
+        /// Replace existing ones with the same name (old copies go to ~/.fermi/trash)
+        #[arg(long)]
+        replace: bool,
     },
 }
 
@@ -135,6 +159,7 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::History { limit } => history(limit)?,
         Cmd::Show { id } => show(id)?,
         Cmd::Import { which, limit } => import(which, limit)?,
+        Cmd::Skills(cmd) => skills_cmd(cmd)?,
         Cmd::Tui { profile } => {
             if !fermi_core::Config::path().exists() {
                 setup::init(false)?;
@@ -260,6 +285,74 @@ async fn run(t: Target) -> Result<ExitCode> {
 }
 
 /// `fermi history`: recent tasks from every front end on this PC.
+fn skills_cmd(cmd: SkillsCmd) -> Result<()> {
+    use fermi::skills::{self, Kind};
+    let engine = Engine::load()?;
+    let places = skills::places(&engine.cfg, &[std::env::current_dir()?]);
+    let kind_name = |k: Kind| if k == Kind::Skill { "skill" } else { "agent" };
+    match cmd {
+        SkillsCmd::List => {
+            for p in &places {
+                let items = skills::scan(p);
+                if items.is_empty() && p.scope == "project" {
+                    continue;
+                }
+                println!("{}  [{}]", p.label, p.id);
+                for i in &items {
+                    let d: String = i.description.chars().take(70).collect();
+                    println!("    {:<6} {:<28} {d}", kind_name(i.kind), i.name);
+                }
+                if items.is_empty() {
+                    println!("    (none)");
+                }
+            }
+        }
+        SkillsCmd::Export { out, names } => {
+            let mut picked = vec![];
+            let mut seen = std::collections::HashSet::new();
+            for p in &places {
+                for i in skills::scan(p) {
+                    if (names.is_empty() || names.contains(&i.name)) && seen.insert((i.kind, i.name.clone())) {
+                        picked.push((p, i.kind, i.name));
+                    }
+                }
+            }
+            anyhow::ensure!(!picked.is_empty(), "nothing to export");
+            let n = skills::export(&picked, &out)?;
+            println!("exported {n} to {}", out.display());
+        }
+        SkillsCmd::Import { src, to, replace } => {
+            let targets: Vec<&skills::Place> = to
+                .iter()
+                .map(|t| {
+                    places
+                        .iter()
+                        .find(|p| &p.id == t || p.label.split(" · ").next() == Some(t.as_str()))
+                        .ok_or_else(|| anyhow::anyhow!("unknown place `{t}` (see `fermi skills list`)"))
+                })
+                .collect::<Result<_>>()?;
+            let dir = engine.home.join("staging").join(format!("cli-{}", std::process::id()));
+            let staged = skills::stage(&src, &dir, "cli");
+            let res = staged.map(|from| {
+                for i in skills::scan(&from) {
+                    for t in &targets {
+                        if i.kind == Kind::Agent && t.agents.is_none() {
+                            continue;
+                        }
+                        match skills::copy(&from, i.kind, &i.name, t, replace) {
+                            Ok(note) => println!("✓ {} {} → {}{}", kind_name(i.kind), i.name, t.label, note.map(|n| format!(" ({n})")).unwrap_or_default()),
+                            Err(e) => println!("✗ {} {} → {}: {e:#}", kind_name(i.kind), i.name, t.label),
+                        }
+                    }
+                }
+            });
+            let _ = std::fs::remove_dir_all(&dir);
+            res?;
+        }
+    }
+    Ok(())
+}
+
 fn import(which: Vec<String>, limit: usize) -> Result<()> {
     let engine = Engine::load()?;
     let found = fermi_core::sessions::discover(&engine.cfg);

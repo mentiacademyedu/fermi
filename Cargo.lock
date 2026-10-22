@@ -1284,6 +1284,7 @@ dependencies = [
  "anyhow",
  "axum",
  "clap",
+ "dirs 6.0.0",
  "fermi-core",
  "getrandom 0.3.4",
  "portable-pty",
