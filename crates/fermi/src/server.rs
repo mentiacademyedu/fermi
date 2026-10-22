@@ -13,7 +13,8 @@ use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use fermi_core::auth::{self, AuthInfo};
-use fermi_core::hub::Hub;
+use fermi_core::hub::{FollowUp, Hub};
+use fermi_core::sessions;
 use fermi_core::util::{expand, now};
 use fermi_core::{Auth, Engine, Task};
 use serde::Deserialize;
@@ -155,6 +156,8 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/tasks/{id}/cancel", post(cancel))
         .route("/api/tasks/{id}/reply", post(reply))
         .route("/api/tasks/{id}/delete", post(delete_task))
+        .route("/api/sessions", get(sessions_list))
+        .route("/api/sessions/import", post(sessions_import))
         .route("/api/accounts", post(add_account))
         .route("/api/accounts/probe", post(probe))
         .route("/api/accounts/{id}/login", post(login))
@@ -466,6 +469,10 @@ async fn cancel(State(s): S, Path(id): Path<u64>) -> Json<Value> {
 #[derive(Deserialize)]
 struct Reply {
     prompt: String,
+    /// Switch to this model; empty keeps the current one.
+    model: Option<String>,
+    /// Empty keeps the effort, "auto" goes back to the default.
+    effort: Option<String>,
 }
 
 async fn reply(State(s): S, Path(id): Path<u64>, Json(b): Json<Reply>) -> Response {
@@ -473,7 +480,11 @@ async fn reply(State(s): S, Path(id): Path<u64>, Json(b): Json<Reply>) -> Respon
     if prompt.is_empty() {
         return err(StatusCode::BAD_REQUEST, "write a reply first");
     }
-    match s.hub.follow_up(id, prompt) {
+    let opts = FollowUp {
+        model: non_empty(b.model),
+        effort: non_empty(b.effort).map(|e| if e == "auto" { String::new() } else { e }),
+    };
+    match s.hub.follow_up(id, prompt, opts) {
         Ok(()) => Json(json!({ "ok": true })).into_response(),
         Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
     }
@@ -483,6 +494,68 @@ async fn delete_task(State(s): S, Path(id): Path<u64>) -> Response {
     match s.hub.delete(id) {
         Ok(()) => Json(json!({ "ok": true })).into_response(),
         Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+// ── sessions from other tools ───────────────────────────────────────────────
+
+/// Sessions Claude Code, Codex and the Gemini CLI saved on this PC.
+async fn sessions_list(State(s): S) -> Response {
+    let cfg = s.hub.engine().cfg.clone();
+    let Ok(found) = tokio::task::spawn_blocking(move || sessions::discover(&cfg)).await else {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, "couldn't read the session folders");
+    };
+    let known = s.hub.known_sessions();
+    let rows: Vec<Value> = found
+        .iter()
+        .map(|f| {
+            json!({
+                "source": f.source, "tool": f.source.name(), "session": f.session, "title": f.title,
+                "cwd": f.cwd, "updated": f.updated, "size": f.size, "account": f.account,
+                // A reply resumes it in place (else the conversation is passed on).
+                "resumes": f.account.is_some() && f.cwd.as_ref().is_some_and(|c| c.is_dir()),
+                "task": known.get(&f.session),
+            })
+        })
+        .collect();
+    Json(json!({ "sessions": rows })).into_response()
+}
+
+#[derive(Deserialize)]
+struct ImportReq {
+    /// `<source>:<session id>` for each session.
+    sessions: Vec<String>,
+}
+
+async fn sessions_import(State(s): S, Json(b): Json<ImportReq>) -> Response {
+    if b.sessions.is_empty() {
+        return err(StatusCode::BAD_REQUEST, "pick a session to import");
+    }
+    // Only sessions the scan finds can be imported: no arbitrary paths.
+    let cfg = s.hub.engine().cfg.clone();
+    let Ok(found) = tokio::task::spawn_blocking(move || sessions::discover(&cfg)).await else {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, "couldn't read the session folders");
+    };
+    let hub = s.hub.clone();
+    let res = tokio::task::spawn_blocking(move || {
+        let mut ids = vec![];
+        let mut errors = vec![];
+        for want in &b.sessions {
+            match found.iter().find(|f| &f.origin() == want) {
+                Some(f) => match hub.import(f) {
+                    Ok(id) => ids.push(id),
+                    Err(e) => errors.push(format!("{}: {e:#}", f.title)),
+                },
+                None => errors.push(format!("{want}: not found")),
+            }
+        }
+        (ids, errors)
+    })
+    .await;
+    match res {
+        Ok((ids, errors)) if ids.is_empty() => err(StatusCode::BAD_REQUEST, errors.join("; ")),
+        Ok((ids, errors)) => Json(json!({ "ids": ids, "errors": errors })).into_response(),
+        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "import failed"),
     }
 }
 

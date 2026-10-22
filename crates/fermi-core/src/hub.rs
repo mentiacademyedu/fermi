@@ -60,12 +60,19 @@ pub struct TaskRec {
     pub ran_on: Option<RanOn>,
     #[serde(default)]
     pub session: Option<String>,
+    /// Sessions earlier turns ran in (before a switch to another provider).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub past_sessions: Vec<String>,
     /// Last write (unix seconds); how other programs tell a live task from an abandoned one.
     #[serde(default)]
     pub updated: u64,
-    /// Which front end ran it: "desktop", "ui", "tui", "cli".
+    /// Which front end ran it: "desktop", "ui", "tui", "cli", or the tool
+    /// an imported session came from ("claude-code", "codex", "gemini").
     #[serde(default)]
     pub via: Option<String>,
+    /// For an imported session, `<tool>:<session id>` (see `sessions::Found::origin`).
+    #[serde(default)]
+    pub origin: Option<String>,
     pub events: Vec<Event>,
 }
 
@@ -93,8 +100,10 @@ impl TaskRec {
             ended: None,
             ran_on: None,
             session: None,
+            past_sessions: vec![],
             updated: now(),
             via: Some(via.to_string()),
+            origin: None,
             events: vec![Event::User { text: task.prompt.clone() }],
         }
     }
@@ -106,6 +115,7 @@ impl TaskRec {
             "account": self.account, "effort": self.effort, "permission": self.permission, "cwd": self.cwd, "status": self.status,
             "route": self.route, "started": self.started, "ended": self.ended, "via": self.via,
             "resumable": self.session.is_some() && self.ran_on.is_some(),
+            "ran_model": self.ran_on.as_ref().map(|r| &r.model), "imported": self.origin.is_some(),
             "turns": self.events.iter().filter(|e| matches!(e, Event::User { .. })).count(),
         })
     }
@@ -122,7 +132,11 @@ impl TaskRec {
                 self.route = Some(format!("{label}{effort} @ {account}"));
                 self.ran_on = Some(RanOn { profile: profile.clone(), model: model.clone(), account: account.clone() });
             }
-            Event::Session { id } => self.session = Some(id.clone()),
+            Event::Session { id } => {
+                if let Some(old) = self.session.replace(id.clone()).filter(|old| old != id) {
+                    self.past_sessions.push(old);
+                }
+            }
             Event::Done { ok, .. } => {
                 self.status = if *ok { TaskStatus::Done } else { TaskStatus::Failed };
                 self.ended = Some(now());
@@ -178,6 +192,15 @@ pub fn new_task_id(dir: &Path) -> u64 {
             return id;
         }
     }
+}
+
+/// An unused id for something that started at `ms` (imports keep their date order).
+pub fn id_at(dir: &Path, ms: u64) -> u64 {
+    let mut id = ms * 1000;
+    while dir.join(format!("{id}.json")).exists() {
+        id += 1;
+    }
+    id
 }
 
 /// Atomic write; returns the file's new modification time.
@@ -346,6 +369,146 @@ impl Drop for Recorder {
     }
 }
 
+// ── continuing a conversation ───────────────────────────────────────────────
+
+/// Changes a follow-up may make.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct FollowUp {
+    /// Switch to this model (`claude:sonnet`); None keeps the current one.
+    pub model: Option<String>,
+    /// New effort; None keeps it, `""` goes back to the default.
+    pub effort: Option<String>,
+}
+
+fn provider_of(model: &str) -> &str {
+    model.split(':').next().unwrap_or("")
+}
+
+/// The task that continues `t` with `prompt`.
+pub fn continuation(engine: &Engine, t: &TaskRec, prompt: &str, opts: &FollowUp) -> Task {
+    let mut task = Task::new(prompt, t.cwd.clone());
+    task.permission = t.permission.clone();
+    task.effort = match &opts.effort {
+        Some(e) if e.is_empty() => None,
+        Some(e) => Some(e.clone()),
+        None => t.effort.clone(),
+    };
+    let current = t.ran_on.as_ref().map(|r| r.model.clone()).or_else(|| t.model.clone());
+    let target = opts.model.clone().or(current);
+    match (&t.session, &t.ran_on) {
+        // Same provider: the session lives on that account, and its CLI can
+        // carry on with a different model.
+        (Some(session), Some(on)) if target.as_deref().is_none_or(|m| provider_of(m) == provider_of(&on.model)) => {
+            task.profile = Some(on.profile.clone());
+            task.model = target.or(Some(on.model.clone()));
+            task.account = Some(on.account.clone());
+            task.resume = Some(session.clone());
+        }
+        _ => {
+            task.profile = t.ran_on.as_ref().map(|r| r.profile.clone()).or_else(|| t.profile.clone());
+            task.model = target;
+            task.context = Some(transcript(engine, t));
+        }
+    }
+    task
+}
+
+/// Longest transcript passed on (characters); older messages are left out first.
+const TRANSCRIPT_MAX: usize = 120_000;
+/// Longest single message kept in a transcript.
+const MESSAGE_MAX: usize = 16_000;
+
+fn clip(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let head: String = s.chars().take(max * 2 / 3).collect();
+    let tail: Vec<char> = s.chars().rev().take(max / 3).collect();
+    format!("{head}\n[… cut …]\n{}", tail.into_iter().rev().collect::<String>())
+}
+
+/// The conversation so far, written out for a model that wasn't part of it.
+pub fn transcript(engine: &Engine, t: &TaskRec) -> String {
+    let mut msgs: Vec<String> = vec![];
+    let mut tools: Vec<String> = vec![];
+    let flush = |tools: &mut Vec<String>, msgs: &mut Vec<String>| {
+        if tools.is_empty() {
+            return;
+        }
+        let shown: Vec<&str> = tools.iter().take(8).map(String::as_str).collect();
+        let more = match tools.len().saturating_sub(8) {
+            0 => String::new(),
+            n => format!("; and {n} more"),
+        };
+        msgs.push(format!("(Assistant used tools: {}{more})", shown.join("; ")));
+        tools.clear();
+    };
+    for ev in &t.events {
+        match ev {
+            Event::User { text } => {
+                flush(&mut tools, &mut msgs);
+                msgs.push(format!("User: {}", clip(text, MESSAGE_MAX)));
+            }
+            Event::Text { text } => {
+                flush(&mut tools, &mut msgs);
+                msgs.push(format!("Assistant: {}", clip(text, MESSAGE_MAX)));
+            }
+            Event::Tool { name, detail } => tools.push(if detail.is_empty() { name.clone() } else { format!("{name} {detail}") }),
+            Event::Artifact { path } => tools.push(format!("created {path}")),
+            Event::Done { ok: false, summary } => {
+                flush(&mut tools, &mut msgs);
+                msgs.push(format!("(That turn failed: {})", clip(summary, 500)));
+            }
+            _ => {}
+        }
+    }
+    flush(&mut tools, &mut msgs);
+    // Keep the first message (the task) and as many recent ones as fit.
+    let total: usize = msgs.iter().map(|m| m.len() + 2).sum();
+    if total > TRANSCRIPT_MAX && msgs.len() > 2 {
+        let mut kept = vec![];
+        let mut size = msgs[0].len();
+        for m in msgs[1..].iter().rev() {
+            if size + m.len() + 2 > TRANSCRIPT_MAX {
+                break;
+            }
+            size += m.len() + 2;
+            kept.push(m.clone());
+        }
+        let left_out = msgs.len() - 1 - kept.len();
+        kept.push(format!("[… {left_out} earlier messages left out …]"));
+        kept.push(msgs[0].clone());
+        kept.reverse();
+        msgs = kept;
+    }
+    let model = t
+        .ran_on
+        .as_ref()
+        .map(|r| r.model.as_str())
+        .or(t.model.as_deref())
+        .and_then(|id| engine.catalog.iter().find(|m| m.id == id))
+        .map(|m| m.name().to_string());
+    let tool = t.origin.as_deref().and_then(|o| crate::sessions::Source::parse(o.split(':').next()?));
+    let from = match (model, tool) {
+        (Some(m), Some(src)) => format!("{m} in {}", src.name()),
+        (None, Some(src)) => src.name().to_string(),
+        (Some(m), None) => m,
+        (None, None) => "another assistant".into(),
+    };
+    format!(
+        "{HANDOFF_START} that started with {from}. The conversation so far is below. \
+         Work it already did, such as file changes, is already on disk in this folder. \
+         Continue from where it left off and answer the user's new message at the end.]\n\n\
+         <conversation>\n{}\n</conversation>\n\n{HANDOFF_MARK}",
+        msgs.join("\n\n")
+    )
+}
+
+/// How a passed-on conversation starts, and the line before the new message
+/// (so a session that began with one can be recognized later).
+pub const HANDOFF_START: &str = "[You're taking over a conversation";
+pub const HANDOFF_MARK: &str = "The user's new message:";
+
 // ── the hub ─────────────────────────────────────────────────────────────────
 
 pub struct Hub {
@@ -445,36 +608,99 @@ impl Hub {
         id
     }
 
-    /// Continues a finished conversation in the same provider session, on the
-    /// same account and model it ran on (any front end may have started it).
-    pub fn follow_up(self: &Arc<Self>, id: u64, prompt: &str) -> Result<()> {
+    /// Continues a finished conversation. On the model it ran on (or another
+    /// model of the same provider) it resumes the provider session; on a
+    /// different provider, or when there's no session to resume (an imported
+    /// or failed task), the conversation so far is passed on as context.
+    pub fn follow_up(self: &Arc<Self>, id: u64, prompt: &str, opts: FollowUp) -> Result<()> {
+        let engine = self.engine();
         let task = {
-            let mut tasks = self.tasks.lock().unwrap();
-            let Some(t) = tasks.iter_mut().find(|t| t.id == id) else { bail!("no such task") };
+            let tasks = self.tasks.lock().unwrap();
+            let Some(t) = tasks.iter().find(|t| t.id == id) else { bail!("no such task") };
             if t.status == TaskStatus::Running {
                 bail!("this task is still running");
             }
-            let (Some(session), Some(on)) = (t.session.clone(), t.ran_on.clone()) else {
-                bail!("this task can't be continued (it has no provider session)");
-            };
-            let mut task = Task::new(prompt, t.cwd.clone());
-            task.profile = Some(on.profile);
-            task.model = Some(on.model);
-            task.account = Some(on.account);
-            task.effort = t.effort.clone();
-            task.permission = t.permission.clone();
-            task.resume = Some(session);
+            let task = continuation(&engine, t, prompt, &opts);
+            // Unknown model, no account for it in the profile…: say so now.
+            engine.plan(&task)?;
+            task
+        };
+        {
+            let mut tasks = self.tasks.lock().unwrap();
+            let Some(t) = tasks.iter_mut().find(|t| t.id == id) else { bail!("no such task") };
+            if opts.model.is_some() {
+                t.model = task.model.clone();
+            }
+            t.effort = task.effort.clone();
             t.status = TaskStatus::Running;
             t.ended = None;
             t.via = Some(self.via.clone());
             t.events.push(Event::User { text: prompt.to_string() });
-            task
-        };
+        }
         let summary = self.get(id).map(|t| t.summary());
         self.publish(json!({ "kind": "task_event", "id": id, "event": Event::User { text: prompt.to_string() }, "task": summary }));
         self.launch(id, task);
         self.save(id);
         Ok(())
+    }
+
+    /// Provider session ids already in the history (run here or imported),
+    /// mapped to their task.
+    pub fn known_sessions(&self) -> HashMap<String, u64> {
+        let mut out = HashMap::new();
+        for t in self.tasks.lock().unwrap().iter() {
+            if let Some((_, s)) = t.origin.as_deref().and_then(|o| o.split_once(':')) {
+                out.insert(s.to_string(), t.id);
+            }
+            for s in t.session.iter().chain(&t.past_sessions) {
+                out.insert(s.clone(), t.id);
+            }
+        }
+        out
+    }
+
+    /// Adds a session from another tool to the history. Importing it again
+    /// refreshes it, unless it has been continued here since (then the
+    /// existing task is returned as is, like a session fermi ran itself).
+    pub fn import(&self, found: &crate::sessions::Found) -> Result<u64> {
+        let engine = self.engine();
+        let origin = found.origin();
+        let existing = {
+            let tasks = self.tasks.lock().unwrap();
+            if let Some(t) = tasks.iter().find(|t| t.origin.is_none() && t.session.as_deref() == Some(&found.session)) {
+                return Ok(t.id);
+            }
+            tasks.iter().find(|t| t.origin.as_deref() == Some(&origin)).cloned()
+        };
+        let id = match &existing {
+            Some(t) if t.status == TaskStatus::Running || t.events.iter().filter(|e| matches!(e, Event::Done { .. })).count() > 1 => {
+                return Ok(t.id);
+            }
+            Some(t) => t.id,
+            None => 0,
+        };
+        let mut rec = crate::sessions::to_rec(&engine, found, id)?;
+        if id == 0 {
+            // Keep the history in date order.
+            rec.id = id_at(&self.dir, rec.started * 1000);
+        }
+        let id = rec.id;
+        if let Some(mtime) = write_rec(&self.dir, &mut rec) {
+            self.scanner.lock().unwrap().note(id, mtime);
+        }
+        let summary = rec.summary();
+        {
+            let mut tasks = self.tasks.lock().unwrap();
+            match tasks.iter().position(|t| t.id == id) {
+                Some(i) => tasks[i] = rec,
+                None => {
+                    let at = tasks.partition_point(|t| t.id < id);
+                    tasks.insert(at, rec);
+                }
+            }
+        }
+        self.publish(json!({ "kind": "task_sync", "task": summary }));
+        Ok(id)
     }
 
     fn launch(self: &Arc<Self>, id: u64, task: Task) {
@@ -696,6 +922,71 @@ mod tests {
             rec.id()
         };
         assert_eq!(read_task(&history_dir(&home), id).unwrap().status, TaskStatus::Cancelled);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn switching_models() {
+        let home = tmp_dir("switch");
+        let cfg = crate::config::Config::parse(
+            r#"
+            [[accounts]]
+            id = "c"
+            provider = "claude"
+            [[accounts]]
+            id = "o"
+            provider = "openai"
+            [[profiles]]
+            name = "p"
+            accounts = ["c", "o"]
+            "#,
+        )
+        .unwrap();
+        let engine = Engine { catalog: cfg.catalog(), store: crate::state::Store::open(&home), cfg, home: home.clone(), depth: 0 };
+        let mut t = TaskRec::new(1, &Task::new("fix the bug", &home), "ui");
+        for ev in [
+            Event::Routed { profile: "p".into(), model: "claude:opus".into(), label: "Opus".into(), effort: None, account: "c".into(), why: String::new() },
+            Event::Session { id: "s1".into() },
+            Event::Tool { name: "Bash".into(), detail: "cargo test".into() },
+            Event::Text { text: "Fixed it.".into() },
+            Event::Done { ok: true, summary: String::new() },
+        ] {
+            t.apply(&ev);
+        }
+        let opts = |model: Option<&str>| FollowUp { model: model.map(String::from), effort: None };
+
+        // Same model, or another Claude model: the session carries on.
+        let same = continuation(&engine, &t, "and the docs", &opts(None));
+        assert_eq!((same.resume.as_deref(), same.model.as_deref(), same.account.as_deref()), (Some("s1"), Some("claude:opus"), Some("c")));
+        let sonnet = continuation(&engine, &t, "and the docs", &opts(Some("claude:sonnet")));
+        assert_eq!((sonnet.resume.as_deref(), sonnet.model.as_deref()), (Some("s1"), Some("claude:sonnet")));
+        assert!(sonnet.context.is_none());
+
+        // Another provider: a fresh session that gets the conversation.
+        let gpt = continuation(&engine, &t, "and the docs", &opts(Some("openai:gpt")));
+        assert!(gpt.resume.is_none() && gpt.account.is_none());
+        assert_eq!((gpt.model.as_deref(), gpt.profile.as_deref()), (Some("openai:gpt"), Some("p")));
+        let ctx = gpt.context.as_deref().unwrap();
+        assert!(ctx.contains("User: fix the bug") && ctx.contains("Bash cargo test") && ctx.contains("Assistant: Fixed it."));
+        assert!(gpt.input().ends_with("The user's new message:\n\nand the docs"));
+        assert_eq!(gpt.prompt, "and the docs", "routing sees only the new message");
+        engine.plan(&gpt).unwrap();
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn long_transcripts_keep_the_start_and_the_end() {
+        let home = tmp_dir("transcript");
+        let cfg = crate::config::Config::parse("").unwrap();
+        let engine = Engine { catalog: cfg.catalog(), store: crate::state::Store::open(&home), cfg, home: home.clone(), depth: 0 };
+        let mut t = TaskRec::new(1, &Task::new("the original task", &home), "ui");
+        for i in 0..400 {
+            t.events.push(Event::Text { text: format!("answer {i} {}", "x".repeat(1000)) });
+        }
+        let s = transcript(&engine, &t);
+        assert!(s.len() < TRANSCRIPT_MAX + 2_000);
+        assert!(s.contains("User: the original task") && s.contains("answer 399") && !s.contains("answer 0 "));
+        assert!(s.contains("earlier messages left out"));
         let _ = std::fs::remove_dir_all(&home);
     }
 }

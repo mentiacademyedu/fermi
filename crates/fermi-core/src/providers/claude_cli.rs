@@ -49,7 +49,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         envs.push(("CLAUDE_CONFIG_DIR".into(), home.display().to_string()));
     }
 
-    let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, &ctx.task.prompt, ctx.tx).await?;
+    let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, &ctx.task.input(), ctx.tx).await?;
     let (mut text, mut usage) = (String::new(), Usage::default());
     let (mut blocked, mut resets, mut error, mut got_result) = (false, None, None::<String>, false);
 

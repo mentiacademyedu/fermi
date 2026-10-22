@@ -59,6 +59,14 @@ enum Cmd {
     },
     /// Print one task's conversation
     Show { id: u64 },
+    /// List sessions from Claude Code, Codex and the Gemini CLI, or import some
+    /// (by list number or session id) so they show up and continue in fermi
+    Import {
+        /// List numbers or session ids (prefixes work); none = list
+        which: Vec<String>,
+        #[arg(short = 'n', long, default_value_t = 30)]
+        limit: usize,
+    },
     /// Interactive terminal UI (default)
     Tui {
         #[arg(short, long)]
@@ -126,6 +134,7 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Run(t) => return run(t).await,
         Cmd::History { limit } => history(limit)?,
         Cmd::Show { id } => show(id)?,
+        Cmd::Import { which, limit } => import(which, limit)?,
         Cmd::Tui { profile } => {
             if !fermi_core::Config::path().exists() {
                 setup::init(false)?;
@@ -250,6 +259,57 @@ async fn run(t: Target) -> Result<ExitCode> {
 }
 
 /// `fermi history`: recent tasks from every front end on this PC.
+fn import(which: Vec<String>, limit: usize) -> Result<()> {
+    let engine = Engine::load()?;
+    let found = fermi_core::sessions::discover(&engine.cfg);
+    let now = fermi_core::util::now();
+    if which.is_empty() {
+        // Sessions fermi ran itself, or imported already.
+        let known: std::collections::HashSet<String> = fermi_core::hub::load_history(&fermi_core::hub::history_dir(&engine.home), usize::MAX)
+            .into_iter()
+            .flat_map(|t| {
+                let origin = t.origin.and_then(|o| o.split_once(':').map(|x| x.1.to_string()));
+                t.session.into_iter().chain(t.past_sessions).chain(origin)
+            })
+            .collect();
+        if found.is_empty() {
+            println!("no Claude Code, Codex or Gemini CLI sessions found");
+        }
+        for (i, f) in found.iter().take(limit).enumerate() {
+            let place = f.cwd.as_ref().and_then(|c| c.file_name()).map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            let title: String = f.title.chars().take(60).collect();
+            println!(
+                "{:>3}  {:>6} ago  {:<11} {:<20} {:<9} {title}",
+                i + 1,
+                fermi_core::util::fmt_dur(now.saturating_sub(f.updated)),
+                f.source.name(),
+                place.chars().take(20).collect::<String>(),
+                if known.contains(&f.session) { "in fermi" } else { "" },
+            );
+        }
+        println!("
+import with: fermi import <number or session id> ...");
+        return Ok(());
+    }
+    let dir = fermi_core::hub::history_dir(&engine.home);
+    std::fs::create_dir_all(&dir)?;
+    let hub = fermi_core::hub::Hub::new(engine, "cli");
+    for w in &which {
+        let pick = match w.parse::<usize>() {
+            Ok(n) if (1..=found.len()).contains(&n) => found.get(n - 1),
+            _ => found.iter().find(|f| f.session.starts_with(w.as_str())),
+        };
+        match pick {
+            Some(f) => match hub.import(f) {
+                Ok(id) => println!("✓ {} → task {id}  ({})", f.title.chars().take(60).collect::<String>(), f.source.name()),
+                Err(e) => println!("✗ {}: {e:#}", f.title.chars().take(60).collect::<String>()),
+            },
+            None => println!("✗ {w}: no such session (run `fermi import` to list them)"),
+        }
+    }
+    Ok(())
+}
+
 fn history(limit: usize) -> Result<()> {
     let home = fermi_core::Config::home();
     let tasks = fermi_core::hub::load_history(&fermi_core::hub::history_dir(&home), limit);

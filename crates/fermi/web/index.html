@@ -280,6 +280,23 @@ button:disabled { opacity: .45; cursor: default; }
 .repo .acts .state { color: var(--faint); font-size: 12px; margin-left: auto; }
 .an-prompt { min-height: 230px !important; font: 13.5px/1.5 var(--sans) !important; }
 
+/* import sessions */
+#im-source { grid-template-columns: repeat(4, auto); }
+.im-tools { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.im-tools .search { flex: 0 1 340px; }
+.im-hide { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; white-space: nowrap; cursor: pointer; }
+.im-list { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); overflow: hidden; }
+.im-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 3px 12px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
+.im-row:first-child { border-top: 0; }
+.im-row:hover { background: var(--panel-2); }
+.im-row > input { grid-row: 1 / 3; margin: 0; }
+.im-row .ttl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.im-row .src { font-size: 11px; font-weight: 400; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); margin-right: 8px; }
+.im-row .act { grid-row: 1 / 3; grid-column: 3; }
+.im-row .meta { grid-column: 2; color: var(--faint); font-size: 12.5px; display: flex; gap: 12px; flex-wrap: wrap; }
+.im-empty { padding: 18px 14px; }
+#reply-route { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
+
 /* usage */
 #usage-range { grid-template-columns: repeat(3, auto); margin: 0 0 14px; }
 #usage-range button { padding: 4px 12px; white-space: nowrap; }
@@ -466,6 +483,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
     <button class="new-task" id="new-task"><span data-i="plusCircle"></span>New task</button>
     <label class="search"><span data-i="search"></span><input id="search" placeholder="Search tasks" autocomplete="off"></label>
     <button class="side-link" id="open-trending" style="flex:none"><span data-i="trend"></span>Trending repos</button>
+    <button class="side-link" id="open-import" style="flex:none" title="Bring in conversations from Claude Code, Codex and the Gemini CLI"><span data-i="download"></span>Import sessions</button>
     <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder (opens a folder picker)" data-i="folderPlus"></button></div>
     <nav class="ws-list" id="ws-list"></nav>
     <div class="side-foot">
@@ -513,8 +531,8 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
             <label class="chip new-only" title="Account"><span data-i="key"></span><select id="f-account"></select></label>
             <span class="spacer"></span>
             <span class="route reply-only" id="reply-route"></span>
-            <label class="chip bold new-only" title="Model"><select id="f-model"></select></label>
-            <label class="chip quiet new-only" title="Reasoning effort"><select id="f-effort"></select></label>
+            <label class="chip bold new-reply" title="Model (you can switch it in the middle of a conversation)"><select id="f-model"></select></label>
+            <label class="chip quiet new-reply" title="Reasoning effort"><select id="f-effort"></select></label>
             <button type="submit" class="send" id="send" title="Send (Ctrl+Enter)" data-i="arrowUp"></button>
           </div>
         </form>
@@ -550,6 +568,27 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
             </div>
           </div>
           <div class="tr-grid" id="tr-grid"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-import" hidden>
+      <div class="settings">
+        <section style="max-width:1000px">
+          <div class="sec-head">
+            <div><h2>Import sessions</h2><p class="sub">Conversations from Claude Code, Codex and the Gemini CLI on this PC. Imported ones join your history, and you can continue them here on any model.</p></div>
+            <div class="tr-controls">
+              <div class="seg" id="im-source"><button data-s="">All</button><button data-s="claude-code">Claude Code</button><button data-s="codex">Codex</button><button data-s="gemini">Gemini</button></div>
+              <button class="icon-btn" id="im-refresh" title="Look again" data-i="refresh"></button>
+            </div>
+          </div>
+          <div class="im-tools">
+            <label class="search"><span data-i="search"></span><input id="im-filter" placeholder="Filter by title or folder" autocomplete="off"></label>
+            <label class="im-hide"><input type="checkbox" id="im-hide-known">Hide ones already in fermi</label>
+            <span class="spacer" style="flex:1"></span>
+            <button class="small primary" id="im-go" disabled>Import selected</button>
+          </div>
+          <div class="im-list" id="im-list"></div>
         </section>
       </div>
     </section>
@@ -743,6 +782,7 @@ const I = {
   collapse: '<path d="m7 15 5-5 5 5"/>',
   terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/>',
   trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
+  download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   arrowLeft: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
   arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
@@ -800,6 +840,8 @@ const fmtSize = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed
 const nowS = () => Math.floor(Date.now() / 1000);
 const IMG = /\.(png|jpe?g|gif|webp|svg|ico|bmp|avif)$/i;
 const PROVIDER = { claude: "Claude", openai: "OpenAI", gemini: "Gemini" };
+const VIA = { "claude-code": "imported from Claude Code", codex: "imported from Codex", gemini: "imported from Gemini CLI" };
+const viaLabel = (v) => (v ? VIA[v] || `from fermi ${v}` : "");
 const PERM_LABEL = { acceptEdits: "Edit files", bypassPermissions: "Full access", plan: "Plan only", default: "Ask first" };
 const PERM_LONG = { acceptEdits: "Edit files freely (recommended)", bypassPermissions: "Anything, without asking", plan: "Plan only, change nothing", default: "Ask first (unanswered asks are skipped)" };
 
@@ -893,7 +935,7 @@ function renderSide() {
     const limit = searching ? 50 : g.showAll ? 200 : 6;
     for (const t of g.tasks.slice(0, limit)) {
       const r = el("div", "task-row" + (t.id === S.sel && S.active === "chat" ? " sel" : ""));
-      r.title = titleOf(t) + (t.via ? `  ·  from fermi ${t.via}` : "");
+      r.title = titleOf(t) + (t.via ? `  ·  ${viaLabel(t.via)}` : "");
       const secs = (t.ended || nowS()) - t.started;
       r.append(statusGlyph(t), el("span", "t", titleOf(t)), el("span", "time", fmtDur(Math.max(0, secs))));
       r.onclick = () => selectTask(t.id);
@@ -930,7 +972,7 @@ function renderTabs() {
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
-    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
+    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
     mk(f.id, f.name, ic, true, f.dirty);
   }
   const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
@@ -943,16 +985,18 @@ function renderTabs() {
 function activate(id) {
   S.active = id;
   const tab = S.tabs.find((t) => t.id === id);
-  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview";
+  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
   $("#view-term").hidden = !isTerm;
   $("#view-trending").hidden = !isTrend;
   $("#view-preview").hidden = !isPreview;
-  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview;
+  $("#view-import").hidden = !isImport;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport;
   if (isTerm) showTerm(tab);
   else if (isTrend) loadTrending();
   else if (isPreview) showPreview();
+  else if (isImport) loadImport();
   else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
@@ -1068,6 +1112,7 @@ function renderMarkdown(src) {
     if (LIST.test(line)) {
       flush();
       const list = el(/^\s*\d/.test(line) ? "ol" : "ul");
+      const first = /^\s*(\d+)/.exec(line); if (first && first[1] !== "1") list.start = Number(first[1]);
       while (i < lines.length && LIST.test(lines[i])) {
         const indent = LIST.exec(lines[i])[1].length;
         const li = el("li"); if (indent >= 2) li.style.marginLeft = Math.floor(indent / 2) * 16 + "px";
@@ -1180,7 +1225,7 @@ function renderChat() {
     return;
   }
   $("#convo-title").textContent = titleOf(t);
-  $("#convo-route").textContent = [t.route, relTo("", t.cwd), t.via ? `from fermi ${t.via}` : ""].filter(Boolean).join("   ·   ");
+  $("#convo-route").textContent = [t.route, relTo("", t.cwd), viaLabel(t.via)].filter(Boolean).join("   ·   ");
   $("#cancel").hidden = t.status !== "running";
   $("#delete-task").hidden = t.status === "running"; $("#delete-task").textContent = "Delete";
   const log = $("#log"); log.replaceChildren();
@@ -1237,7 +1282,18 @@ function composerMode() {
   const t = S.tasks.get(S.sel);
   if (!t) return "new";
   if (t.status === "running") return "busy";
-  return t.resumable ? "reply" : "closed";
+  return "reply"; // any finished conversation continues (see replyRoute)
+}
+const modelLabel = (id) => S.state?.models.find((m) => m.id === id)?.label || id;
+// What a reply will do with the model and effort picked in the composer.
+function replyRoute(t) {
+  const m = $("#f-model").value, cur = t.ran_model || t.model;
+  const prov = (id) => (id || "").split(":")[0];
+  if (m && m !== cur) {
+    return t.resumable && prov(m) === prov(cur) ? `switching to ${modelLabel(m)} · same session` : `switching to ${modelLabel(m)} · it gets the conversation so far`;
+  }
+  if (t.resumable) return `continuing on ${t.route || ""}`;
+  return `continuing on ${cur ? modelLabel(cur) : "the profile's model"} · it gets the conversation so far`;
 }
 function renderComposer() {
   const st = S.state; if (!st) return;
@@ -1249,13 +1305,29 @@ function renderComposer() {
   fillSelect($("#f-perm"), [["", "Profile default"], ...st.permissions.map((p) => [p, PERM_LABEL[p] || p])]);
   fillSelect($("#f-profile"), [["", `Auto profile${w?.profile ? " (" + w.profile + ")" : ""}`], ...st.profiles.map((p) => [p.name, p.name])]);
   fillSelect($("#f-account"), [["", "Any account"], ...st.accounts.map((a) => [a.id, a.id])]);
-  fillSelect($("#f-model"), modelOptions());
-  fillSelect($("#f-effort"), [["", "Auto effort"], ...st.efforts.map((e) => [e, e])]);
   const mode = composerMode(); const t = S.tasks.get(S.sel);
+  // A new task keeps the last model/effort picked for new tasks; a reply
+  // starts on "keep" each time it's opened.
+  const forWhat = mode === "reply" ? `reply:${S.sel}` : mode;
+  const fresh = S.composerFor !== forWhat;
+  if (fresh && S.composerFor === "new") S.newPick = { model: $("#f-model").value, effort: $("#f-effort").value };
+  S.composerFor = forWhat;
+  if (mode === "reply") {
+    const cur = t.ran_model || t.model;
+    fillSelect($("#f-model"), [opt("", `Keep ${cur ? modelLabel(cur) : "the model"}`), ...modelOptions().slice(1)]);
+    fillSelect($("#f-effort"), [["", `Keep effort${t.effort ? " (" + t.effort + ")" : ""}`], ["auto", "Auto effort"], ...st.efforts.map((e) => [e, e])]);
+    if (fresh) $("#f-model").value = $("#f-effort").value = "";
+  } else {
+    fillSelect($("#f-model"), modelOptions());
+    fillSelect($("#f-effort"), [["", "Auto effort"], ...st.efforts.map((e) => [e, e])]);
+    if (fresh && S.newPick) { $("#f-model").value = S.newPick.model; $("#f-effort").value = S.newPick.effort; }
+  }
   document.querySelectorAll(".new-only").forEach((n) => (n.hidden = mode !== "new"));
   document.querySelectorAll(".reply-only").forEach((n) => (n.hidden = mode !== "reply"));
+  document.querySelectorAll(".new-reply").forEach((n) => (n.hidden = mode !== "new" && mode !== "reply"));
   $(".ws-pick").hidden = mode !== "new";
-  $("#reply-route").textContent = mode === "reply" ? `continuing on ${t.route || ""}` : "";
+  $("#reply-route").textContent = mode === "reply" ? replyRoute(t) : "";
+  $("#reply-route").title = $("#reply-route").textContent;
   const p = $("#prompt");
   p.disabled = mode === "busy" || mode === "closed";
   p.placeholder = { new: "Describe what you want to build… (Ctrl+Enter)", reply: "Reply to continue this conversation… (Ctrl+Enter)", busy: "Working… you can reply once it finishes.", closed: "This task can't be continued. Start a new task from the sidebar." }[mode];
@@ -1286,7 +1358,8 @@ $("#composer").onsubmit = async (e) => {
   $("#send").disabled = true;
   try {
     if (mode === "reply") {
-      await api(`/api/tasks/${S.sel}/reply`, { prompt });
+      await api(`/api/tasks/${S.sel}/reply`, { prompt, model: $("#f-model").value, effort: $("#f-effort").value });
+      $("#f-model").value = $("#f-effort").value = "";
     } else {
       const w = currentWs();
       const r = await api("/api/tasks", {
@@ -1303,6 +1376,10 @@ $("#composer").onsubmit = async (e) => {
     renderChat(); schedule("side", "composer", "tabs");
   } catch (err) { note.textContent = err.message; note.className = "composer-note err"; }
   finally { $("#send").disabled = false; renderComposer(); }
+};
+$("#f-model").onchange = $("#f-effort").onchange = () => {
+  const t = S.tasks.get(S.sel);
+  if (composerMode() === "reply" && t) $("#reply-route").textContent = $("#reply-route").title = replyRoute(t);
 };
 $("#prompt").onkeydown = (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); $("#composer").requestSubmit(); } };
 $("#prompt").oninput = () => { const p = $("#prompt"); p.style.height = "auto"; p.style.height = Math.min(p.scrollHeight, window.innerHeight * 0.4) + "px"; };
@@ -1499,6 +1576,72 @@ function showFile(tab) {
   }
 }
 const activeTab = () => S.tabs.find((t) => t.id === S.active);
+
+// ── sessions from other tools (Claude Code, Codex, Gemini CLI) ─────────────
+S.im = { data: null, source: pref.get("imSource", ""), hideKnown: pref.get("imHideKnown", false), picked: new Set(), busy: false };
+function openImport() {
+  if (!S.tabs.some((t) => t.id === "import")) S.tabs.unshift({ id: "import", name: "Import", kind: "import" });
+  activate("import");
+}
+async function loadImport(refresh = false) {
+  if (S.im.data && !S.im.data.error && !refresh) { renderImport(); return; }
+  S.im.data = null; renderImport();
+  try { S.im.data = await api("/api/sessions"); } catch (e) { S.im.data = { error: e.message }; }
+  renderImport();
+}
+function renderImport() {
+  document.querySelectorAll("#im-source button").forEach((b) => (b.className = b.dataset.s === S.im.source ? "on" : ""));
+  $("#im-hide-known").checked = S.im.hideKnown;
+  const list = $("#im-list"), d = S.im.data; list.replaceChildren();
+  if (!d) { list.append(el("div", "im-empty faint", "Looking for sessions…")); syncImportBtn(); return; }
+  if (d.error) { list.append(el("div", "im-empty err", d.error)); syncImportBtn(); return; }
+  const term = $("#im-filter").value.trim().toLowerCase();
+  const rows = d.sessions.filter((x) => (!S.im.source || x.source === S.im.source) && !(S.im.hideKnown && x.task != null)
+    && (!term || x.title.toLowerCase().includes(term) || (x.cwd || "").toLowerCase().includes(term)));
+  if (!rows.length) list.append(el("div", "im-empty faint", d.sessions.length ? "No sessions match." : "No Claude Code, Codex or Gemini CLI sessions on this PC yet."));
+  for (const x of rows.slice(0, 300)) {
+    const key = `${x.source}:${x.session}`, known = x.task != null;
+    const row = el("div", "im-row");
+    const cb = el("input"); cb.type = "checkbox"; cb.disabled = known; cb.checked = !known && S.im.picked.has(key);
+    cb.title = known ? "Already in fermi" : "Select";
+    cb.onchange = () => { cb.checked ? S.im.picked.add(key) : S.im.picked.delete(key); syncImportBtn(); };
+    const ttl = el("div", "ttl"); ttl.append(el("span", "src", x.tool), x.title); ttl.title = x.title;
+    const meta = el("div", "meta");
+    const where = el("span", null, x.cwd ? baseName(x.cwd) : "unknown folder"); if (x.cwd) where.title = x.cwd;
+    meta.append(where, el("span", null, `${fmtDur(Math.max(0, nowS() - x.updated))} ago`), el("span", null, fmtSize(x.size)),
+      el("span", null, known ? "in fermi" : x.resumes ? `continues in the same session on ${x.account}` : "continues on any model, with the conversation passed on"));
+    const act = el("button", "small act" + (known ? "" : " primary"), known ? "Open" : "Import");
+    act.disabled = S.im.busy;
+    act.onclick = () => (known ? selectTask(x.task) : importSessions([key]));
+    row.append(cb, ttl, act, meta);
+    list.append(row);
+  }
+  syncImportBtn();
+}
+function syncImportBtn() {
+  const n = S.im.picked.size, b = $("#im-go");
+  b.disabled = !n || S.im.busy;
+  b.textContent = S.im.busy ? "Importing…" : n ? `Import ${n} selected` : "Import selected";
+}
+async function importSessions(keys) {
+  S.im.busy = true; renderImport();
+  try {
+    const r = await api("/api/sessions/import", { sessions: keys });
+    for (const k of keys) S.im.picked.delete(k);
+    if (r.errors?.length) toast(r.errors.join("; "), true);
+    S.im.busy = false;
+    if (keys.length === 1 && r.ids.length) { selectTask(r.ids[0]); loadImport(true); return; }
+    toast(`Imported ${r.ids.length} session${r.ids.length === 1 ? "" : "s"}`);
+    loadImport(true);
+  } catch (e) { toast(e.message, true); }
+  finally { S.im.busy = false; syncImportBtn(); }
+}
+document.querySelectorAll("#im-source button").forEach((b) => (b.onclick = () => { S.im.source = b.dataset.s; pref.set("imSource", S.im.source); renderImport(); }));
+$("#im-hide-known").onchange = () => { S.im.hideKnown = $("#im-hide-known").checked; pref.set("imHideKnown", S.im.hideKnown); renderImport(); };
+$("#im-filter").oninput = () => renderImport();
+$("#im-refresh").onclick = () => loadImport(true);
+$("#im-go").onclick = () => importSessions([...S.im.picked]);
+$("#open-import").onclick = openImport;
 
 // ── trending repositories ───────────────────────────────────────────────────
 const TR_LANGS = ["", "Python", "TypeScript", "JavaScript", "Rust", "Go", "Java", "C++", "C#", "C", "Swift", "Kotlin", "Ruby", "PHP", "Shell", "Zig", "Dart", "Lua"];
@@ -2290,6 +2433,7 @@ async function refresh() {
     if (params.get("pane")) setPane(params.get("pane"));
     if (params.get("view") === "settings" && S.active !== "settings") openSettings();
     if (params.get("view") === "trending" && S.active !== "trending") openTrending();
+    if (params.get("view") === "import" && S.active !== "import") openImport();
     if (params.get("view") === "preview" && S.active !== "preview") openPreview(params.get("url") || undefined);
     if (params.get("term") && !S.tabs.some((t) => t.kind === "term")) newTerm();
     if (params.get("diff") && !S.tabs.length) { const p = params.get("diff"); openDiff({ path: p, rel: relTo(currentWs()?.path, p), status: "M" }); }

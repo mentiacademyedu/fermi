@@ -91,7 +91,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     }
     match (ctx.account.provider, ctx.account.auth) {
         (Provider::Claude, Auth::Cli) => claude_cli::run(ctx).await,
-        (Provider::Openai, Auth::Cli) => codex_cli::run(ctx, &ctx.task.prompt, ctx.model.cli.as_deref(), None).await,
+        (Provider::Openai, Auth::Cli) => codex_cli::run(ctx, &ctx.task.input(), ctx.model.cli.as_deref(), None).await,
         (Provider::Claude, Auth::Api) => api::anthropic(ctx).await,
         (Provider::Openai, Auth::Api) => api::openai(ctx).await,
         // The Gemini CLI takes API keys too, so both go through it.

@@ -93,7 +93,8 @@ fermi ui                    # the same dashboard in your browser
 
 Everything the TUI does, in the browser: run tasks in parallel with live
 output, **reply to a finished task to continue the conversation** (same
-session, account and model), browse and edit workspace files, review what
+session and account; you can **switch the model** for any reply, see below),
+**import sessions** from Claude Code, Codex and the Gemini CLI, browse and edit workspace files, review what
 agents changed in a **Changes** panel (git status and diffs), open **terminals** in
 your workspaces (Ctrl+`; PowerShell on Windows, your `$SHELL` elsewhere), check
 a website you're building in the **Preview** tab (an internal browser: it finds dev
@@ -110,6 +111,21 @@ add or remove accounts, and log in
 once it's done). It's served by the same binary on `127.0.0.1` only. Every
 request needs the access key in the link `fermi ui` prints, and requests from
 other sites are refused. Ctrl+C stops it and its running tasks.
+
+## Continuing conversations
+
+- **Switch models mid-conversation**: pick a model (and effort) in the reply
+  box. Another model of the same provider resumes the same session; a model of
+  another provider starts a fresh session that gets the conversation so far
+  (long ones keep the start and the most recent messages). Either way the next
+  reply carries on from there.
+- **Import sessions** from other tools: the dashboard's *Import sessions* page
+  (or `fermi import`, then `fermi import <number>`) lists the conversations
+  Claude Code, Codex and the Gemini CLI saved on this PC. Imported ones join the
+  shared history. When one of your accounts owns the folder a session was saved
+  in (e.g. an account with `home = "default"` for `~/.claude`), a reply resumes
+  that session in place; otherwise the conversation is passed on to whichever
+  model you pick. Sessions fermi ran itself show up as already imported.
 
 ## Models
 
@@ -140,7 +156,8 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   state.rs         per-account usage (~/.fermi/state.json) + usage.jsonl log
   providers/       claude_cli, codex_cli, gemini_cli, api (Anthropic/OpenAI), image
   mcp.rs           `fermi mcp` stdio server attached to Claude sessions
-  hub.rs           task registry + broadcast for long-lived front ends
+  hub.rs           task registry + broadcast for long-lived front ends, model switching
+  sessions.rs      finds and imports Claude Code / Codex / Gemini CLI sessions
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
   web/index.html   the dashboard (single file, no build step, embedded in the binary)

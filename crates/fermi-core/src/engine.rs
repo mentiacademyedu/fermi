@@ -31,6 +31,10 @@ pub struct Task {
     /// Overrides the profile's permission mode for this task
     /// (`acceptEdits`, `bypassPermissions`, `plan`, `default`).
     pub permission: Option<String>,
+    /// The conversation so far, for a model that wasn't part of it (after a
+    /// model switch, or for an imported session). Sent ahead of the prompt;
+    /// routing still looks at the prompt alone.
+    pub context: Option<String>,
 }
 
 /// Permission modes a task may ask for.
@@ -48,6 +52,17 @@ impl Task {
             out: None,
             resume: None,
             permission: None,
+            context: None,
+        }
+    }
+
+    /// What the model is sent: the context (if any), then the prompt.
+    pub fn input(&self) -> std::borrow::Cow<'_, str> {
+        match &self.context {
+            Some(c) => format!("{c}
+
+{}", self.prompt).into(),
+            None => self.prompt.as_str().into(),
         }
     }
 }
@@ -179,6 +194,7 @@ impl Engine {
                     account: acct.id.clone(),
                     why: match (&task.resume, &task.model) {
                         (Some(_), _) => "continuing the conversation".into(),
+                        (None, _) if task.context.is_some() => "continuing; the conversation so far was passed on".into(),
                         (None, Some(_)) => "chosen".into(),
                         (None, None) => plan.need.why.clone(),
                     },
