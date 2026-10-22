@@ -297,6 +297,87 @@ button:disabled { opacity: .45; cursor: default; }
 .im-empty { padding: 18px 14px; }
 #reply-route { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
 
+/* slides */
+.sl-bar { display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-bottom: 1px solid var(--line); min-width: 0; }
+.sl-bar .crumb { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 0 auto; max-width: 240px; }
+.sl-bar .spacer { min-width: 0; }
+.sl-bar .faint { white-space: nowrap; font-size: 12.5px; }
+.sl-bar .sep { width: 1px; height: 18px; background: var(--line-2); margin: 0 4px; flex: none; }
+.sl-bar button { white-space: nowrap; flex: none; }
+.sl-body { flex: 1; display: flex; min-height: 0; }
+.sl-thumbs { width: 190px; flex: none; overflow: auto; padding: 12px 10px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+.sl-thumb { display: flex; gap: 6px; align-items: flex-start; background: none; border: 0; padding: 0; cursor: pointer; }
+.sl-thumb .n { width: 16px; flex: none; color: var(--faint); font-size: 11px; text-align: right; padding-top: 2px; }
+.sl-thumb .sl-fit { border-radius: 3px; box-shadow: 0 0 0 1px var(--line-2); }
+.sl-thumb.on .sl-fit { box-shadow: 0 0 0 2px var(--accent); }
+.sl-code { width: 38%; min-width: 260px; max-width: 640px; flex: none; border-right: 1px solid var(--line); display: flex; }
+.sl-code textarea { flex: 1; border: 0; resize: none; padding: 12px 14px; font: 13px/1.6 var(--mono); font-variant-ligatures: none; background: var(--panel); color: var(--text); outline: none; tab-size: 2; }
+.sl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sl-stage { flex: 1; min-height: 0; display: grid; place-items: center; overflow: hidden; background: var(--panel-2); }
+.sl-fit { position: relative; overflow: hidden; flex: none; background: #fff; }
+.sl-stage .sl-fit { box-shadow: 0 2px 14px rgba(0,0,0,.18); }
+.sl-fit > .slide { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.sl-notes { border-top: 1px solid var(--line); height: 104px; display: flex; flex-direction: column; flex: none; }
+.sl-notes-h { font-size: 11.5px; color: var(--faint); padding: 6px 14px 0; }
+.sl-notes textarea { flex: 1; border: 0; resize: none; padding: 4px 14px 8px; background: transparent; color: var(--text); font: 13px/1.5 var(--sans); outline: none; }
+/* A rendered slide: its colors come from the deck, never from the app theme. */
+.slide { position: relative; overflow: hidden; color: #000; background: #fff; font-family: Calibri, Arial, sans-serif; line-height: 1.2; text-align: left; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.slide .shp { position: absolute; box-sizing: border-box; }
+.slide .shp.pic img { position: absolute; display: block; max-width: none; }
+.slide .shp svg.ln { position: absolute; left: 0; top: 0; overflow: visible; }
+.slide .tx { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.slide .tx-in { min-height: 1em; }
+.slide .tp { white-space: pre-wrap; overflow-wrap: break-word; }
+.slide .tp[data-bu]::before { content: attr(data-bu); display: inline-block; min-width: var(--bw, 0px); text-indent: 0; color: var(--buc, inherit); }
+.slide .ptbl { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.slide .ptbl td { border: 1px solid #fff; padding: 0; position: relative; vertical-align: top; }
+.slide .ptbl td .tx { position: relative; inset: auto; }
+.slide .ph-box { position: absolute; inset: 0; display: grid; place-items: center; border: 1px dashed #999; color: #777; font-size: 14px; background: rgba(0,0,0,.03); }
+.sl-stage .slide .shp.ed:hover { outline: 1px dashed rgba(29,111,184,.7); }
+.sl-stage .slide .shp.sel { outline: 2px solid #1d6fb8; z-index: 5; cursor: move; }
+.slide .shp .grip { position: absolute; right: -7px; bottom: -7px; width: 12px; height: 12px; background: #1d6fb8; border: 2px solid #fff; border-radius: 3px; cursor: nwse-resize; }
+.slide [contenteditable="true"] { outline: none; cursor: text; }
+/* Markdown (Marp-style) decks */
+.md-slide { padding: 64px 84px; display: flex; flex-direction: column; justify-content: center; font: 32px/1.45 "Segoe UI", Helvetica, Arial, sans-serif; color: #24292f; background: #fff; }
+.md-slide .md-content { position: relative; z-index: 1; min-width: 0; }
+.md-slide h3 { font-size: 1.9em; margin: 0 0 .4em; line-height: 1.15; color: #1f2937; }
+.md-slide h4 { font-size: 1.45em; margin: 0 0 .45em; line-height: 1.2; color: #1f2937; }
+.md-slide h5 { font-size: 1.15em; margin: 0 0 .4em; }
+.md-slide p, .md-slide ul, .md-slide ol { margin: 0 0 .5em; }
+.md-slide ul, .md-slide ol { padding-left: 1.2em; }
+.md-slide code { font-size: .85em; background: rgba(127,127,127,.15); padding: .1em .3em; border-radius: 4px; }
+.md-slide pre { font-size: .6em; background: #f6f8fa; color: #24292f; border-radius: 8px; padding: .8em 1em; }
+.md-slide table { border-collapse: collapse; font-size: .8em; }
+.md-slide th, .md-slide td { border: 1px solid #d0d7de; padding: .3em .7em; }
+.md-slide img.md-img { max-width: 100%; max-height: 520px; }
+.md-slide .md-bg { position: absolute; inset: 0; background: center / cover no-repeat; }
+.md-slide.split-left .md-bg { right: auto; width: var(--bgw); }
+.md-slide.split-right .md-bg { left: auto; width: var(--bgw); }
+.md-slide.split-left .md-content { margin-left: var(--bgw); }
+.md-slide.split-right .md-content { margin-right: var(--bgw); }
+.md-slide.lead { text-align: center; }
+.md-slide.lead h3 { font-size: 2.3em; }
+.md-slide.invert, .md-slide.theme-gaia.invert { background: #1f2430; color: #e6e6e6; }
+.md-slide.invert h3, .md-slide.invert h4 { color: #fff; }
+.md-slide.theme-gaia { background: #fff8e1; color: #455a64; }
+.md-slide.theme-gaia h3, .md-slide.theme-gaia h4 { color: #0288d1; }
+.md-slide.theme-uncover { text-align: center; background: #fdfcff; }
+.md-slide .md-hf { position: absolute; left: 84px; right: 84px; font-size: 18px; color: rgba(0,0,0,.45); }
+.md-slide header.md-hf { top: 24px; }
+.md-slide footer.md-hf { bottom: 24px; }
+.md-slide .md-page { position: absolute; right: 30px; bottom: 22px; font-size: 18px; color: rgba(0,0,0,.45); }
+#present { position: fixed; inset: 0; z-index: 1000; background: #000; display: grid; place-items: center; cursor: pointer; }
+#present .sl-fit { background: transparent; }
+#pr-count { position: absolute; right: 16px; bottom: 10px; color: rgba(255,255,255,.45); font: 12px var(--sans); pointer-events: none; }
+#print-root { display: none; }
+@media print {
+  body.printing > *:not(#print-root) { display: none !important; }
+  body.printing { background: #fff !important; }
+  body.printing #print-root { display: block; }
+  .pr-page { position: relative; overflow: hidden; break-after: page; page-break-after: always; }
+  .pr-page > .slide { transform: none !important; }
+}
+
 /* usage */
 #usage-range { grid-template-columns: repeat(3, auto); margin: 0 0 14px; }
 #usage-range button { padding: 4px 12px; white-space: nowrap; }
@@ -547,6 +628,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
         <span class="faint" id="file-info"></span>
         <button class="small ghost" id="file-open" title="Open the file">Open file</button>
         <button class="small ghost" id="file-preview" title="Show this page in the Preview tab">Preview</button>
+        <button class="small ghost" id="file-slides" title="Show this Markdown as slides (separated by --- lines)">Slides</button>
         <button class="small ghost" id="file-mention" title="Mention this file in the chat">@ Mention</button>
         <button class="small primary" id="file-save" title="Save (Ctrl+S)">Save</button>
       </div>
@@ -569,6 +651,35 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
           </div>
           <div class="tr-grid" id="tr-grid"></div>
         </section>
+      </div>
+    </section>
+
+    <section class="view" id="view-slides" hidden>
+      <div class="sl-bar">
+        <span data-i="slides"></span><span class="crumb" id="sl-path"></span><span class="faint" id="sl-info"></span>
+        <span class="spacer" style="flex:1"></span>
+        <button class="small ghost" id="sl-codebtn">Hide code</button>
+        <button class="small ghost" id="sl-text" title="Edit the file as plain text">Text</button>
+        <span class="sep"></span>
+        <button class="small ghost" id="sl-addslide" title="Add a slide after this one">+ Slide</button>
+        <button class="small ghost" id="sl-addtext" title="Add a text box">+ Text</button>
+        <button class="small ghost" id="sl-dup" title="Duplicate this slide">Duplicate</button>
+        <button class="icon-btn" id="sl-up" title="Move slide up" data-i="arrowUp"></button>
+        <button class="icon-btn" id="sl-down" title="Move slide down" data-i="arrowDown"></button>
+        <button class="small ghost" id="sl-del" title="Delete this slide">Delete</button>
+        <button class="small ghost" id="sl-undo" title="Undo (Ctrl+Z)">Undo</button>
+        <span class="sep"></span>
+        <button class="small ghost" id="sl-print" title="Print or save as PDF">PDF</button>
+        <button class="small" id="sl-present" title="Present from this slide (F5 from the start)"><span data-i="play"></span>Present</button>
+        <button class="small primary" id="sl-save" title="Save (Ctrl+S)">Save</button>
+      </div>
+      <div class="sl-body">
+        <div class="sl-thumbs" id="sl-thumbs"></div>
+        <div class="sl-code" id="sl-code-pane" hidden><textarea id="sl-src" spellcheck="false" wrap="soft"></textarea></div>
+        <div class="sl-main">
+          <div class="sl-stage" id="sl-stage"></div>
+          <div class="sl-notes"><div class="sl-notes-h">Speaker notes</div><textarea id="sl-notes"></textarea></div>
+        </div>
       </div>
     </section>
 
@@ -750,6 +861,8 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
 </dialog>
 
 <div id="toast"></div>
+<div id="present" hidden><div id="pr-stage"></div><div id="pr-count"></div></div>
+<div id="print-root"></div>
 <div id="notice" hidden><span id="notice-text"></span><button class="small primary" id="notice-go"></button><button class="icon-btn" id="notice-x" title="Dismiss" data-i="x"></button></div>
 
 <script>
@@ -783,6 +896,9 @@ const I = {
   terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/>',
   trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
+  slides: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/>',
+  play: '<path d="M8 5v14l11-7z"/>',
+  arrowDown: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
   arrowLeft: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
   arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
@@ -972,7 +1088,7 @@ function renderTabs() {
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
-    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
+    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
     mk(f.id, f.name, ic, true, f.dirty);
   }
   const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
@@ -985,18 +1101,20 @@ function renderTabs() {
 function activate(id) {
   S.active = id;
   const tab = S.tabs.find((t) => t.id === id);
-  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import";
+  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
   $("#view-term").hidden = !isTerm;
   $("#view-trending").hidden = !isTrend;
   $("#view-preview").hidden = !isPreview;
   $("#view-import").hidden = !isImport;
-  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport;
+  $("#view-slides").hidden = !isSlides;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides;
   if (isTerm) showTerm(tab);
   else if (isTrend) loadTrending();
   else if (isPreview) showPreview();
   else if (isImport) loadImport();
+  else if (isSlides) showSlides(tab);
   else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
@@ -1056,7 +1174,9 @@ function codeBlock(code, lang) {
   wrap.append(head, pre);
   return wrap;
 }
-const INLINE = /(`+)([^`]+?)\1|\*\*([^*\n]+)\*\*|__([^_\n]+)__|(?<![\w*])\*([^*\n]+)\*(?![\w*])|(?<![\w])_([^_\n]+)_(?![\w])|\[([^\]\n]+)\]\(([^)\s]+)\)/g;
+const INLINE = /(`+)([^`]+?)\1|\*\*([^*\n]+)\*\*|__([^_\n]+)__|(?<![\w*])\*([^*\n]+)\*(?![\w*])|(?<![\w])_([^_\n]+)_(?![\w])|\[([^\]\n]+)\]\(([^)\s]+)\)|!\[([^\]\n]*)\]\(([^)\s]+)[^)\n]*\)/g;
+// Resolves image sources while a slide renders (chat messages don't show images).
+let mdImage = null;
 // Opens a link: local dev servers in Preview, everything else in the browser.
 function openLink(url) {
   if (LOCAL_URL.test(url) && pvNormalize(url)) openPreview(url);
@@ -1086,7 +1206,13 @@ function inline(parent, text) {
     if (m[2] != null) parent.append(el("code", null, m[2]));
     else if (m[3] != null || m[4] != null) parent.append(el("strong", null, m[3] ?? m[4]));
     else if (m[5] != null || m[6] != null) parent.append(el("em", null, m[5] ?? m[6]));
-    else {
+    else if (m[10] != null) {
+      if (!mdImage) { linkText(parent, m[0]); continue; }
+      const im = el("img", "md-img"); im.alt = m[9]; im.src = mdImage(m[10]);
+      const w = /\b(?:w|width):(\d+)/.exec(m[9]), h = /\b(?:h|height):(\d+)/.exec(m[9]);
+      if (w) im.style.width = w[1] + "px"; if (h) im.style.height = h[1] + "px";
+      parent.append(im);
+    } else {
       const a = el("span", /^https?:/.test(m[8]) ? "md-url" : "md-link", m[7]); a.title = m[8];
       if (/^https?:/.test(m[8])) a.onclick = () => openLink(m[8]);
       parent.append(a);
@@ -1517,6 +1643,7 @@ $("#files-collapse").onclick = () => { S.open.clear(); pref.set("open", []); ren
 // ── file tabs: editor and image viewer ──────────────────────────────────────
 async function openFile(path) {
   let tab = S.tabs.find((t) => norm(t.id) === norm(path));
+  if (!tab && /\.pptx$/i.test(path)) { openSlides({ id: path, name: baseName(path), fmt: "pptx" }); return; }
   if (!tab) {
     tab = { id: path, name: baseName(path), kind: IMG.test(path) ? "image" : "text" };
     if (tab.kind === "text") {
@@ -1527,6 +1654,8 @@ async function openFile(path) {
         else tab.kind = f.too_large ? "large" : "binary";
       } catch (e) { toast(e.message, true); return; }
     }
+    // Slide decks agents write in Markdown open as slides.
+    if (tab.kind === "text" && /\.md$/i.test(path) && isMdDeck(path, tab.text)) { tab.fmt = "md"; openSlides(tab); return; }
     S.tabs.push(tab);
   }
   activate(tab.id);
@@ -1560,6 +1689,7 @@ function showFile(tab) {
   $("#file-save").hidden = tab.kind !== "text";
   $("#file-open").hidden = tab.kind !== "diff" || tab.status === "D";
   $("#file-preview").hidden = tab.kind !== "text" || !/\.html?$/i.test(tab.name);
+  $("#file-slides").hidden = tab.kind !== "text" || !/\.md$/i.test(tab.name) || !hasSlideBreaks(tab.text);
   $("#file-info").textContent = tab.size != null ? fmtSize(tab.size) : "";
   if (tab.kind === "diff") {
     renderDiff(tab.diff);
@@ -1576,6 +1706,927 @@ function showFile(tab) {
   }
 }
 const activeTab = () => S.tabs.find((t) => t.id === S.active);
+
+// ── slides: PowerPoint (.pptx) and Markdown (Marp) decks ────────────────────
+// A deck renders each slide as a DOM node at its own size (one pixel per
+// point for .pptx) and the views scale it. .pptx edits change the deck's XML
+// in place and save the changed parts back; Markdown decks are edited as text.
+const NS = {
+  a: "http://schemas.openxmlformats.org/drawingml/2006/main",
+  p: "http://schemas.openxmlformats.org/presentationml/2006/main",
+  r: "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+  rel: "http://schemas.openxmlformats.org/package/2006/relationships",
+  ct: "http://schemas.openxmlformats.org/package/2006/content-types",
+};
+const EMU = 12700; // per point (= per pixel here)
+const xk = (n, name) => (n ? [...n.children].filter((c) => c.localName === name) : []);
+const x1 = (n, ...names) => names.reduce((c, nm) => (c ? [...c.children].find((k) => k.localName === nm) || null : null), n);
+const xa = (n, a) => (n ? n.getAttribute(a) : null);
+const xnum = (n, a, d = 0) => { const v = n?.getAttribute(a); return v == null || v === "" ? d : Number(v); };
+const rid = (n, a = "embed") => (n ? n.getAttributeNS(NS.r, a) || n.getAttribute("r:" + a) : null);
+const xmlParse = (s) => new DOMParser().parseFromString(s, "application/xml");
+const xmlText = (doc) => new XMLSerializer().serializeToString(doc);
+const withDecl = (s) => (s.startsWith("<?xml") ? s : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' + s);
+const relsName = (part) => { const i = part.lastIndexOf("/"); return `${part.slice(0, i)}/_rels/${part.slice(i + 1)}.rels`; };
+function resolvePart(from, target) {
+  if (target.startsWith("/")) return target.slice(1);
+  const parts = from.split("/"); parts.pop();
+  for (const seg of target.split("/")) { if (seg === "..") parts.pop(); else if (seg && seg !== ".") parts.push(seg); }
+  return parts.join("/");
+}
+const PRST_CLR = { black: "000000", white: "FFFFFF", red: "FF0000", green: "008000", blue: "0000FF", yellow: "FFFF00", gray: "808080", grey: "808080", orange: "FFA500", purple: "800080" };
+function rgb2hsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  if (mx === mn) return [0, 0, l];
+  const d = mx - mn, s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+  const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, s, l];
+}
+function hsl2rgb(h, s, l) {
+  if (!s) return [l * 255, l * 255, l * 255];
+  const q2 = l < 0.5 ? l * (1 + s) : l + s - l * s, p2 = 2 * l - q2;
+  const f = (t) => { t = (t + 1) % 1; return t < 1 / 6 ? p2 + (q2 - p2) * 6 * t : t < 1 / 2 ? q2 : t < 2 / 3 ? p2 + (q2 - p2) * (2 / 3 - t) * 6 : p2; };
+  return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
+}
+// A DrawingML color element (srgbClr, schemeClr…) with its modifiers, as CSS.
+function hexOf(ctx, c) {
+  if (!c) return null;
+  const v = c.getAttribute("val");
+  let hex;
+  switch (c.localName) {
+    case "srgbClr": hex = v; break;
+    case "sysClr": hex = c.getAttribute("lastClr") || (v === "window" ? "FFFFFF" : "000000"); break;
+    case "schemeClr": { let k = v === "phClr" ? ctx.phClr || "accent1" : v; k = ctx.map[k] || k; hex = ctx.scheme[k] || "000000"; break; }
+    case "prstClr": hex = PRST_CLR[v] || "000000"; break;
+    default: return null;
+  }
+  let [r, g, b] = [0, 2, 4].map((i) => parseInt((hex || "000000").slice(i, i + 2), 16) || 0);
+  let a = 1, lumMod = 1, lumOff = 0, lum = false;
+  for (const m of c.children) {
+    const x = Number(m.getAttribute("val")) / 100000;
+    switch (m.localName) {
+      case "lumMod": lumMod = x; lum = true; break;
+      case "lumOff": lumOff = x; lum = true; break;
+      case "tint": r = 255 - (255 - r) * x; g = 255 - (255 - g) * x; b = 255 - (255 - b) * x; break;
+      case "shade": r *= x; g *= x; b *= x; break;
+      case "alpha": a = x; break;
+    }
+  }
+  if (lum) { const [h, s, l] = rgb2hsl(r, g, b); [r, g, b] = hsl2rgb(h, s, Math.min(1, Math.max(0, l * lumMod + lumOff))); }
+  [r, g, b] = [r, g, b].map((x) => Math.round(Math.min(255, Math.max(0, x))));
+  return a < 1 ? `rgba(${r},${g},${b},${a.toFixed(3)})` : `rgb(${r},${g},${b})`;
+}
+const mediaUrl = (d, name) => `/api/slides/media?${q({ path: d.tab.id, name, t: token })}`;
+function fillCss(ctx, pr, part) {
+  if (!pr) return null;
+  for (const c of pr.children) {
+    switch (c.localName) {
+      case "noFill": return "transparent";
+      case "solidFill": return hexOf(ctx, c.firstElementChild);
+      case "gradFill": {
+        const stops = xk(x1(c, "gsLst"), "gs").map((s) => `${hexOf(ctx, s.firstElementChild)} ${xnum(s, "pos") / 1000}%`);
+        return stops.length ? `linear-gradient(${xnum(x1(c, "lin"), "ang", 5400000) / 60000 + 90}deg, ${stops.join(", ")})` : null;
+      }
+      case "blipFill": {
+        const t = ctx.d.rels(part)[rid(x1(c, "blip"))]?.target;
+        return t ? `center / cover no-repeat url("${mediaUrl(ctx.d, t)}")` : null;
+      }
+    }
+  }
+  return null;
+}
+const phOf = (sp) => x1(sp.firstElementChild, "nvPr", "ph");
+const phType = (ph) => ph.getAttribute("type") || "obj";
+const phKind = (t) => (t === "ctrTitle" || t === "title" ? "title" : t === "subTitle" || t === "obj" || t === "body" ? "body" : t);
+// The layout or master shape a slide placeholder inherits from.
+function findPh(root, ph) {
+  if (!root || !ph) return null;
+  const all = [...root.getElementsByTagNameNS(NS.p, "sp")].filter((s) => phOf(s));
+  const idx = ph.getAttribute("idx"), type = phType(ph);
+  return (idx != null && all.find((s) => phOf(s).getAttribute("idx") === idx && phKind(phType(phOf(s))) === phKind(type)))
+    || all.find((s) => phType(phOf(s)) === type)
+    || all.find((s) => phKind(phType(phOf(s))) === phKind(type))
+    || (idx != null && all.find((s) => phOf(s).getAttribute("idx") === idx))
+    || null;
+}
+
+async function pptxDeck(tab) {
+  const data = await api(`/api/slides/pptx?${q({ path: tab.id })}`);
+  const d = { kind: "pptx", tab, raw: data.parts, docs: {}, dirty: new Set(), removed: new Set(), undo: [] };
+  d.doc = (name) => {
+    if (d.docs[name]) return d.docs[name];
+    if (d.raw[name] == null || d.removed.has(name)) return null;
+    const doc = xmlParse(d.raw[name]);
+    if (doc.getElementsByTagName("parsererror").length) return null;
+    return (d.docs[name] = doc);
+  };
+  d.rels = (part) => {
+    const out = {}, doc = part && d.doc(relsName(part));
+    for (const r of doc?.documentElement.children || []) {
+      out[r.getAttribute("Id")] = { type: (r.getAttribute("Type") || "").split("/").pop(), target: r.getAttribute("TargetMode") === "External" ? null : resolvePart(part, r.getAttribute("Target") || "") };
+    }
+    return out;
+  };
+  d.relOf = (part, type) => Object.values(d.rels(part)).find((r) => r.type === type)?.target || null;
+  d.load = () => {
+    const pres = d.doc("ppt/presentation.xml").documentElement;
+    const sz = x1(pres, "sldSz");
+    d.w = xnum(sz, "cx", 9144000) / EMU; d.h = xnum(sz, "cy", 6858000) / EMU;
+    const rels = d.rels("ppt/presentation.xml");
+    d.slides = xk(x1(pres, "sldIdLst"), "sldId").map((s) => ({ sldId: s, name: rels[rid(s, "id")]?.target })).filter((s) => s.name && d.doc(s.name));
+    d.defaultText = x1(pres, "defaultTextStyle");
+  };
+  d.load();
+  d.count = () => d.slides.length;
+  d.render = (i, editable) => renderPptxSlide(d, i, editable);
+  d.notesBody = (i) => {
+    const notes = d.slides[i] && d.relOf(d.slides[i].name, "notesSlide");
+    const doc = notes && d.doc(notes);
+    const sp = doc && [...doc.getElementsByTagNameNS(NS.p, "sp")].find((s) => phOf(s) && phType(phOf(s)) === "body");
+    return sp ? { part: notes, tx: x1(sp, "txBody") } : null;
+  };
+  d.notes = (i) => { const n = d.notesBody(i); return n?.tx ? xk(n.tx, "p").map(paraText).join("\n") : null; };
+  d.setNotes = (i, text) => { const n = d.notesBody(i); if (n?.tx && d.notes(i) !== text) d.change([n.part], () => applyText(n.tx, text.split("\n"))); };
+  // Every edit goes through here: snapshot for undo, then mark the parts changed.
+  d.change = (names, fn) => {
+    d.undo.push({ parts: names.map((n) => [n, d.doc(n) ? xmlText(d.doc(n)) : null]), removed: new Set(d.removed) });
+    if (d.undo.length > 100) d.undo.shift();
+    fn();
+    names.forEach((n) => d.dirty.add(n));
+    d.load(); tab.dirty = true; renderTabs();
+  };
+  d.undoLast = () => {
+    const s = d.undo.pop(); if (!s) return false;
+    for (const [n, xml] of s.parts) { if (xml == null) { delete d.docs[n]; delete d.raw[n]; } else d.docs[n] = xmlParse(xml); d.dirty.add(n); }
+    d.removed = s.removed; d.load(); tab.dirty = true; renderTabs();
+    return true;
+  };
+  d.save = async () => {
+    const parts = {};
+    for (const n of d.dirty) if (!d.removed.has(n) && d.docs[n]) parts[n] = withDecl(xmlText(d.docs[n]));
+    await api("/api/slides/save", { path: tab.id, parts, remove: [...d.removed] });
+    for (const [n, x] of Object.entries(parts)) d.raw[n] = x;
+    d.dirty.clear(); d.removed.clear(); d.undo = [];
+  };
+  // Slide operations: they edit presentation.xml, its relationships and the content types.
+  const PRES = "ppt/presentation.xml", PRES_RELS = "ppt/_rels/presentation.xml.rels", CT = "[Content_Types].xml";
+  d.move = (i, dir) => {
+    const j = i + dir; if (j < 0 || j >= d.slides.length) return false;
+    const a = d.slides[i].sldId, b = d.slides[j].sldId;
+    d.change([PRES], () => (dir < 0 ? b.before(a) : b.after(a)));
+    return true;
+  };
+  d.del = (i) => {
+    if (d.slides.length < 2) { toast("A deck needs at least one slide.", true); return false; }
+    const s = d.slides[i], notes = d.relOf(s.name, "notesSlide");
+    const gone = [s.name, relsName(s.name), ...(notes ? [notes, relsName(notes)] : [])];
+    d.change([PRES, PRES_RELS, CT], () => {
+      const r = rid(s.sldId, "id"); s.sldId.remove();
+      [...d.doc(PRES_RELS).documentElement.children].find((x) => x.getAttribute("Id") === r)?.remove();
+      for (const o of [...d.doc(CT).documentElement.children]) if (gone.includes((o.getAttribute("PartName") || "").slice(1))) o.remove();
+      gone.forEach((n) => d.removed.add(n));
+    });
+    return true;
+  };
+  d.dup = (i) => {
+    const s = d.slides[i];
+    const nums = Object.keys({ ...d.raw, ...d.docs }).map((n) => /^ppt\/slides\/slide(\d+)\.xml$/.exec(n)?.[1]).filter(Boolean).map(Number);
+    const name = `ppt/slides/slide${Math.max(0, ...nums) + 1}.xml`;
+    const presRels = d.doc(PRES_RELS).documentElement, ct = d.doc(CT).documentElement;
+    const srcRel = [...presRels.children].find((x) => x.getAttribute("Id") === rid(s.sldId, "id"));
+    const ids = [...presRels.children].map((x) => Number(/^rId(\d+)$/.exec(x.getAttribute("Id"))?.[1] || 0));
+    const newRid = `rId${Math.max(0, ...ids) + 1}`;
+    d.change([PRES, PRES_RELS, CT, name, relsName(name)], () => {
+      d.raw[name] = xmlText(d.doc(s.name)); delete d.docs[name];
+      const rels = d.doc(relsName(s.name));
+      if (rels) {
+        const copy = xmlParse(xmlText(rels));
+        // The copy gets no speaker notes: a notes page belongs to one slide.
+        for (const r of [...copy.documentElement.children]) if ((r.getAttribute("Type") || "").endsWith("/notesSlide")) r.remove();
+        d.raw[relsName(name)] = xmlText(copy); delete d.docs[relsName(name)];
+      }
+      const o = ct.ownerDocument.createElementNS(NS.ct, "Override");
+      o.setAttribute("PartName", "/" + name);
+      o.setAttribute("ContentType", [...ct.children].find((x) => x.getAttribute("PartName") === "/" + s.name)?.getAttribute("ContentType") || "application/vnd.openxmlformats-officedocument.presentationml.slide+xml");
+      ct.append(o);
+      const r = presRels.ownerDocument.createElementNS(NS.rel, "Relationship");
+      r.setAttribute("Id", newRid); r.setAttribute("Type", srcRel.getAttribute("Type")); r.setAttribute("Target", `slides/${name.split("/").pop()}`);
+      presRels.append(r);
+      const sid = s.sldId.cloneNode(false);
+      const maxId = Math.max(255, ...d.slides.map((x) => xnum(x.sldId, "id")));
+      sid.setAttribute("id", String(maxId + 1)); sid.setAttributeNS(NS.r, "r:id", newRid);
+      s.sldId.after(sid);
+    });
+    return true;
+  };
+  d.addText = (i) => {
+    const s = d.slides[i], doc = d.doc(s.name), tree = x1(doc.documentElement, "cSld", "spTree");
+    const id = Math.max(1, ...[...doc.getElementsByTagNameNS(NS.p, "cNvPr")].map((c) => xnum(c, "id"))) + 1;
+    const w = Math.round(d.w * EMU * 0.5), h = Math.round(d.h * EMU * 0.12);
+    const frag = xmlParse(`<p:sp xmlns:p="${NS.p}" xmlns:a="${NS.a}"><p:nvSpPr><p:cNvPr id="${id}" name="TextBox ${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${Math.round((d.w * EMU - w) / 2)}" y="${Math.round((d.h * EMU - h) / 2)}"/><a:ext cx="${w}" cy="${h}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" rtlCol="0"><a:spAutoFit/></a:bodyPr><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="2400" dirty="0"/><a:t>New text</a:t></a:r></a:p></p:txBody></p:sp>`);
+    const sp = doc.importNode(frag.documentElement, true);
+    d.change([s.name], () => tree.append(sp));
+    return sp;
+  };
+  return d;
+}
+
+// Context for drawing one slide: its layout, master, theme colors and fonts.
+function slideCtx(d, name) {
+  const layout = d.relOf(name, "slideLayout"), master = layout && d.relOf(layout, "slideMaster"), theme = master && d.relOf(master, "theme");
+  const slide = d.doc(name).documentElement, layoutEl = layout ? d.doc(layout)?.documentElement : null, masterEl = master ? d.doc(master)?.documentElement : null;
+  const themeEl = theme ? d.doc(theme)?.documentElement : null;
+  const scheme = {};
+  for (const c of x1(themeEl, "themeElements", "clrScheme")?.children || []) {
+    const v = c.firstElementChild; scheme[c.localName] = v?.getAttribute("lastClr") || v?.getAttribute("val") || "000000";
+  }
+  const map = {};
+  const cm = x1(slide, "clrMapOvr", "overrideClrMapping") || x1(layoutEl, "clrMapOvr", "overrideClrMapping") || x1(masterEl, "clrMap");
+  for (const at of cm?.attributes || []) map[at.name] = at.value;
+  const font = (k) => xa(x1(themeEl, "themeElements", "fontScheme", k, "latin"), "typeface") || "Calibri";
+  const parts = new Map([[slide, name], [layoutEl, layout], [masterEl, master]]);
+  return { d, name, slide, layoutEl, masterEl, scheme, map, fonts: { mj: font("majorFont"), mn: font("minorFont") }, parts };
+}
+function bgCss(ctx) {
+  for (const root of [ctx.slide, ctx.layoutEl, ctx.masterEl]) {
+    const bg = x1(root, "cSld", "bg"); if (!bg) continue;
+    const f = fillCss(ctx, x1(bg, "bgPr"), ctx.parts.get(root)); if (f) return f;
+    const ref = x1(bg, "bgRef"); if (ref?.firstElementChild) return hexOf(ctx, ref.firstElementChild);
+  }
+  return "#fff";
+}
+function xfrmOf(ctx, sp) {
+  let xf = x1(x1(sp, "spPr"), "xfrm") || x1(x1(sp, "grpSpPr"), "xfrm") || x1(sp, "xfrm");
+  const ph = phOf(sp);
+  if ((!xf || !x1(xf, "off")) && ph) {
+    for (const root of [ctx.layoutEl, ctx.masterEl]) { const f = x1(x1(findPh(root, ph), "spPr"), "xfrm"); if (f && x1(f, "off")) { xf = f; break; } }
+  }
+  if (!xf || !x1(xf, "off")) return null;
+  const off = x1(xf, "off"), ext = x1(xf, "ext");
+  return { x: xnum(off, "x"), y: xnum(off, "y"), w: xnum(ext, "cx"), h: xnum(ext, "cy"), rot: xnum(xf, "rot") / 60000, flipH: xa(xf, "flipH") === "1", flipV: xa(xf, "flipV") === "1" };
+}
+function place(n, b) {
+  Object.assign(n.style, { left: b.x / EMU + "px", top: b.y / EMU + "px", width: b.w / EMU + "px", height: b.h / EMU + "px" });
+  if (b.rot) n.style.transform = `rotate(${b.rot}deg)`;
+}
+// Text styles a shape's paragraphs inherit, most specific first.
+function textChain(ctx, sp) {
+  const own = x1(sp, "txBody", "lstStyle"), ph = phOf(sp);
+  if (!ph) return { lst: [own, ctx.d.defaultText], body: [x1(sp, "txBody", "bodyPr")] };
+  const lay = findPh(ctx.layoutEl, ph), mas = findPh(ctx.masterEl, ph);
+  const kind = phKind(phType(ph));
+  const styles = x1(ctx.masterEl, "txStyles");
+  const master = x1(styles, kind === "title" ? "titleStyle" : kind === "body" ? "bodyStyle" : "otherStyle");
+  return {
+    lst: [own, x1(lay, "txBody", "lstStyle"), x1(mas, "txBody", "lstStyle"), master, ctx.d.defaultText],
+    body: [x1(sp, "txBody", "bodyPr"), x1(lay, "txBody", "bodyPr"), x1(mas, "txBody", "bodyPr")],
+  };
+}
+function paraProps(lst, lvl, pPr) {
+  const P = { algn: "l", marL: 0, indent: 0, bu: null, buFont: null, buClr: null, rprs: [], spcBef: null, spcAft: null, lnSpc: null };
+  const take = (src) => {
+    if (!src) return;
+    for (const a of ["algn", "marL", "indent"]) if (src.hasAttribute(a)) P[a] = a === "algn" ? src.getAttribute(a) : Number(src.getAttribute(a));
+    for (const c of src.children) {
+      switch (c.localName) {
+        case "buNone": P.bu = null; break;
+        case "buChar": P.bu = { char: c.getAttribute("char") }; break;
+        case "buAutoNum": P.bu = { num: c.getAttribute("type") || "arabicPeriod", start: xnum(c, "startAt", 1) }; break;
+        case "buFont": P.buFont = c.getAttribute("typeface"); break;
+        case "buClr": P.buClr = c.firstElementChild; break;
+        case "defRPr": P.rprs.push(c); break;
+        case "spcBef": P.spcBef = c.firstElementChild; break;
+        case "spcAft": P.spcAft = c.firstElementChild; break;
+        case "lnSpc": P.lnSpc = c.firstElementChild; break;
+      }
+    }
+  };
+  for (const s of [...lst].reverse()) take(x1(s, `lvl${lvl + 1}pPr`));
+  take(pPr);
+  return P;
+}
+// `rprs`: inherited run properties, least specific first, then the run's own.
+// A base color (an autoshape's font reference, a table header) beats the
+// inherited ones but not the run's own.
+function runStyle(ctx, rprs, base) {
+  const st = { sz: 18, b: !!base.bold, i: false, u: false, strike: false, color: null, font: null, baseline: 0 };
+  rprs.forEach((r, k) => {
+    if (k === rprs.length - 1 && base.color) st.color = base.color;
+    if (!r) return;
+    if (r.hasAttribute("sz")) st.sz = Number(r.getAttribute("sz")) / 100;
+    if (r.hasAttribute("b")) st.b = /^(1|true)$/.test(r.getAttribute("b"));
+    if (r.hasAttribute("i")) st.i = /^(1|true)$/.test(r.getAttribute("i"));
+    if (r.hasAttribute("u")) st.u = r.getAttribute("u") !== "none";
+    if (r.hasAttribute("strike")) st.strike = r.getAttribute("strike") !== "noStrike";
+    if (r.hasAttribute("baseline")) st.baseline = Number(r.getAttribute("baseline")) / 1000;
+    const f = x1(r, "solidFill"); if (f?.firstElementChild) st.color = hexOf(ctx, f.firstElementChild);
+    const lat = x1(r, "latin"); if (lat) st.font = lat.getAttribute("typeface");
+  });
+  return st;
+}
+const fontCss = (ctx, f) => { const face = !f || f === "+mn-lt" ? ctx.fonts.mn : f === "+mj-lt" ? ctx.fonts.mj : f; return `"${face}", Calibri, Arial, sans-serif`; };
+function styleRun(span, st, scale) {
+  span.style.fontSize = st.sz * scale + "px";
+  if (st.b) span.style.fontWeight = "700";
+  if (st.i) span.style.fontStyle = "italic";
+  const deco = [st.u && "underline", st.strike && "line-through"].filter(Boolean).join(" ");
+  if (deco) span.style.textDecoration = deco;
+  if (st.color) span.style.color = st.color;
+  if (st.baseline) { span.style.verticalAlign = st.baseline > 0 ? "super" : "sub"; span.style.fontSize = st.sz * scale * 0.7 + "px"; }
+}
+const WINGDINGS = { "§": "■", "Ø": "➢", "ü": "✓", q: "❑", v: "❖", n: "■", l: "●", "Ÿ": "•", "": "•", "": "•" };
+function autoNum(type, n) {
+  const roman = (x) => [[1000, "m"], [900, "cm"], [500, "d"], [400, "cd"], [100, "c"], [90, "xc"], [50, "l"], [40, "xl"], [10, "x"], [9, "ix"], [5, "v"], [4, "iv"], [1, "i"]].reduce((s, [v, r]) => { while (x >= v) { s += r; x -= v; } return s; }, "");
+  const alpha = (x) => String.fromCharCode(96 + ((x - 1) % 26) + 1);
+  let s = /alphaLc/.test(type) ? alpha(n) : /alphaUc/.test(type) ? alpha(n).toUpperCase() : /romanLc/.test(type) ? roman(n) : /romanUc/.test(type) ? roman(n).toUpperCase() : String(n);
+  return /ParenBoth/.test(type) ? `(${s})` : /ParenR/.test(type) ? `${s})` : `${s}.`;
+}
+const paraText = (p) => [...p.children].map((c) => (c.localName === "br" ? "\n" : c.localName === "r" || c.localName === "fld" ? x1(c, "t")?.textContent || "" : "")).join("");
+function renderText(ctx, tx, chain, base) {
+  const bodyPrs = chain.body.filter(Boolean);
+  const bp = (a, dflt) => { for (const b of bodyPrs) if (b.hasAttribute(a)) return b.getAttribute(a); return dflt; };
+  const own = bodyPrs[0];
+  const fit = x1(own, "normAutofit");
+  const scale = fit ? xnum(fit, "fontScale", 100000) / 100000 : 1, lnRed = fit ? xnum(fit, "lnSpcReduction") / 100000 : 0;
+  const box = el("div", "tx");
+  box.style.padding = `${Number(bp("tIns", 45720)) / EMU}px ${Number(bp("rIns", 91440)) / EMU}px ${Number(bp("bIns", 45720)) / EMU}px ${Number(bp("lIns", 91440)) / EMU}px`;
+  box.style.justifyContent = { t: "flex-start", ctr: "center", b: "flex-end" }[bp("anchor", "t")] || "flex-start";
+  const inner = el("div", "tx-in");
+  if (bp("wrap", "square") === "none") inner.style.whiteSpace = "nowrap";
+  const counters = [];
+  for (const p of xk(tx, "p")) {
+    const pPr = x1(p, "pPr"), lvl = xnum(pPr, "lvl", 0);
+    const P = paraProps(chain.lst.filter(Boolean), lvl, pPr);
+    const pe = el("div", "tp");
+    pe.style.textAlign = { l: "left", ctr: "center", r: "right", just: "justify", dist: "justify" }[P.algn] || "left";
+    const runs = [...p.children].filter((c) => ["r", "br", "fld"].includes(c.localName));
+    const first = runs.find((c) => c.localName !== "br");
+    const pst = runStyle(ctx, [...P.rprs, x1(first, "rPr") || x1(p, "endParaRPr")], base);
+    const fsz = pst.sz * scale;
+    pe.style.fontSize = fsz + "px";
+    pe.style.fontFamily = fontCss(ctx, pst.font);
+    if (pst.color) pe.style.color = pst.color;
+    const lnPct = P.lnSpc?.localName === "spcPct" ? xnum(P.lnSpc, "val", 100000) / 100000 : 1;
+    pe.style.lineHeight = P.lnSpc?.localName === "spcPts" ? xnum(P.lnSpc, "val") / 100 * scale + "px" : String(Math.max(0.6, 1.2 * lnPct * (1 - lnRed)));
+    const spc = (s) => (!s ? 0 : s.localName === "spcPts" ? xnum(s, "val") / 100 : (xnum(s, "val") / 100000) * fsz);
+    pe.style.marginTop = spc(P.spcBef) + "px"; pe.style.marginBottom = spc(P.spcAft) + "px";
+    pe.style.paddingLeft = P.marL / EMU + "px"; pe.style.textIndent = P.indent / EMU + "px";
+    for (let k = lvl + 1; k < counters.length; k++) counters[k] = null;
+    const text = paraText(p);
+    if (P.bu && text.trim()) {
+      let ch = P.bu.char;
+      if (P.bu.num) { counters[lvl] = (counters[lvl] ?? P.bu.start - 1) + 1; ch = autoNum(P.bu.num, counters[lvl]); }
+      else if (/wingdings|symbol/i.test(P.buFont || "")) ch = WINGDINGS[ch] || "•";
+      pe.dataset.bu = ch;
+      pe.style.setProperty("--bw", Math.max(0, -P.indent / EMU) + "px");
+      if (P.buClr) pe.style.setProperty("--buc", hexOf(ctx, P.buClr));
+    } else if (!P.bu?.num) counters[lvl] = null;
+    for (const c of runs) {
+      if (c.localName === "br") { pe.append(el("br")); continue; }
+      const s = el("span", null, x1(c, "t")?.textContent || ""), st = runStyle(ctx, [...P.rprs, x1(c, "rPr")], base);
+      styleRun(s, st, scale);
+      s.style.fontFamily = fontCss(ctx, st.font);
+      pe.append(s);
+    }
+    if (!text) pe.append(el("br"));
+    inner.append(pe);
+  }
+  box.append(inner);
+  return box;
+}
+// Paragraph texts back into the XML: unchanged paragraphs keep all their
+// formatting; a changed one keeps its paragraph and first-run formatting.
+function setParaText(p, text) {
+  const doc = p.ownerDocument, A = (n) => doc.createElementNS(NS.a, "a:" + n);
+  const pPr = x1(p, "pPr"), end = x1(p, "endParaRPr"), r0 = x1(p, "r"), rPr = r0 && x1(r0, "rPr");
+  for (const c of [...p.children]) if (c !== pPr && c !== end) c.remove();
+  text.split("\n").forEach((seg, i) => {
+    if (i) { const br = A("br"); if (rPr) br.append(rPr.cloneNode(true)); p.insertBefore(br, end); }
+    if (!seg) return;
+    const r = A("r");
+    if (rPr) r.append(rPr.cloneNode(true));
+    else if (end) { const nr = A("rPr"); for (const at of end.attributes) nr.setAttribute(at.name, at.value); for (const c of end.children) nr.append(c.cloneNode(true)); r.append(nr); }
+    const t = A("t"); t.textContent = seg; r.append(t);
+    p.insertBefore(r, end);
+  });
+}
+function applyText(tx, lines) {
+  if (!lines.length) lines = [""];
+  const ps = xk(tx, "p");
+  if (!ps.length) { const p = tx.ownerDocument.createElementNS(NS.a, "a:p"); tx.append(p); ps.push(p); }
+  lines.forEach((line, i) => {
+    let p = ps[i];
+    if (!p) { p = ps[ps.length - 1].cloneNode(true); ps[ps.length - 1].after(p); ps.push(p); }
+    if (paraText(p) !== line) setParaText(p, line);
+  });
+  ps.slice(lines.length).forEach((p) => p.remove());
+}
+function drawShapes(ctx, tree, part, out, map, editable, skipPh) {
+  for (const n of tree.children) {
+    const ln = n.localName;
+    if (ln === "AlternateContent") { const alt = x1(n, "Fallback") || x1(n, "Choice"); if (alt) drawShapes(ctx, alt, part, out, map, editable, skipPh); continue; }
+    if (!["sp", "pic", "grpSp", "graphicFrame", "cxnSp"].includes(ln)) continue;
+    if (skipPh && phOf(n)) continue;
+    if (ln === "grpSp") {
+      const xf = x1(x1(n, "grpSpPr"), "xfrm");
+      let m2 = map;
+      if (xf && x1(xf, "chExt")) {
+        const off = x1(xf, "off"), ext = x1(xf, "ext"), co = x1(xf, "chOff"), ce = x1(xf, "chExt");
+        const sx = xnum(ce, "cx") ? xnum(ext, "cx") / xnum(ce, "cx") : 1, sy = xnum(ce, "cy") ? xnum(ext, "cy") / xnum(ce, "cy") : 1;
+        m2 = (b) => map({ ...b, x: xnum(off, "x") + (b.x - xnum(co, "x")) * sx, y: xnum(off, "y") + (b.y - xnum(co, "y")) * sy, w: b.w * sx, h: b.h * sy });
+      }
+      drawShapes(ctx, n, part, out, m2, false, skipPh);
+      continue;
+    }
+    const xf = xfrmOf(ctx, n); if (!xf) continue;
+    const b = map(xf);
+    let node;
+    try { node = ln === "pic" ? renderPic(ctx, n, part, b) : ln === "graphicFrame" ? renderFrame(ctx, n, part, b) : renderSp(ctx, n, part, b); }
+    catch (e) { console.warn("slide shape", e); continue; }
+    if (!node) continue;
+    if (editable) { node._x = n; node.classList.add("ed"); }
+    out.append(node);
+  }
+}
+function lineOf(ctx, spPr, style) {
+  const ln = x1(spPr, "ln");
+  if (ln && x1(ln, "noFill")) return null;
+  let color = ln && hexOf(ctx, x1(ln, "solidFill")?.firstElementChild);
+  const w = ln && ln.hasAttribute("w") ? xnum(ln, "w") / EMU : 0.75;
+  if (!color) { const r = x1(style, "lnRef"); if (r && xnum(r, "idx") > 0 && r.firstElementChild) color = hexOf(ctx, r.firstElementChild); }
+  return color ? { color, w: Math.max(w, 0.5), dash: xa(x1(ln, "prstDash"), "val") } : null;
+}
+function renderSp(ctx, sp, part, b) {
+  const n = el("div", "shp"); place(n, b);
+  const spPr = x1(sp, "spPr"), style = x1(sp, "style");
+  const geom = xa(x1(spPr, "prstGeom"), "prst") || "rect";
+  const line = lineOf(ctx, spPr, style);
+  if (sp.localName === "cxnSp" || /^(line|straightConnector1|bentConnector\d|curvedConnector\d)$/.test(geom)) {
+    const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    s.setAttribute("class", "ln"); s.setAttribute("width", Math.max(1, b.w / EMU)); s.setAttribute("height", Math.max(1, b.h / EMU));
+    const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    const [x1_, x2_] = b.flipH ? [b.w / EMU, 0] : [0, b.w / EMU], [y1_, y2_] = b.flipV ? [b.h / EMU, 0] : [0, b.h / EMU];
+    Object.entries({ x1: x1_, y1: y1_, x2: x2_, y2: y2_, stroke: line?.color || "#000", "stroke-width": line?.w || 1 }).forEach(([k, v]) => l.setAttribute(k, v));
+    s.append(l); n.append(s);
+    return n;
+  }
+  let fill = fillCss(ctx, spPr, part);
+  if (fill == null) { const fr = x1(style, "fillRef"); if (fr && xnum(fr, "idx") > 0 && fr.firstElementChild) fill = hexOf(ctx, fr.firstElementChild); }
+  if (fill) n.style.background = fill;
+  if (line) n.style.border = `${line.w}px ${line.dash && line.dash !== "solid" ? "dashed" : "solid"} ${line.color}`;
+  if (geom === "ellipse") n.style.borderRadius = "50%";
+  else if (geom === "roundRect") {
+    const gd = [...(x1(spPr, "prstGeom", "avLst")?.children || [])].find((g) => g.getAttribute("name") === "adj");
+    const adj = Number(/val\s+(-?\d+)/.exec(gd?.getAttribute("fmla") || "")?.[1] ?? 16667);
+    n.style.borderRadius = (Math.min(b.w, b.h) / EMU) * Math.min(0.5, adj / 100000) + "px";
+  }
+  const tx = x1(sp, "txBody");
+  if (tx) {
+    // Autoshapes color their text through the style's font reference.
+    const fontRef = x1(style, "fontRef");
+    n.append(renderText(ctx, tx, textChain(ctx, sp), { color: fontRef?.firstElementChild ? hexOf(ctx, fontRef.firstElementChild) : null }));
+  }
+  return n;
+}
+function renderPic(ctx, pic, part, b) {
+  const n = el("div", "shp pic"); place(n, b);
+  const bf = x1(pic, "blipFill"), target = ctx.d.rels(part)[rid(x1(bf, "blip"))]?.target;
+  if (xa(x1(x1(pic, "spPr"), "prstGeom"), "prst") === "ellipse") n.style.borderRadius = "50%";
+  const line = lineOf(ctx, x1(pic, "spPr"), x1(pic, "style"));
+  if (line && x1(x1(pic, "spPr"), "ln")) n.style.border = `${line.w}px solid ${line.color}`;
+  if (!target) return n;
+  const im = el("img"); im.draggable = false; im.alt = "";
+  const sr = x1(bf, "srcRect"), [l, t, r, bt] = ["l", "t", "r", "b"].map((k) => xnum(sr, k) / 100000);
+  Object.assign(im.style, { width: 100 / (1 - l - r) + "%", height: 100 / (1 - t - bt) + "%", left: (-l / (1 - l - r)) * 100 + "%", top: (-t / (1 - t - bt)) * 100 + "%" });
+  if (b.flipH || b.flipV) im.style.transform = `scale(${b.flipH ? -1 : 1}, ${b.flipV ? -1 : 1})`;
+  im.onerror = () => im.replaceWith(el("div", "ph-box", /\.(emf|wmf)$/i.test(target) ? "EMF/WMF image" : "image"));
+  im.src = mediaUrl(ctx.d, target);
+  n.append(im);
+  return n;
+}
+function renderFrame(ctx, gf, part, b) {
+  const n = el("div", "shp"); place(n, b);
+  const gd = x1(gf, "graphic", "graphicData"), tbl = x1(gd, "tbl");
+  if (!tbl) { n.append(el("div", "ph-box", /chart/.test(xa(gd, "uri") || "") ? "Chart · open in PowerPoint to see it" : /diagram/.test(xa(gd, "uri") || "") ? "SmartArt" : "Embedded object")); return n; }
+  const tp = x1(tbl, "tblPr"), styled = !!x1(tp, "tableStyleId"), firstRow = xa(tp, "firstRow") === "1", band = xa(tp, "bandRow") === "1";
+  const accent = hexOf(ctx, xmlParse(`<a:schemeClr xmlns:a="${NS.a}" val="accent1"/>`).documentElement);
+  const t = el("table", "ptbl"), cg = el("colgroup");
+  for (const c of xk(x1(tbl, "tblGrid"), "gridCol")) { const col = el("col"); col.style.width = xnum(c, "w") / EMU + "px"; cg.append(col); }
+  t.append(cg);
+  xk(tbl, "tr").forEach((tr, ri) => {
+    const row = el("tr"); row.style.height = xnum(tr, "h") / EMU + "px";
+    const head = ri === 0 && firstRow;
+    for (const tc of xk(tr, "tc")) {
+      if (xa(tc, "hMerge") === "1" || xa(tc, "vMerge") === "1") continue;
+      const td = el("td");
+      if (xnum(tc, "gridSpan", 1) > 1) td.colSpan = xnum(tc, "gridSpan");
+      if (xnum(tc, "rowSpan", 1) > 1) td.rowSpan = xnum(tc, "rowSpan");
+      let fill = fillCss(ctx, x1(tc, "tcPr"), part);
+      if (!fill && styled) fill = head ? accent : `color-mix(in srgb, ${accent} ${band && ri % 2 ? 40 : 20}%, white)`;
+      if (fill) td.style.background = fill;
+      const tx = x1(tc, "txBody");
+      if (tx) td.append(renderText(ctx, tx, { lst: [x1(tx, "lstStyle"), ctx.d.defaultText], body: [x1(tx, "bodyPr")] }, { color: head && styled ? "#fff" : null, bold: head && styled }));
+      row.append(td);
+    }
+    t.append(row);
+  });
+  n.append(t);
+  return n;
+}
+function renderPptxSlide(d, i, editable) {
+  const s = d.slides[i];
+  const n = el("div", "slide pptx-slide");
+  n.style.width = d.w + "px"; n.style.height = d.h + "px";
+  if (!s) return n;
+  const ctx = slideCtx(d, s.name);
+  n.style.background = bgCss(ctx);
+  const id = (b) => b;
+  const showLayout = xa(ctx.slide, "showMasterSp") !== "0", showMaster = showLayout && xa(ctx.layoutEl, "showMasterSp") !== "0";
+  if (showMaster && ctx.masterEl) drawShapes(ctx, x1(ctx.masterEl, "cSld", "spTree"), ctx.parts.get(ctx.masterEl), n, id, false, true);
+  if (showLayout && ctx.layoutEl) drawShapes(ctx, x1(ctx.layoutEl, "cSld", "spTree"), ctx.parts.get(ctx.layoutEl), n, id, false, true);
+  drawShapes(ctx, x1(ctx.slide, "cSld", "spTree"), s.name, n, id, editable, false);
+  return n;
+}
+// Moves or resizes a shape: writes its a:xfrm (adding one to a placeholder that inherited it).
+function setXfrm(sp, b) {
+  const doc = sp.ownerDocument, A = (n) => doc.createElementNS(NS.a, "a:" + n);
+  if (sp.localName === "graphicFrame") {
+    const xf = x1(sp, "xfrm"); x1(xf, "off").setAttribute("x", Math.round(b.x)); x1(xf, "off").setAttribute("y", Math.round(b.y));
+    return;
+  }
+  let spPr = x1(sp, "spPr");
+  if (!spPr) { spPr = doc.createElementNS(NS.p, "p:spPr"); sp.firstElementChild.after(spPr); }
+  let xf = x1(spPr, "xfrm");
+  if (!xf) { xf = A("xfrm"); spPr.prepend(xf); }
+  let off = x1(xf, "off"), ext = x1(xf, "ext");
+  if (!off) { off = A("off"); xf.prepend(off); }
+  if (!ext) { ext = A("ext"); off.after(ext); }
+  off.setAttribute("x", Math.round(b.x)); off.setAttribute("y", Math.round(b.y));
+  ext.setAttribute("cx", Math.max(1, Math.round(b.w))); ext.setAttribute("cy", Math.max(1, Math.round(b.h)));
+}
+
+// ── Markdown decks (Marp-style: slides separated by --- lines) ──────────────
+const DIRECTIVES = ["class", "paginate", "header", "footer", "backgroundColor", "backgroundImage", "color", "theme"];
+function isMdDeck(name, text) {
+  if (/(^|[\\/.])slides\.md$/i.test(name)) return true;
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(\r?\n|$)/.exec(text || "");
+  return !!fm && /^\s*marp\s*:\s*true\s*$/m.test(fm[1]);
+}
+const hasSlideBreaks = (text) => /\n---[ \t]*\r?\n/.test((text || "").replace(/^---\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n/, ""));
+function mdDeck(tab) {
+  const d = { kind: "md", tab, w: 1280, h: 720 };
+  const dir = tab.id.replace(/[\\/][^\\/]*$/, ""), sep = tab.id.includes("\\") ? "\\" : "/";
+  d.img = (url) => {
+    if (/^(data:|blob:)/.test(url)) return url;
+    if (/^https?:/.test(url)) return url; // shown only if the page allows it
+    const parts = (/^([a-zA-Z]:[\\/]|[\\/])/.test(url) ? url : dir + sep + url).split(/[\\/]/), out = [];
+    for (const p of parts) { if (p === "..") out.pop(); else if (p !== "." && p !== "") out.push(p); else if (!out.length && p === "") out.push(""); }
+    return `/api/fs/raw?${q({ path: out.join(sep), t: token })}`;
+  };
+  d.parse = () => {
+    const text = tab.text.replace(/\r\n/g, "\n");
+    const fmM = /^---\n([\s\S]*?)\n---[ \t]*(\n|$)/.exec(text);
+    const fm = {};
+    if (fmM) for (const l of fmM[1].split("\n")) { const m = /^\s*([\w-]+)\s*:\s*(.*?)\s*$/.exec(l); if (m) fm[m[1]] = m[2].replace(/^["']|["']$/g, ""); }
+    const front = fmM ? fmM[0] : "", body = text.slice(front.length);
+    const slides = []; let cur = [], start = front.length, pos = front.length, fence = null;
+    for (const line of body.split("\n")) {
+      const f = /^\s*(```|~~~)/.exec(line);
+      if (f) { if (!fence) fence = f[1]; else if (line.trim().startsWith(fence)) fence = null; }
+      if (!fence && /^---\s*$/.test(line)) { slides.push({ src: cur.join("\n"), start }); cur = []; start = pos + line.length + 1; }
+      else cur.push(line);
+      pos += line.length + 1;
+    }
+    slides.push({ src: cur.join("\n"), start });
+    // Directives: `<!-- _class: lead -->` for one slide, `<!-- class: x -->` from there on.
+    const carry = { theme: fm.theme || "default", class: fm.class || "", paginate: fm.paginate || "", header: fm.header || "", footer: fm.footer || "", backgroundColor: fm.backgroundColor || "", color: fm.color || "", backgroundImage: fm.backgroundImage || "" };
+    for (const s of slides) {
+      const local = {}, notes = [];
+      s.content = s.src.replace(/<!--([\s\S]*?)-->/g, (_, body) => {
+        const kv = body.trim().split("\n").map((l) => /^\s*(_?)([\w]+)\s*:\s*(.*?)\s*$/.exec(l));
+        if (kv.length && kv.every((m) => m && DIRECTIVES.includes(m[2]))) {
+          for (const m of kv) { const v = m[3].replace(/^["']|["']$/g, ""); if (m[1]) local[m[2]] = v; else carry[m[2]] = v; }
+        } else notes.push(body.trim());
+        return "";
+      });
+      s.info = { ...carry, ...local };
+      s.notes = notes.join("\n\n");
+    }
+    d.fm = fm; d.front = front; d.slides = slides;
+    d.w = /^4:3$/.test(fm.size || "") ? 960 : 1280;
+  };
+  d.parse();
+  d.count = () => d.slides.length;
+  d.notes = (i) => d.slides[i]?.notes ?? "";
+  d.render = (i) => {
+    const s = d.slides[i], info = s?.info || {};
+    const n = el("div", `slide md-slide theme-${(info.theme || "default").replace(/\W/g, "")} ${(info.class || "").replace(/[^\w -]/g, "")}`);
+    n.style.width = d.w + "px"; n.style.height = d.h + "px";
+    if (!s) return n;
+    if (info.backgroundColor) n.style.background = info.backgroundColor;
+    if (info.backgroundImage) n.style.backgroundImage = info.backgroundImage;
+    if (info.color) n.style.color = info.color;
+    const bgs = [];
+    const src = s.content.replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, (all, alt, url) => (/(^|\s)bg(\s|$)/.test(alt) ? (bgs.push({ alt, url }), "") : all));
+    if (bgs.length) {
+      const bg = bgs[0], side = /\b(left|right)(?::(\d+)%)?/.exec(bg.alt);
+      const box = el("div", "md-bg"); box.style.backgroundImage = `url("${d.img(bg.url)}")`;
+      if (/\b(contain|fit)\b/.test(bg.alt)) box.style.backgroundSize = "contain";
+      if (side) { n.classList.add("split-" + side[1]); n.style.setProperty("--bgw", (side[2] || 50) + "%"); }
+      n.append(box);
+    }
+    const content = el("section", "md-content");
+    mdImage = d.img; try { content.append(renderMarkdown(src)); } finally { mdImage = null; }
+    n.append(content);
+    if (info.header) n.append(el("header", "md-hf", info.header));
+    if (info.footer) n.append(el("footer", "md-hf", info.footer));
+    if (/^true$/.test(info.paginate)) n.append(el("div", "md-page", String(i + 1)));
+    return n;
+  };
+  const write = (srcs) => { tab.text = d.front + srcs.join("\n---\n"); tab.dirty = true; d.parse(); renderTabs(); };
+  const srcs = () => d.slides.map((s) => s.src);
+  d.move = (i, dir) => { const j = i + dir, a = srcs(); if (j < 0 || j >= a.length) return false; [a[i], a[j]] = [a[j], a[i]]; write(a); return true; };
+  d.del = (i) => { const a = srcs(); if (a.length < 2) return false; a.splice(i, 1); write(a); return true; };
+  d.dup = (i) => { const a = srcs(); a.splice(i + 1, 0, a[i]); write(a); return true; };
+  d.add = (i) => { const a = srcs(); a.splice(i + 1, 0, "\n## New slide\n\n- Point\n"); write(a); return true; };
+  d.save = async () => { const r = await api("/api/fs/write", { path: tab.id, text: tab.text }); tab.orig = tab.text; tab.size = r.size; };
+  return d;
+}
+
+// ── the slides view ─────────────────────────────────────────────────────────
+// A slide node scaled into a box of at most maxW × maxH.
+function fitSlide(node, w, h, maxW, maxH) {
+  const k = Math.max(0.01, Math.min(maxW / w, maxH / h));
+  const wrap = el("div", "sl-fit");
+  wrap.style.width = w * k + "px"; wrap.style.height = h * k + "px";
+  node.style.transform = `scale(${k})`;
+  wrap.append(node);
+  return { wrap, k };
+}
+async function openSlides(tab) {
+  tab.kind = "slides"; tab.cur = tab.cur || 0;
+  if (!S.tabs.includes(tab)) S.tabs.push(tab);
+  activate(tab.id);
+}
+async function showSlides(tab) {
+  $("#sl-path").textContent = tab.name; $("#sl-path").title = tab.id;
+  if (!tab.deck) {
+    $("#sl-stage").replaceChildren(el("div", "faint", "Opening the deck…")); $("#sl-thumbs").replaceChildren();
+    try { tab.deck = tab.fmt === "pptx" ? await pptxDeck(tab) : mdDeck(tab); }
+    catch (e) { $("#sl-stage").replaceChildren(el("div", "err", e.message)); return; }
+    if (S.active !== tab.id) return;
+  }
+  const d = tab.deck, md = d.kind === "md";
+  $("#sl-code-pane").hidden = !md || tab.hideCode;
+  if (md && $("#sl-src").value !== tab.text) $("#sl-src").value = tab.text;
+  for (const [id, show] of [["sl-text", md], ["sl-addslide", md], ["sl-addtext", !md], ["sl-undo", !md], ["sl-codebtn", md]]) $("#" + id).hidden = !show;
+  $("#sl-codebtn").textContent = tab.hideCode ? "Show code" : "Hide code";
+  tab.cur = Math.min(tab.cur || 0, Math.max(0, d.count() - 1));
+  renderSlides(tab, true);
+}
+function renderSlides(tab, thumbs) {
+  const d = tab.deck; if (!d) return;
+  $("#sl-info").textContent = `${d.count()} slide${d.count() === 1 ? "" : "s"} · ${d.kind === "pptx" ? "PowerPoint" : "Markdown"}${tab.dirty ? " · unsaved" : ""}`;
+  $("#sl-save").disabled = !tab.dirty;
+  if (thumbs === true) {
+    const box = $("#sl-thumbs"); box.replaceChildren();
+    for (let i = 0; i < d.count(); i++) box.append(thumbNode(tab, i));
+  } else if (thumbs === "cur") {
+    const old = $("#sl-thumbs").children[tab.cur]; if (old) old.replaceWith(thumbNode(tab, tab.cur));
+  }
+  [...$("#sl-thumbs").children].forEach((b, i) => b.classList.toggle("on", i === tab.cur));
+  $("#sl-thumbs").children[tab.cur]?.scrollIntoView({ block: "nearest" });
+  drawStage(tab);
+  const notes = d.notes(tab.cur), ta = $("#sl-notes");
+  ta.value = notes ?? ""; ta.readOnly = d.kind === "md" || notes == null;
+  ta.placeholder = d.kind === "md" ? "Notes are the HTML comments in a slide's Markdown." : notes == null ? "This slide has no notes page." : "Speaker notes";
+}
+function thumbNode(tab, i) {
+  const d = tab.deck, b = el("button", "sl-thumb");
+  b.append(el("span", "n", String(i + 1)), fitSlide(d.render(i, false), d.w, d.h, 150, 150 * d.h / d.w).wrap);
+  b.onclick = () => gotoSlide(tab, i, true);
+  return b;
+}
+function drawStage(tab) {
+  const d = tab.deck, stage = $("#sl-stage");
+  const r = stage.getBoundingClientRect();
+  const { wrap, k } = fitSlide(d.render(tab.cur, d.kind === "pptx"), d.w, d.h, Math.max(100, r.width - 40), Math.max(80, r.height - 40));
+  tab.k = k; tab.selEl = null;
+  stage.replaceChildren(wrap);
+  if (tab.sel) { const n = [...wrap.querySelectorAll(".shp.ed")].find((x) => x._x === tab.sel); n ? selectShape(tab, n) : (tab.sel = null); }
+}
+function gotoSlide(tab, i, syncCode) {
+  const d = tab.deck; if (!d || i < 0 || i >= d.count()) return;
+  if (i !== tab.cur) tab.sel = null;
+  tab.cur = i; renderSlides(tab);
+  if (syncCode && d.kind === "md" && !tab.hideCode) {
+    const ta = $("#sl-src"), at = d.slides[i].start;
+    ta.focus({ preventScroll: true }); ta.setSelectionRange(at, at);
+    const line = tab.text.slice(0, at).split("\n").length - 1;
+    ta.scrollTop = Math.max(0, line * parseFloat(getComputedStyle(ta).lineHeight || "20") - 40);
+  }
+}
+function selectShape(tab, n) {
+  $("#sl-stage").querySelectorAll(".shp.sel").forEach((x) => { x.classList.remove("sel"); x.querySelector(".grip")?.remove(); });
+  tab.sel = n?._x || null; tab.selEl = n || null;
+  if (!n) return;
+  n.classList.add("sel");
+  const g = el("div", "grip"); g.title = "Resize"; n.append(g);
+}
+// Pointer: select, drag to move, drag the corner to resize, double-click to edit text.
+$("#sl-stage").addEventListener("pointerdown", (e) => {
+  const tab = activeTab(); if (tab?.kind !== "slides" || tab.deck?.kind !== "pptx") return;
+  const shp = e.target.closest(".shp.ed");
+  if (e.target.closest("[contenteditable=true]")) return;
+  if (!shp) { selectShape(tab, null); return; }
+  if (shp !== tab.selEl) selectShape(tab, shp);
+  const sp = shp._x, d = tab.deck, ctx = slideCtx(d, d.slides[tab.cur].name);
+  const start = xfrmOf(ctx, sp); if (!start) return;
+  const resize = e.target.classList.contains("grip"), x0 = e.clientX, y0 = e.clientY;
+  let moved = false, box = { ...start };
+  const mv = (ev) => {
+    const dx = (ev.clientX - x0) / tab.k * EMU, dy = (ev.clientY - y0) / tab.k * EMU;
+    if (!moved && Math.abs(ev.clientX - x0) + Math.abs(ev.clientY - y0) < 3) return;
+    moved = true;
+    box = resize ? { ...start, w: Math.max(EMU * 8, start.w + dx), h: Math.max(EMU * 8, start.h + dy) } : { ...start, x: start.x + dx, y: start.y + dy };
+    place(shp, box);
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up);
+    if (!moved) return;
+    d.change([d.slides[tab.cur].name], () => setXfrm(sp, box));
+    renderSlides(tab, "cur");
+  };
+  window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up);
+  e.preventDefault();
+});
+$("#sl-stage").addEventListener("dblclick", (e) => {
+  const tab = activeTab(); if (tab?.kind !== "slides" || tab.deck?.kind !== "pptx") return;
+  const shp = e.target.closest(".shp.ed"), inner = shp?.querySelector(".tx-in");
+  if (!inner || !x1(shp._x, "txBody") || inner.isContentEditable) return;
+  editShapeText(tab, shp);
+});
+function editShapeText(tab, shp) {
+  const inner = shp.querySelector(".tx-in"), sp = shp._x, d = tab.deck;
+  inner.contentEditable = "true"; inner.spellcheck = true; inner.focus();
+  const sel = getSelection(); sel.selectAllChildren(inner); sel.collapseToEnd();
+  let cancelled = false;
+  const done = () => {
+    inner.removeEventListener("blur", done); inner.removeEventListener("keydown", key);
+    if (cancelled) { renderSlides(tab); return; }
+    const kids = [...inner.children].filter((c) => c.tagName === "DIV");
+    const lines = kids.length ? kids.map((c) => c.innerText.replace(/\n$/, "")) : [inner.innerText.replace(/\n$/, "")];
+    const tx = x1(sp, "txBody");
+    if (xk(tx, "p").map(paraText).join("\n") !== lines.join("\n")) d.change([d.slides[tab.cur].name], () => applyText(tx, lines));
+    renderSlides(tab, "cur");
+  };
+  const key = (e) => {
+    if (e.key === "Escape") { cancelled = true; inner.blur(); }
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); inner.blur(); }
+  };
+  inner.addEventListener("blur", done); inner.addEventListener("keydown", key);
+}
+// Pasting into a text box takes plain text only.
+$("#sl-stage").addEventListener("paste", (e) => {
+  if (!e.target.closest?.("[contenteditable=true]")) return;
+  e.preventDefault();
+  document.execCommand("insertText", false, (e.clipboardData?.getData("text/plain") || "").replace(/\r\n/g, "\n"));
+});
+new ResizeObserver(() => { const t = activeTab(); if (t?.kind === "slides" && t.deck && !$("#view-slides").hidden) drawStage(t); }).observe($("#sl-stage"));
+
+function slideOp(op) {
+  const tab = activeTab(), d = tab?.deck; if (!d) return;
+  const i = tab.cur;
+  let ok = false, to = i;
+  if (op === "up") { ok = d.move(i, -1); to = i - 1; }
+  else if (op === "down") { ok = d.move(i, 1); to = i + 1; }
+  else if (op === "dup") { ok = d.dup(i); to = i + 1; }
+  else if (op === "add") { ok = d.add?.(i); to = i + 1; }
+  else if (op === "del") { if (!confirm(`Delete slide ${i + 1}?`)) return; ok = d.del(i); to = Math.min(i, d.count() - 1); }
+  if (!ok) return;
+  tab.cur = Math.max(0, to); tab.sel = null;
+  if (d.kind === "md") $("#sl-src").value = tab.text;
+  renderSlides(tab, true);
+}
+async function saveSlides(tab) {
+  if (!tab?.deck || !tab.dirty) return;
+  try { await tab.deck.save(); tab.dirty = false; renderTabs(); renderSlides(tab); toast(`Saved ${tab.name}`); }
+  catch (e) { toast(e.message, true); }
+}
+function undoSlides(tab) {
+  if (tab?.deck?.kind !== "pptx") return;
+  if (!tab.deck.undoLast()) { toast("Nothing to undo"); return; }
+  tab.sel = null; tab.cur = Math.min(tab.cur, tab.deck.count() - 1); renderSlides(tab, true);
+}
+let mdTimer = 0;
+$("#sl-src").addEventListener("input", () => {
+  const tab = activeTab(); if (tab?.deck?.kind !== "md") return;
+  tab.text = $("#sl-src").value; tab.dirty = tab.text !== tab.orig;
+  clearTimeout(mdTimer);
+  mdTimer = setTimeout(() => { tab.deck.parse(); syncMdCursor(tab, false); renderTabs(); renderSlides(tab, true); }, 180);
+});
+function syncMdCursor(tab, draw = true) {
+  const d = tab.deck, at = $("#sl-src").selectionStart;
+  let i = 0; d.slides.forEach((s, k) => { if (s.start <= at) i = k; });
+  if (i !== tab.cur) { tab.cur = i; if (draw) renderSlides(tab); }
+}
+["click", "keyup"].forEach((ev) => $("#sl-src").addEventListener(ev, () => { const t = activeTab(); if (t?.deck?.kind === "md") syncMdCursor(t); }));
+$("#sl-notes").addEventListener("change", () => {
+  const tab = activeTab(); if (tab?.deck?.kind !== "pptx" || $("#sl-notes").readOnly) return;
+  tab.deck.setNotes(tab.cur, $("#sl-notes").value); renderSlides(tab);
+});
+$("#sl-up").onclick = () => slideOp("up");
+$("#sl-down").onclick = () => slideOp("down");
+$("#sl-dup").onclick = () => slideOp("dup");
+$("#sl-del").onclick = () => slideOp("del");
+$("#sl-addslide").onclick = () => slideOp("add");
+$("#sl-addtext").onclick = () => {
+  const tab = activeTab(); if (tab?.deck?.kind !== "pptx") return;
+  const sp = tab.deck.addText(tab.cur); tab.sel = sp;
+  renderSlides(tab, "cur");
+  const n = [...$("#sl-stage").querySelectorAll(".shp.ed")].find((x) => x._x === sp);
+  if (n) editShapeText(tab, n);
+};
+$("#sl-undo").onclick = () => undoSlides(activeTab());
+$("#sl-save").onclick = () => saveSlides(activeTab());
+$("#sl-present").onclick = () => { const t = activeTab(); if (t?.deck) present(t, t.cur); };
+$("#sl-print").onclick = () => { const t = activeTab(); if (t?.deck) printDeck(t); };
+$("#sl-codebtn").onclick = () => { const t = activeTab(); if (!t) return; t.hideCode = !t.hideCode; showSlides(t); };
+$("#sl-text").onclick = () => { const t = activeTab(); if (!t) return; t.kind = "text"; t.deck = null; activate(t.id); };
+$("#file-slides").onclick = () => { const t = activeTab(); if (!t) return; t.fmt = "md"; t.deck = null; openSlides(t); };
+
+// ── presenting and printing ─────────────────────────────────────────────────
+function present(tab, i) {
+  S.pr = { tab, i };
+  $("#present").hidden = false;
+  document.documentElement.requestFullscreen?.().catch(() => {});
+  drawPresent();
+}
+function drawPresent() {
+  const { tab, i } = S.pr, d = tab.deck;
+  $("#pr-stage").replaceChildren(fitSlide(d.render(i, false), d.w, d.h, innerWidth, innerHeight).wrap);
+  $("#pr-count").textContent = `${i + 1} / ${d.count()}`;
+}
+function presentStep(n) { const d = S.pr.tab.deck; S.pr.i = Math.min(d.count() - 1, Math.max(0, n)); drawPresent(); }
+function endPresent() {
+  if (!S.pr) return;
+  const tab = S.pr.tab; S.pr = null; $("#present").hidden = true;
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  if (activeTab() === tab) gotoSlide(tab, tab.cur);
+}
+$("#present").onclick = (e) => { if (S.pr) presentStep(S.pr.i + (e.clientX < innerWidth / 4 ? -1 : 1)); };
+document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && S.pr) endPresent(); });
+window.addEventListener("resize", () => { if (S.pr) drawPresent(); });
+async function printDeck(tab) {
+  const d = tab.deck, root = $("#print-root");
+  root.replaceChildren();
+  for (let i = 0; i < d.count(); i++) { const pg = el("div", "pr-page"); pg.style.width = d.w + "px"; pg.style.height = d.h + "px"; pg.append(d.render(i, false)); root.append(pg); }
+  $("#print-size")?.remove();
+  const st = el("style"); st.id = "print-size"; st.textContent = `@page { size: ${d.w}px ${d.h}px; margin: 0; }`; document.head.append(st);
+  document.body.classList.add("printing");
+  toast("Preparing the PDF… pick “Save as PDF” in the print dialog.");
+  await Promise.race([Promise.all([...root.querySelectorAll("img")].map((im) => im.complete ? 0 : new Promise((r) => { im.onload = im.onerror = r; }))), new Promise((r) => setTimeout(r, 4000))]);
+  window.print();
+}
+window.addEventListener("afterprint", () => { document.body.classList.remove("printing"); $("#print-size")?.remove(); $("#print-root").replaceChildren(); });
+// Keys: presenting, then the slides view (outside text fields).
+document.addEventListener("keydown", (e) => {
+  if (S.pr) {
+    if (["ArrowRight", "ArrowDown", "PageDown", " ", "Enter", "n"].includes(e.key)) { e.preventDefault(); presentStep(S.pr.i + 1); }
+    else if (["ArrowLeft", "ArrowUp", "PageUp", "Backspace", "p"].includes(e.key)) { e.preventDefault(); presentStep(S.pr.i - 1); }
+    else if (e.key === "Home") presentStep(0);
+    else if (e.key === "End") presentStep(S.pr.tab.deck.count() - 1);
+    else if (e.key === "Escape") endPresent();
+    return;
+  }
+  const tab = activeTab(); if (tab?.kind !== "slides" || !tab.deck) return;
+  const t = e.target, typing = t.isContentEditable || /^(TEXTAREA|INPUT|SELECT)$/.test(t.tagName);
+  const mod = e.ctrlKey || e.metaKey;
+  if (e.key === "F5") { e.preventDefault(); present(tab, e.shiftKey ? tab.cur : 0); return; }
+  if (mod && e.key.toLowerCase() === "z" && !typing && tab.deck.kind === "pptx") { e.preventDefault(); undoSlides(tab); return; }
+  if (typing) return;
+  if (tab.sel && tab.deck.kind === "pptx") {
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault(); const sp = tab.sel; tab.sel = null;
+      tab.deck.change([tab.deck.slides[tab.cur].name], () => sp.remove()); renderSlides(tab, "cur"); return;
+    }
+    const nudge = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (nudge) {
+      e.preventDefault();
+      const d = tab.deck, b = xfrmOf(slideCtx(d, d.slides[tab.cur].name), tab.sel); if (!b) return;
+      const step = (e.shiftKey ? 10 : 1) * EMU;
+      d.change([d.slides[tab.cur].name], () => setXfrm(tab.sel, { ...b, x: b.x + nudge[0] * step, y: b.y + nudge[1] * step }));
+      renderSlides(tab, "cur"); return;
+    }
+    if (e.key === "Escape") { selectShape(tab, null); return; }
+    if (e.key === "Enter" && tab.selEl?.querySelector(".tx-in")) { e.preventDefault(); editShapeText(tab, tab.selEl); return; }
+  }
+  if (["ArrowRight", "ArrowDown", "PageDown"].includes(e.key)) { e.preventDefault(); gotoSlide(tab, tab.cur + 1, true); }
+  else if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); gotoSlide(tab, tab.cur - 1, true); }
+  else if (e.key === "Home") gotoSlide(tab, 0, true);
+  else if (e.key === "End") gotoSlide(tab, tab.deck.count() - 1, true);
+});
 
 // ── sessions from other tools (Claude Code, Codex, Gemini CLI) ─────────────
 S.im = { data: null, source: pref.get("imSource", ""), hideKnown: pref.get("imHideKnown", false), picked: new Set(), busy: false };
@@ -2015,7 +3066,9 @@ $("#code").onkeydown = (e) => {
   }
 };
 async function saveActive() {
-  const tab = activeTab(); if (!tab || tab.kind !== "text" || !tab.dirty) return;
+  const tab = activeTab();
+  if (tab?.kind === "slides") return saveSlides(tab);
+  if (!tab || tab.kind !== "text" || !tab.dirty) return;
   try {
     const r = await api("/api/fs/write", { path: tab.id, text: tab.text });
     tab.orig = tab.text; tab.dirty = false; tab.size = r.size;

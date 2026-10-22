@@ -100,7 +100,8 @@ your workspaces (Ctrl+`; PowerShell on Windows, your `$SHELL` elsewhere), check
 a website you're building in the **Preview** tab (an internal browser: it finds dev
 servers already running on the usual ports, can serve a plain HTML folder on its
 own local port, switches between desktop/tablet/mobile widths, and offers to open
-`localhost` links printed in terminals or task output), browse
+`localhost` links printed in terminals or task output), view and edit **slide
+decks** agents make (see below), browse
 **trending GitHub repositories** and clone or analyze them with an editable prompt
 (read-only "Plan only" by default), keep a history across restarts that every
 fermi window on the PC shares (desktop, `fermi ui`, the TUI and `fermi run`;
@@ -126,6 +127,26 @@ other sites are refused. Ctrl+C stops it and its running tasks.
   in (e.g. an account with `home = "default"` for `~/.claude`), a reply resumes
   that session in place; otherwise the conversation is passed on to whichever
   model you pick. Sessions fermi ran itself show up as already imported.
+
+## Slides
+
+Decks open in a slides view (from the file tree, a task's output, or Changes):
+
+- **PowerPoint (.pptx)**, e.g. made with python-pptx or pptxgenjs: thumbnails,
+  speaker notes, and editing in place: double-click text to edit it, drag to
+  move, drag the corner to resize, arrow keys to nudge, Delete to remove a
+  shape, add text boxes, duplicate / reorder / delete slides, undo (Ctrl+Z).
+  Saving rewrites only the parts that changed; everything else in the file is
+  kept byte for byte. Charts and SmartArt show as placeholders.
+- **Markdown decks** (Marp style: `marp: true` front matter or a `*.slides.md`
+  name, slides separated by `---`): a live editor next to the slides, with
+  Marp's `_class`/`paginate`/`header`/`footer` directives, `![bg](…)`
+  backgrounds and HTML-comment speaker notes. Any Markdown file with `---`
+  breaks has a *Slides* button.
+
+Both have **Present** (full screen; arrows, space, Esc; F5 starts from the top)
+and **PDF** (print to PDF, one page per slide). Agents are told about the
+viewer, so asking for "a deck" gets a file you can open there.
 
 ## Models
 
@@ -160,6 +181,7 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   sessions.rs      finds and imports Claude Code / Codex / Gemini CLI sessions
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
+  slides.rs        .pptx parts in and out (the dashboard renders and edits the XML)
   web/index.html   the dashboard (single file, no build step, embedded in the binary)
 crates/fermi-desktop  native window around the dashboard (Tauri)
 ```

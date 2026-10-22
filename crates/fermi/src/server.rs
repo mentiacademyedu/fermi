@@ -3,7 +3,7 @@
 //! puts in the URL it opens, and the Host header must be local, so other
 //! sites in the browser can't drive it (CSRF / DNS rebinding).
 
-use crate::{files, setup};
+use crate::{files, setup, slides};
 use anyhow::{bail, Result};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, Request, State};
@@ -172,6 +172,9 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/fs/raw", get(fs_raw))
         .route("/api/fs/write", post(fs_write))
         .route("/api/fs/search", get(fs_search))
+        .route("/api/slides/pptx", get(pptx_read))
+        .route("/api/slides/media", get(pptx_media))
+        .route("/api/slides/save", post(pptx_save).layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
         .route("/api/attachments", post(attach).layer(axum::extract::DefaultBodyLimit::max(25 * 1024 * 1024)))
         .route("/api/usage", get(usage))
         .route("/api/trending", get(trending))
@@ -723,6 +726,76 @@ async fn fs_write(State(s): S, Json(b): Json<WriteBody>) -> Response {
     match res {
         Ok(p) => Json(json!({ "path": p, "size": b.text.len() })).into_response(),
         Err(e) => fs_err(e),
+    }
+}
+
+// ── slides (.pptx) ──────────────────────────────────────────────────────────
+
+fn pptx_path(s: &Srv, path: &str) -> Result<PathBuf> {
+    let p = files::check(&s.workspaces(), path)?;
+    if !p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pptx")) {
+        bail!("not a .pptx file");
+    }
+    Ok(p)
+}
+
+async fn pptx_read(State(s): S, Query(q): Query<PathBody>) -> Response {
+    let path = match pptx_path(&s, &q.path) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    match tokio::task::spawn_blocking(move || slides::read(&path)).await {
+        Ok(Ok(deck)) => Json(deck).into_response(),
+        Ok(Err(e)) => fs_err(e),
+        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "couldn't read the deck"),
+    }
+}
+
+#[derive(Deserialize)]
+struct MediaQuery {
+    path: String,
+    name: String,
+}
+
+async fn pptx_media(State(s): S, Query(q): Query<MediaQuery>) -> Response {
+    let path = match pptx_path(&s, &q.path) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    match tokio::task::spawn_blocking(move || slides::media(&path, &q.name)).await {
+        Ok(Ok((bytes, mime))) => (
+            [
+                (header::CONTENT_TYPE, mime),
+                (header::CONTENT_SECURITY_POLICY, "sandbox; default-src 'none'; style-src 'unsafe-inline'"),
+                (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+                (header::CACHE_CONTROL, "no-store"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        Ok(Err(e)) => fs_err(e),
+        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "couldn't read the deck"),
+    }
+}
+
+#[derive(Deserialize)]
+struct PptxSave {
+    path: String,
+    #[serde(default)]
+    parts: HashMap<String, String>,
+    #[serde(default)]
+    remove: Vec<String>,
+}
+
+async fn pptx_save(State(s): S, Json(b): Json<PptxSave>) -> Response {
+    let path = match pptx_path(&s, &b.path) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    match tokio::task::spawn_blocking(move || slides::save(&path, &b.parts, &b.remove)).await {
+        Ok(Ok(())) => Json(json!({ "ok": true })).into_response(),
+        Ok(Err(e)) => fs_err(e),
+        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "couldn't save the deck"),
     }
 }
 

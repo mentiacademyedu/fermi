@@ -54,7 +54,11 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
     }
 
     let mut tools = vec![];
-    let mut prompt = format!("You are running inside the fermi harness, profile {}.", profile.name);
+    let mut prompt = format!(
+        "You are running inside the fermi harness, profile {}. Slide decks you make as .pptx files or as Marp Markdown \
+         (front matter `marp: true`, slides separated by --- lines) open in fermi's slides viewer, where the user can present and edit them.",
+        profile.name
+    );
     if !image.is_empty() {
         tools.push("mcp__fermi__generate_image");
         prompt += " For any image creation request call the fermi generate_image tool, which uses an OpenAI image model and saves a file.";
