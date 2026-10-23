@@ -58,7 +58,7 @@ def a(cid, status, where, note, tests=""):
 
 core = "crates/fermi-core/src"
 # System 1
-a("AI-01", "partial", f"{core}/providers/*.rs, events.rs", "Five adapters (Claude/Codex/Gemini CLIs, Anthropic and OpenAI APIs) normalize into one Event stream and RunResult. No deterministic provider simulator exists; CLI adapters need fake CLI binaries via [bins], API adapters a local server via base_url.")
+a("AI-01", "partial", f"{core}/providers/*.rs, events.rs", "Five adapters (Claude/Codex/Gemini CLIs, Anthropic and OpenAI APIs) normalize into one Event stream and RunResult. The acceptance test covers the three CLI adapters through the fake CLI; the two API adapters need an HTTP mock (not built yet), so the case stays partial.")
 a("AI-02", "implemented", f"{core}/engine.rs (Task, Engine::run)", "Every provider runs through Task and Engine::run with the same lifecycle and Event schema. Unverified against a fixture oracle.", "router::tests::*")
 a("AI-03", "implemented", f"{core}/hub.rs (follow_up, continuation)", "Model switch per reply; same provider resumes the session, other providers get the transcript; Routed events attribute each turn.", "hub::tests::switching_models")
 a("AI-04", "missing", f"{core}/providers/api.rs, engine.rs", "429 maps to Limited (Retry-After read) and fails over to the next account; there is no backoff/retry policy or attempt ceiling.")
@@ -72,7 +72,7 @@ a("MA-02", "implemented", f"{core}/team.rs (schedule, topo)", "Dependencies gate
 a("MA-03", "implemented", f"{core}/team.rs (start_task, integrate)", "Separate worktrees and branches merged with --no-ff into an integration branch; manually verified on a fixture (2 runs).")
 a("MA-04", "partial", f"{core}/team.rs (integrate)", "Conflicts are detected (unmerged paths) and logged with both branches kept, but resolution is delegated automatically to a debugger agent rather than escalated to the user. Manually verified once.")
 a("MA-05", "missing", "", "No delegate tool; agents cannot spawn scoped subtasks.")
-a("MA-06", "partial", f"{core}/hub.rs, team.rs (on_done)", "A failed agent marks only its task failed and others continue; untested with a killed process.")
+a("MA-06", "implemented", f"{core}/hub.rs, team.rs (on_done)", "A killed agent process marks only its task failed; concurrent tasks finish with their results. In team runs a failed task blocks its dependents (MA-02).")
 a("MA-07", "implemented", f"{core}/team.rs (cancel), providers/proc.rs (kill_tree)", "Cancel stops running agents and every process they started (process tree), and queued tasks never start. Fixed 2026-10-23: processes started by the CLI were orphaned (D-005).")
 a("MA-08", "partial", f"{core}/team.rs (integrate, merge)", "Merge into the user's branch requires approval and the final checks run on the integration branch, but checks are agent judgments: there is no mechanical verification command gating the merge.")
 # System 3

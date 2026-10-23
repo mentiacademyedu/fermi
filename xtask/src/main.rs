@@ -242,7 +242,9 @@ fn report(run_id: &str) -> Result<(), String> {
     let mut rows = vec![];
     for c in &cases {
         let id = s(c, "id");
-        let st = ran.get(id).and_then(|r| r["status"].as_str()).unwrap_or("not_run");
+        // Outside this run: a case without a test is not_implemented, one with a test simply didn't run.
+        let absent = if c["testName"].is_null() { "not_implemented" } else { "not_run" };
+        let st = ran.get(id).and_then(|r| r["status"].as_str()).unwrap_or(absent);
         *by_sys.entry(s(c, "system").to_string()).or_default().entry(st).or_default() += 1;
         *by_sys.entry(s(c, "system").to_string()).or_default().entry("total").or_default() += 1;
         rows.push(format!("| {id} | {} | {st} | {} |", s(c, "title"), s(c, "capability")));

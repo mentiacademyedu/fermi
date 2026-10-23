@@ -31,14 +31,19 @@ fn kinds(events: &[Event]) -> Vec<&'static str> {
 #[tokio::test(flavor = "multi_thread")]
 async fn ai_01_adapter_normalization() {
     let mut c = Case::start("AI-01", "T1");
-    c.real(&["fermi engine", "claude and codex CLI adapters", "process spawning and stream parsing"]);
-    c.mocked(&["Claude Code and Codex CLIs (fake-cli with scripted output)"]);
+    c.real(&["fermi engine", "claude, codex and gemini CLI adapters", "process spawning and stream parsing"]);
+    c.mocked(&["Claude Code, Codex and Gemini CLIs (fake-cli with scripted output)"]);
     // Equivalent scripted output, emitted in each CLI's own stream format.
     let step = json!({ "text": "The answer is 42.", "tools": [{ "name": "Bash", "input": { "command": "ls src" } }], "usage": { "input": 120, "output": 30 } });
-    let f = Fermi::new(&c, &[account("cl", "claude", vec![step.clone()]), account("cx", "openai", vec![step])], "").unwrap();
+    let f = Fermi::new(
+        &c,
+        &[account("cl", "claude", vec![step.clone()]), account("cx", "openai", vec![step.clone()]), account("gm", "gemini", vec![step])],
+        "",
+    )
+    .unwrap();
     let cwd = c.work.clone();
     let mut normalized = vec![];
-    for (acct, model) in [("cl", "claude:sonnet"), ("cx", "openai:gpt")] {
+    for (acct, model) in [("cl", "claude:sonnet"), ("cx", "openai:gpt"), ("gm", "gemini:flash")] {
         let mut task = f.task("What is the answer?", &cwd);
         task.account = Some(acct.into());
         task.model = Some(model.into());
@@ -61,30 +66,28 @@ async fn ai_01_adapter_normalization() {
         }));
     }
     c.json("normalized-responses.json", &json!(normalized));
-    c.json("request-envelopes.json", &json!({ "cl": f.calls("cl"), "cx": f.calls("cx") }));
+    c.json("request-envelopes.json", &json!({ "cl": f.calls("cl"), "cx": f.calls("cx"), "gm": f.calls("gm") }));
     let canonical =
         json!({ "text": "The answer is 42.", "toolCalls": ["ls src"], "finish": "ok", "usage": { "input": 120, "output": 30 } });
     for n in &normalized {
         let same = ["text", "toolCalls", "finish", "usage"].iter().all(|k| n[k] == canonical[k]);
         c.check(&format!("normalized:{}", n["account"].as_str().unwrap()), same, format!("{n}"));
     }
-    // `delta` is optional progressive output (Claude streams it, Codex doesn't);
+    // `delta` is optional progressive output (some CLIs stream it, others don't);
     // the finished `text` replaces it. The lifecycle must match without it.
     let lifecycle = |n: &Value| -> Vec<String> {
         n["eventKinds"].as_array().unwrap().iter().filter_map(|k| k.as_str()).filter(|k| *k != "delta").map(String::from).collect()
     };
-    c.check(
-        "sameLifecycle",
-        lifecycle(&normalized[0]) == lifecycle(&normalized[1]),
-        format!("{:?} vs {:?} (optional delta events excluded)", lifecycle(&normalized[0]), lifecycle(&normalized[1])),
-    );
-    let (cl, cx) = (f.calls("cl"), f.calls("cx"));
-    c.check("eachAdapterCalledOnce", cl.len() == 1 && cx.len() == 1, format!("claude {} call(s), codex {} call(s)", cl.len(), cx.len()));
-    c.check(
-        "rightAdapter",
-        cl.first().is_some_and(|x| x["flavor"] == "claude") && cx.first().is_some_and(|x| x["flavor"] == "codex"),
-        "claude-format and codex-format invocations",
-    );
+    let cycles: Vec<Vec<String>> = normalized.iter().map(lifecycle).collect();
+    c.check("sameLifecycle", cycles.iter().all(|l| *l == cycles[0]), format!("{cycles:?} (optional delta events excluded)"));
+    for (acct, flavor) in [("cl", "claude"), ("cx", "codex"), ("gm", "gemini")] {
+        let calls = f.calls(acct);
+        c.check(
+            &format!("rightAdapter:{flavor}"),
+            calls.len() == 1 && calls[0]["flavor"] == flavor,
+            format!("{} call(s) to account {acct}, flavor {:?}", calls.len(), calls.first().map(|x| x["flavor"].clone())),
+        );
+    }
     c.finish();
 }
 
