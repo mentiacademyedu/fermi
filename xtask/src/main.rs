@@ -155,6 +155,14 @@ fn acceptance(o: Opts) -> Result<bool, String> {
     let reports = root().join("tests/reports").join(&run_id);
     std::fs::create_dir_all(&reports).map_err(|e| e.to_string())?;
     eprintln!("run {run_id}: {} case(s), profile {}", selected.len(), o.profile);
+    // The revision under test is the one the tests are built from: record it now.
+    let commit = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(root())
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    let dirty = Command::new("git").args(["status", "--porcelain"]).current_dir(root()).output().ok().is_some_and(|o| !o.stdout.is_empty());
 
     // Build once; a build failure fails every case rather than passing none.
     let build = Command::new("cargo")
@@ -215,13 +223,6 @@ fn acceptance(o: Opts) -> Result<bool, String> {
         eprintln!("{id}: {status}");
         summary.push(json!({ "id": id, "system": s(c, "system"), "status": status, "attempts": attempts, "durationMs": started.elapsed().as_millis() as u64 }));
     }
-    let commit = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(root())
-        .output()
-        .ok()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
-    let dirty = Command::new("git").args(["status", "--porcelain"]).current_dir(root()).output().ok().is_some_and(|o| !o.stdout.is_empty());
     let manifest = json!({ "runId": run_id, "profile": o.profile, "commitSha": commit, "dirtyTree": dirty, "os": std::env::consts::OS, "cases": summary });
     std::fs::write(reports.join("summary.json"), serde_json::to_vec_pretty(&manifest).unwrap()).map_err(|e| e.to_string())?;
     report(&run_id)?;

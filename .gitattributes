@@ -1,0 +1,2 @@
+# Fixtures and their ground truth are byte-exact (line numbers, hashes).
+tests/fixtures/** text eol=lf
