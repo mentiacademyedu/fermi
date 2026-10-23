@@ -1,0 +1,37 @@
+{
+  "cases": [
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1215,
+      "id": "MA-06",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 4593,
+      "id": "MA-07",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    }
+  ],
+  "commitSha": "faa705c5b757d19b5e0c0ccc4d0919e621d0a6ba",
+  "dirtyTree": false,
+  "os": "windows",
+  "profile": "security",
+  "runId": "2026-10-23-faa705c-security"
+}
