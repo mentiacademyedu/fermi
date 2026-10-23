@@ -55,9 +55,14 @@ pub struct Usage {
 pub enum Status {
     Ok,
     /// Account hit a usage/rate limit; `until` = reset time if known.
-    Limited { until: Option<u64> },
+    Limited {
+        until: Option<u64>,
+    },
     /// `retry` = worth trying the next account (auth/availability problems).
-    Failed { msg: String, retry: bool },
+    Failed {
+        msg: String,
+        retry: bool,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -102,29 +107,70 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
 pub(crate) fn is_limit(msg: &str) -> bool {
     let m = msg.to_lowercase();
     [
-        "usage limit", "rate limit", "rate_limit", "hit your limit", "limit reached", "quota", "too many requests",
-        "resource exhausted", "resource_exhausted", "429",
+        "usage limit",
+        "rate limit",
+        "rate_limit",
+        "hit your limit",
+        "limit reached",
+        "quota",
+        "too many requests",
+        "resource exhausted",
+        "resource_exhausted",
+        "429",
     ]
-        .iter()
-        .any(|w| m.contains(w))
+    .iter()
+    .any(|w| m.contains(w))
 }
 
 pub(crate) fn is_auth(msg: &str) -> bool {
     let m = msg.to_lowercase();
     [
-        "/login", "log in", "logged in", "login", "authenticat", "api key", "unauthorized", "401", "credit balance",
-        "not signed in", "auth method",
+        "/login",
+        "log in",
+        "logged in",
+        "login",
+        "authenticat",
+        "api key",
+        "unauthorized",
+        "401",
+        "credit balance",
+        "not signed in",
+        "auth method",
     ]
-        .iter()
-        .any(|w| m.contains(w))
+    .iter()
+    .any(|w| m.contains(w))
 }
 
-/// Turns a CLI's final error text into a status.
+/// A provider-side outage another account may not have (the API adapters
+/// treat HTTP 5xx the same way).
+pub(crate) fn is_transient(msg: &str) -> bool {
+    let m = msg.to_lowercase();
+    [
+        "500 ",
+        "502",
+        "503",
+        "504",
+        "529",
+        "overloaded",
+        "service unavailable",
+        "internal server error",
+        "bad gateway",
+        "gateway timeout",
+        "timed out",
+        "connection reset",
+        "econnreset",
+    ]
+    .iter()
+    .any(|w| m.contains(w))
+}
+
+/// Turns a CLI's final error text into a status. Login problems and
+/// provider outages are worth trying on the profile's next account.
 pub(crate) fn classify_error(msg: String, resets: Option<u64>) -> RunResult {
     if is_limit(&msg) {
         RunResult::limited(resets)
     } else {
-        let retry = is_auth(&msg);
+        let retry = is_auth(&msg) || is_transient(&msg);
         RunResult::failed(msg, retry)
     }
 }
@@ -145,5 +191,20 @@ pub(crate) fn brief(v: &serde_json::Value) -> String {
         format!("{}…", line.chars().take(120).collect::<String>())
     } else {
         line
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn outages_fail_over_and_bugs_do_not() {
+        let retry = |m: &str| matches!(classify_error(m.into(), None).status, Status::Failed { retry: true, .. });
+        assert!(retry("API Error: 503 Service Unavailable"));
+        assert!(retry("Overloaded"));
+        assert!(retry("Please run /login"));
+        assert!(!retry("syntax error in your request"));
+        assert!(matches!(classify_error("429 Too Many Requests".into(), None).status, Status::Limited { .. }));
     }
 }

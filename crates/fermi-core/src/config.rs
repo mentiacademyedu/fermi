@@ -178,8 +178,7 @@ impl Config {
 
     pub fn load() -> Result<Self> {
         let p = Self::path();
-        let text = std::fs::read_to_string(&p)
-            .with_context(|| format!("reading {} (run `fermi init` first)", p.display()))?;
+        let text = std::fs::read_to_string(&p).with_context(|| format!("reading {} (run `fermi init` first)", p.display()))?;
         Self::parse(&text).with_context(|| format!("in {}", p.display()))
     }
 
@@ -256,12 +255,7 @@ impl Config {
     /// with every account.
     pub fn resolve_profile(&self, name: Option<&str>, cwd: &Path) -> Result<Profile> {
         if let Some(n) = name {
-            return self
-                .profiles
-                .iter()
-                .find(|p| p.name == n)
-                .cloned()
-                .ok_or_else(|| anyhow!("unknown profile `{n}`"));
+            return self.profiles.iter().find(|p| p.name == n).cloned().ok_or_else(|| anyhow!("unknown profile `{n}`"));
         }
         let here = norm_path(cwd);
         let best = self

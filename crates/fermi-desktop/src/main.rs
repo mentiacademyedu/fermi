@@ -26,11 +26,7 @@ fn main() {
                 }
                 Err(e) => WebviewUrl::App(format!("index.html#{}", percent_encode(&format!("{e:#}"))).into()),
             };
-            WebviewWindowBuilder::new(app, "main", url)
-                .title("Fermi")
-                .inner_size(1280.0, 840.0)
-                .min_inner_size(860.0, 560.0)
-                .build()?;
+            WebviewWindowBuilder::new(app, "main", url).title("Fermi").inner_size(1280.0, 840.0).min_inner_size(860.0, 560.0).build()?;
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -60,11 +56,8 @@ fn start_dashboard() -> anyhow::Result<(String, Arc<Hub>)> {
 }
 
 fn run_mcp(args: &[String]) -> anyhow::Result<()> {
-    let profile = args
-        .windows(2)
-        .find(|w| w[0] == "--profile")
-        .map(|w| w[1].clone())
-        .ok_or_else(|| anyhow::anyhow!("missing --profile"))?;
+    let profile =
+        args.windows(2).find(|w| w[0] == "--profile").map(|w| w[1].clone()).ok_or_else(|| anyhow::anyhow!("missing --profile"))?;
     tokio::runtime::Runtime::new()?.block_on(fermi_core::mcp::serve(Engine::load()?, profile))
 }
 

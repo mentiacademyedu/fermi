@@ -175,7 +175,8 @@ async fn call_tool(e: &Engine, profile: &Profile, name: &str, args: &Value) -> R
         return Ok("Handoff recorded. You're done.".into());
     }
     if name == "create_deck" {
-        let spec: crate::deck::DeckSpec = serde_json::from_value(args.clone()).map_err(|err| anyhow::anyhow!("bad deck description: {err}"))?;
+        let spec: crate::deck::DeckSpec =
+            serde_json::from_value(args.clone()).map_err(|err| anyhow::anyhow!("bad deck description: {err}"))?;
         let mut out = cwd.join(args["path"].as_str().unwrap_or("deck.pptx"));
         if !out.extension().is_some_and(|x| x.eq_ignore_ascii_case("pptx")) {
             out.set_extension("pptx");

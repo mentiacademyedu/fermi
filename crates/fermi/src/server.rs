@@ -153,8 +153,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         staged: Mutex::new(HashMap::new()),
         code: Mutex::new(HashMap::new()),
     });
-    let saved: Vec<String> =
-        std::fs::read(srv.workspaces_file()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+    let saved: Vec<String> = std::fs::read(srv.workspaces_file()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
     *srv.added.lock().unwrap() = saved.into_iter().map(PathBuf::from).collect();
     srv.probe_all();
     let _ = std::fs::remove_dir_all(srv.hub.engine().home.join("staging")); // reviews from an earlier run
@@ -282,10 +281,7 @@ async fn require_token(State(s): S, req: Request, next: Next) -> Response {
 }
 
 async fn index() -> impl IntoResponse {
-    (
-        [(header::CONTENT_SECURITY_POLICY, CSP), (header::CACHE_CONTROL, "no-store"), (header::X_FRAME_OPTIONS, "DENY")],
-        Html(INDEX),
-    )
+    ([(header::CONTENT_SECURITY_POLICY, CSP), (header::CACHE_CONTROL, "no-store"), (header::X_FRAME_OPTIONS, "DENY")], Html(INDEX))
 }
 
 // ── state ───────────────────────────────────────────────────────────────────
@@ -1003,7 +999,8 @@ async fn skills_export(State(s): S, Json(b): Json<SkillExport>) -> Response {
         }
     }
     let default = if picked.len() == 1 { format!("{}.zip", picked[0].2) } else { "skills-and-agents.zip".into() };
-    let dialog = rfd::AsyncFileDialog::new().set_title("Export skills and agents").set_file_name(&default).add_filter("Zip archive", &["zip"]);
+    let dialog =
+        rfd::AsyncFileDialog::new().set_title("Export skills and agents").set_file_name(&default).add_filter("Zip archive", &["zip"]);
     let Some(chosen) = with_dialog(dialog.save_file()).await else { return err(StatusCode::CONFLICT, "a file dialog is already open") };
     let Some(file) = chosen else { return Json(json!({ "cancelled": true })).into_response() };
     let mut out = file.path().to_path_buf();
@@ -1382,7 +1379,11 @@ async fn attach(State(s): S, Query(q): Query<AttachQuery>, body: axum::body::Byt
         // Keep a safe, short file name; prefix the time so names never collide.
         let clean: String = q.name.chars().filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')).collect();
         let clean = clean.trim_start_matches('.');
-        let clean = if clean.is_empty() { "file".to_string() } else { clean.chars().rev().take(60).collect::<Vec<_>>().into_iter().rev().collect() };
+        let clean = if clean.is_empty() {
+            "file".to_string()
+        } else {
+            clean.chars().rev().take(60).collect::<Vec<_>>().into_iter().rev().collect()
+        };
         let path = dir.join(format!("{}-{clean}", fermi_core::util::now()));
         std::fs::write(&path, &body)?;
         Ok(path)

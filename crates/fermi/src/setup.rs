@@ -202,9 +202,7 @@ fn apply_profile(doc: &mut DocumentMut, p: &ProfileEdit) -> Result<String> {
 pub fn delete_profile(name: &str) -> Result<String> {
     let mut doc = load_doc()?;
     let Some(arr) = doc.get_mut("profiles").and_then(|i| i.as_array_of_tables_mut()) else { bail!("no profiles") };
-    let Some(i) = arr.iter().position(|t| t.get("name").and_then(|v| v.as_str()) == Some(name)) else {
-        bail!("no profile named `{name}`")
-    };
+    let Some(i) = arr.iter().position(|t| t.get("name").and_then(|v| v.as_str()) == Some(name)) else { bail!("no profile named `{name}`") };
     arr.remove(i);
     if doc.get("default_profile").and_then(|v| v.as_str()) == Some(name) {
         doc.remove("default_profile");
@@ -218,9 +216,7 @@ pub fn delete_profile(name: &str) -> Result<String> {
 pub fn remove_account(id: &str) -> Result<String> {
     let mut doc = load_doc()?;
     let Some(arr) = doc.get_mut("accounts").and_then(|i| i.as_array_of_tables_mut()) else { bail!("no accounts") };
-    let Some(i) = arr.iter().position(|t| t.get("id").and_then(|v| v.as_str()) == Some(id)) else {
-        bail!("no account named `{id}`")
-    };
+    let Some(i) = arr.iter().position(|t| t.get("id").and_then(|v| v.as_str()) == Some(id)) else { bail!("no account named `{id}`") };
     arr.remove(i);
     if let Some(profiles) = doc.get_mut("profiles").and_then(|i| i.as_array_of_tables_mut()) {
         for t in profiles.iter_mut() {
@@ -317,10 +313,7 @@ pub async fn status(engine: &Engine) {
         );
     }
     println!("\nACCOUNTS");
-    println!(
-        "   {:<18} {:<7} {:<4} {:<22} {:>6} {:>6} {:>9}  LOGGED IN AS",
-        "ID", "PROV", "AUTH", "STATUS", "WINDOW", "TASKS", "TOKENS"
-    );
+    println!("   {:<18} {:<7} {:<4} {:<22} {:>6} {:>6} {:>9}  LOGGED IN AS", "ID", "PROV", "AUTH", "STATUS", "WINDOW", "TASKS", "TOKENS");
     let snap = engine.store.snapshot();
     let t = now();
     for (a, info) in cfg.accounts.iter().zip(&who) {

@@ -62,19 +62,11 @@ const DEFAULT_COOLDOWN: u64 = 15 * 60;
 impl Store {
     pub fn open(home: &Path) -> Self {
         let _ = std::fs::create_dir_all(home);
-        Store {
-            path: home.join("state.json"),
-            log: home.join("usage.jsonl"),
-            lock: Mutex::new(()),
-            running: Mutex::new(HashMap::new()),
-        }
+        Store { path: home.join("state.json"), log: home.join("usage.jsonl"), lock: Mutex::new(()), running: Mutex::new(HashMap::new()) }
     }
 
     pub fn snapshot(&self) -> HashMap<String, AcctState> {
-        std::fs::read(&self.path)
-            .ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default()
+        std::fs::read(&self.path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
     }
 
     pub fn get(&self, id: &str) -> AcctState {

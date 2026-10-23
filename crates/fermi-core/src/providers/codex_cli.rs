@@ -9,10 +9,7 @@ use std::path::PathBuf;
 
 /// The Codex config dir this account uses (`CODEX_HOME`).
 pub fn codex_home(account: &crate::config::Account) -> Option<PathBuf> {
-    account
-        .home_dir()
-        .or_else(|| std::env::var_os("CODEX_HOME").map(PathBuf::from))
-        .or_else(|| dirs::home_dir().map(|h| h.join(".codex")))
+    account.home_dir().or_else(|| std::env::var_os("CODEX_HOME").map(PathBuf::from)).or_else(|| dirs::home_dir().map(|h| h.join(".codex")))
 }
 
 /// On Windows, Codex only enforces write sandboxes through its own Windows
@@ -22,9 +19,8 @@ fn needs_windows_sandbox(account: &crate::config::Account, sandbox: Option<&str>
     if !cfg!(windows) || !matches!(sandbox, Some("workspace-write")) {
         return false;
     }
-    let configured = codex_home(account)
-        .and_then(|h| std::fs::read_to_string(h.join("config.toml")).ok())
-        .is_some_and(|t| t.contains("[windows]"));
+    let configured =
+        codex_home(account).and_then(|h| std::fs::read_to_string(h.join("config.toml")).ok()).is_some_and(|t| t.contains("[windows]"));
     !configured
 }
 
@@ -95,12 +91,7 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>, sandbox: O
                     }
                     "command_execution" => emit(ctx.tx, Event::Tool { name: "shell".into(), detail: brief(&item["command"]) }),
                     "file_change" => {
-                        let paths: Vec<_> = item["changes"]
-                            .as_array()
-                            .into_iter()
-                            .flatten()
-                            .filter_map(|c| c["path"].as_str())
-                            .collect();
+                        let paths: Vec<_> = item["changes"].as_array().into_iter().flatten().filter_map(|c| c["path"].as_str()).collect();
                         emit(ctx.tx, Event::Tool { name: "edit".into(), detail: paths.join(", ") });
                     }
                     "mcp_tool_call" => emit(ctx.tx, Event::Tool { name: format!("{}:{}", s("server"), s("tool")), detail: String::new() }),

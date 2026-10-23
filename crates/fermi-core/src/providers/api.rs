@@ -28,20 +28,13 @@ pub(crate) async fn send(req: reqwest::RequestBuilder) -> Result<std::result::Re
     let resp = req.send().await?;
     let status = resp.status();
     if status.as_u16() == 429 {
-        let retry = resp
-            .headers()
-            .get("retry-after")
-            .and_then(|h| h.to_str().ok())
-            .and_then(|s| s.parse::<u64>().ok())
-            .map(|s| now() + s);
+        let retry = resp.headers().get("retry-after").and_then(|h| h.to_str().ok()).and_then(|s| s.parse::<u64>().ok()).map(|s| now() + s);
         return Ok(Err(RunResult::limited(retry)));
     }
     let body = resp.text().await?;
     if !status.is_success() {
-        let msg = serde_json::from_str::<Value>(&body)
-            .ok()
-            .and_then(|v| v["error"]["message"].as_str().map(str::to_string))
-            .unwrap_or(body);
+        let msg =
+            serde_json::from_str::<Value>(&body).ok().and_then(|v| v["error"]["message"].as_str().map(str::to_string)).unwrap_or(body);
         let retry = matches!(status.as_u16(), 401 | 403 | 500..=599);
         return Ok(Err(RunResult::failed(format!("HTTP {status}: {msg}"), retry)));
     }
@@ -106,10 +99,6 @@ pub async fn openai(ctx: &RunCtx<'_>) -> Result<RunResult> {
         .join("\n");
     emit(ctx.tx, Event::Text { text: text.clone() });
     let u = &v["usage"];
-    let usage = Usage {
-        input: u["input_tokens"].as_u64().unwrap_or(0),
-        output: u["output_tokens"].as_u64().unwrap_or(0),
-        cost_usd: None,
-    };
+    let usage = Usage { input: u["input_tokens"].as_u64().unwrap_or(0), output: u["output_tokens"].as_u64().unwrap_or(0), cost_usd: None };
     Ok(RunResult::ok(text, usage))
 }

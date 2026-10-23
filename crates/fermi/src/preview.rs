@@ -53,9 +53,7 @@ pub async fn scan(skip: u16) -> Vec<DevServer> {
 }
 
 /// Runs the probes concurrently (no futures crate needed).
-async fn futures_join<F: std::future::Future<Output = T> + Send + 'static, T: Send + 'static>(
-    futs: impl Iterator<Item = F>,
-) -> Vec<T> {
+async fn futures_join<F: std::future::Future<Output = T> + Send + 'static, T: Send + 'static>(futs: impl Iterator<Item = F>) -> Vec<T> {
     let handles: Vec<_> = futs.map(tokio::spawn).collect();
     let mut out = vec![];
     for h in handles {

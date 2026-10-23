@@ -1,0 +1,55 @@
+# Mandatory gates (docs/FERMI_ADE_Verification_and_Acceptance_Testing, "CI gates").
+# Any failed step blocks a green result. Live-provider (T4) runs are manual only.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System libraries (desktop shell and file dialogs)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev libxdo-dev
+
+      - name: Toolchain (pinned by rust-toolchain.toml)
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Static analysis
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Unit tests
+        run: cargo test --workspace --locked --lib --bins
+
+      - name: Acceptance (every case with a test, deterministic profile)
+        run: cargo run --locked -p xtask -- acceptance --implemented
+        env:
+          ACCEPTANCE_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Coverage
+        run: cargo llvm-cov --workspace --locked --lcov --output-path lcov.info
+
+      - name: Evidence and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            tests/reports/
+            lcov.info
+          retention-days: 30

@@ -1,10 +1,16 @@
-"""Phase 1 audit: parse the acceptance catalog and join it with the repository audit.
+"""Acceptance matrix: the catalog joined with the capability audit and the published results.
 
-Writes tests/acceptance/systems.yaml (the registry) and docs/ACCEPTANCE_MATRIX.md.
+    python tests/acceptance/phase1_audit.py <repo> [--registry] [--run tests/reports/<run>/summary.json]
+
+Writes docs/ACCEPTANCE_MATRIX.md. With --registry it also regenerates
+tests/acceptance/systems.yaml from the catalog and audit, keeping each case's
+testFile/testName/repetitions and taking status from the --run summary.
 """
 import re, sys, os, json
 
 ROOT = sys.argv[1]
+WRITE_REGISTRY = "--registry" in sys.argv
+RUN = sys.argv[sys.argv.index("--run") + 1] if "--run" in sys.argv else None
 doc = open(os.path.join(ROOT, "docs", "FERMI_ADE_Verification_and_Acceptance_Testing"), encoding="utf8").read().replace("\r\n", "\n")
 
 SYSTEMS = [
@@ -56,7 +62,7 @@ a("AI-01", "partial", f"{core}/providers/*.rs, events.rs", "Five adapters (Claud
 a("AI-02", "implemented", f"{core}/engine.rs (Task, Engine::run)", "Every provider runs through Task and Engine::run with the same lifecycle and Event schema. Unverified against a fixture oracle.", "router::tests::*")
 a("AI-03", "implemented", f"{core}/hub.rs (follow_up, continuation)", "Model switch per reply; same provider resumes the session, other providers get the transcript; Routed events attribute each turn.", "hub::tests::switching_models")
 a("AI-04", "missing", f"{core}/providers/api.rs, engine.rs", "429 maps to Limited (Retry-After read) and fails over to the next account; there is no backoff/retry policy or attempt ceiling.")
-a("AI-05", "partial", f"{core}/engine.rs (run_inner), providers/api.rs (send)", "HTTP 5xx is retryable: the task moves to the profile's next account, then the next candidate model, and fails with the last error when all are exhausted. This fallback is always on (not explicitly configured or disableable) and the switch is recorded as a Failover event. CLI adapters classify errors from text.")
+a("AI-05", "implemented", f"{core}/engine.rs (run_inner), providers/mod.rs (classify_error)", "Provider outages (HTTP 5xx from the APIs; 5xx, overloaded or unavailable from the CLIs) fail over to the profile's next account, then the next candidate model, recorded as Failover events; pinning the account and model disables it. Fixed 2026-10-23: CLI outages failed without fallback (D-004).")
 a("AI-06", "missing", f"{core}/models.rs (Cap)", "Capabilities cover code/reasoning/general/fast/image; tool calling is not modeled or validated before dispatch.")
 a("AI-07", "missing", "", "No budget or reservation ledger.")
 a("AI-08", "partial", f"{core}/providers/api.rs (base_url)", "API accounts accept base_url (OpenAI-compatible endpoint), untested against a local model server; uses the Responses API, which local servers may not support.")
@@ -67,17 +73,17 @@ a("MA-03", "implemented", f"{core}/team.rs (start_task, integrate)", "Separate w
 a("MA-04", "partial", f"{core}/team.rs (integrate)", "Conflicts are detected (unmerged paths) and logged with both branches kept, but resolution is delegated automatically to a debugger agent rather than escalated to the user. Manually verified once.")
 a("MA-05", "missing", "", "No delegate tool; agents cannot spawn scoped subtasks.")
 a("MA-06", "partial", f"{core}/hub.rs, team.rs (on_done)", "A failed agent marks only its task failed and others continue; untested with a killed process.")
-a("MA-07", "partial", f"{core}/team.rs (cancel), providers/proc.rs (kill_on_drop)", "Cancel aborts running agents (child processes killed on drop) and queued tasks never start; grandchildren of the CLI are not tracked.")
+a("MA-07", "implemented", f"{core}/team.rs (cancel), providers/proc.rs (kill_tree)", "Cancel stops running agents and every process they started (process tree), and queued tasks never start. Fixed 2026-10-23: processes started by the CLI were orphaned (D-005).")
 a("MA-08", "partial", f"{core}/team.rs (integrate, merge)", "Merge into the user's branch requires approval and the final checks run on the integration branch, but checks are agent judgments: there is no mechanical verification command gating the merge.")
 # System 3
-a("CI-01", "partial", f"{core}/code.rs (Index::open/update)", "Indexes Rust, Python, JS, TS/TSX, Go with .gitignore; unsupported files are skipped silently instead of being listed as unsupported.", "code::tests::rust_project_graph, python_and_typescript")
+a("CI-01", "implemented", f"{core}/code.rs (Index::open/update)", "Indexes Rust, Python, JS, TS/TSX, Go with .gitignore; lists unsupported files and the indexed git revision (added 2026-10-23, D-006).", "code::tests::rust_project_graph, python_and_typescript")
 a("CI-02", "implemented", f"{core}/code.rs (search, symbol)", "Exact and prefix lookup with file and line span.", "code::tests::*")
-a("CI-03", "implemented", f"{core}/code.rs (graph callers)", "Static callers resolved same-file, then imported files; the text output declares that dynamic calls may be missing.", "code::tests::rust_project_graph")
+a("CI-03", "implemented", f"{core}/code.rs (graph callers)", "Static callers resolved same-file, then imported files; results declare the analysis scope (dynamic dispatch is not covered; added 2026-10-23, D-006).", "code::tests::rust_project_graph")
 a("CI-04", "missing", "", "No semantic rename / edit API.")
 a("CI-05", "implemented", f"{core}/code.rs (update)", "Incremental re-parse by mtime and size on every query; no completion event.", "code::tests::rust_project_graph (incremental assertion)")
 a("CI-06", "missing", f"{core}/code.rs", "tree-sitter parses error-tolerantly; syntax errors are not surfaced and results are not marked stale.")
-a("CI-07", "implemented", f"{core}/code.rs (impact)", "Transitive callers and importers with visited sets (cycles terminate) and tests to run; unsupported relationships are not explicitly disclosed.", "code::tests::rust_project_graph")
-a("CI-08", "partial", f"{core}/code.rs (find, resolution)", "Duplicate names resolve per importing file; lookup by Type::name or path:line, but not by module-qualified path (crate::a::helper).")
+a("CI-07", "implemented", f"{core}/code.rs (impact)", "Transitive callers and importers with visited sets (cycles terminate), tests to run, and a declared scope of what isn't covered.", "code::tests::rust_project_graph")
+a("CI-08", "implemented", f"{core}/code.rs (find, resolution)", "Duplicate names resolve per importing file; lookup by Type::name, module path (util::text::helper, added 2026-10-23) or path:line.")
 # System 4
 for i in range(1, 9):
     a(f"PM-0{i}", "missing", "", "fermi has no project memory store (only conversation history in ~/.fermi/history).")
@@ -176,18 +182,40 @@ def prof(c):
             out.append(m[t])
     return out
 
+# ── test mappings (kept from the current registry) and the published run ────
+registry = os.path.join(ROOT, "tests", "acceptance", "systems.yaml")
+tests, cur = {}, None
+if os.path.exists(registry):
+    for line in open(registry, encoding="utf8"):
+        m = re.match(r"  - id: (\S+)", line)
+        if m:
+            cur = m.group(1)
+        m = re.match(r"    (testFile|testName|repetitions): (\S+)", line)
+        if m and m.group(2) != "null":
+            tests.setdefault(cur, {})[m.group(1)] = m.group(2)
+run_meta = json.load(open(RUN, encoding="utf8")) if RUN else {}
+results = {c["id"]: c for c in run_meta.get("cases", [])}
+
+def result(cid):
+    r = results.get(cid)
+    if r:
+        n = len(r["attempts"])
+        return r["status"] + (f" ({n}/{n})" if n > 1 and r["status"] == "passed" else "")
+    return "not_run" if cid in tests else "not_implemented"
+
 # ── registry ────────────────────────────────────────────────────────────────
 os.makedirs(os.path.join(ROOT, "tests", "acceptance"), exist_ok=True)
 def q(s):
     return json.dumps(s, ensure_ascii=False)
 lines = ["# Acceptance registry: the authoritative inventory of all 106 case IDs.",
          "# Source: docs/FERMI_ADE_Verification_and_Acceptance_Testing (APEX = fermi).",
-         "# Generated by the Phase 1 audit; testFile/testName are null until a test exists.",
-         "# status is the latest published result; executionState not_run means no acceptance run yet.",
+         "# Generated by tests/acceptance/phase1_audit.py --registry; testFile/testName are null until a test exists.",
+         "# status is the latest published result; executionState not_run means the case has no executed run.",
          "schemaVersion: 1", "cases:"]
 for c in cases:
     sys_key = next(s for s in SYSTEMS if c["id"].startswith(s[0] + "-"))
     au = A[c["id"]]
+    test = tests.get(c["id"], {})
     lines += [
         f"  - id: {c['id']}",
         f"    title: {q(c['title'])}",
@@ -203,44 +231,56 @@ for c in cases:
         f"    capability: {au['capability']}",
         f"    implementation: {q(au['where'])}",
         f"    auditNote: {q(au['note'])}",
-        "    testFile: null",
-        "    testName: null",
-        "    executionState: not_run",
-        "    status: not_implemented",
+        f"    testFile: {test.get('testFile', 'null')}",
+        f"    testName: {test.get('testName', 'null')}",
     ]
-open(os.path.join(ROOT, "tests", "acceptance", "systems.yaml"), "w", encoding="utf8", newline="\n").write("\n".join(lines) + "\n")
+    if "repetitions" in test:
+        lines.append(f"    repetitions: {test['repetitions']}")
+    r = results.get(c["id"])
+    lines += [
+        f"    executionState: {'completed' if r and r['status'] in ('passed', 'failed') else 'not_run'}",
+        f"    status: {r['status'] if r else 'not_implemented'}",
+    ]
+if WRITE_REGISTRY:
+    open(registry, "w", encoding="utf8", newline="\n").write("\n".join(lines) + "\n")
 
 # ── matrix ──────────────────────────────────────────────────────────────────
 counts = {}
 out = ["# Acceptance matrix", "",
        "Phase 1 audit of fermi (called APEX in the spec) against `docs/FERMI_ADE_Verification_and_Acceptance_Testing`.",
        "",
-       "Audited revision: `REV` (working tree clean apart from `docs/`). Date: 2026-10-23.", "",
-       "**No acceptance test exists yet, so every case's published status is `not_implemented` (execution state `not_run`).**",
-       "The *capability* column is an audit finding from reading the code and from earlier manual runs; it is not verification.",
-       "Related unit tests are listed for reference; they exercise pieces of a capability but are not acceptance evidence.", "",
+       "RUNLINE", "",
+       "*Result* is the published acceptance outcome: `passed` or `failed` from an executed test with validated evidence; `not_implemented` when no test exists (usually because the capability is missing); `not_run` when a test exists but wasn't in the published run.",
+       "*Capability* is an audit finding from reading the code; it is not verification.", "",
        "Capability: **implemented** (the behavior exists end to end), **partial** (some of the expected behavior exists), **missing** (absent).", ""]
 summary_rows = []
 for key, slug, name in SYSTEMS:
     cs = [c for c in cases if c["id"].startswith(key + "-")]
     n = {s: sum(1 for c in cs if A[c["id"]]["capability"] == s) for s in ("implemented", "partial", "missing")}
-    summary_rows.append((name, len(cs), n))
-out += ["## Summary", "", "| System | Cases | Implemented | Partial | Missing | Acceptance passed |", "| --- | --- | --- | --- | --- | --- |"]
+    summary_rows.append((name, len(cs), n, sum(1 for c in cs if result(c["id"]).startswith("passed"))))
+out += ["## Summary", "", "| System | Cases | Capability implemented | Partial | Missing | Acceptance passed |", "| --- | --- | --- | --- | --- | --- |"]
 tot = {"implemented": 0, "partial": 0, "missing": 0}
-for name, total, n in summary_rows:
-    out.append(f"| {name} | {total} | {n['implemented']} | {n['partial']} | {n['missing']} | 0 / {total} |")
+passed_total = 0
+for name, total, n, passed in summary_rows:
+    out.append(f"| {name} | {total} | {n['implemented']} | {n['partial']} | {n['missing']} | {passed} / {total} |")
+    passed_total += passed
     for k in tot:
         tot[k] += n[k]
-out += [f"| **Total** | **106** | **{tot['implemented']}** | **{tot['partial']}** | **{tot['missing']}** | **0 / 106** |", ""]
+out += [f"| **Total** | **106** | **{tot['implemented']}** | **{tot['partial']}** | **{tot['missing']}** | **{passed_total} / 106** |", ""]
 for key, slug, name in SYSTEMS:
     cs = [c for c in cases if c["id"].startswith(key + "-")]
-    out += [f"## {name}", "", "| ID | Case | Tiers | Fixtures | Capability | Where | Audit note | Related unit tests |", "| --- | --- | --- | --- | --- | --- | --- | --- |"]
+    out += [f"## {name}", "", "| ID | Case | Tiers | Result | Test | Capability | Where | Audit note |", "| --- | --- | --- | --- | --- | --- | --- | --- |"]
     for c in cs:
         au = A[c["id"]]
         cell = lambda s: (s or "—").replace("|", "\\|")
-        out.append(f"| {c['id']} | {cell(c['title'])} | {' '.join(c['profiles'])} | {' '.join(c['fixtures'])} | {au['capability']} | {cell(au['where'])} | {cell(au['note'])} | {cell(au['related_tests'])} |")
+        out.append(f"| {c['id']} | {cell(c['title'])} | {' '.join(c['profiles'])} | **{result(c['id'])}** | {cell(tests.get(c['id'], {}).get('testName'))} | {au['capability']} | {cell(au['where'])} | {cell(au['note'])} |")
     out.append("")
-rev = os.popen(f'git -C "{ROOT}" rev-parse --short HEAD').read().strip()
-text = "\n".join(out).replace("REV", rev)
+if run_meta:
+    runline = (f"Published run `{run_meta['runId']}` on revision `{(run_meta.get('commitSha') or '?')[:12]}`"
+               f"{' (dirty tree)' if run_meta.get('dirtyTree') else ''}, profile {run_meta.get('profile')}, {run_meta.get('os')}. "
+               f"Full report: `docs/acceptance-runs/{run_meta['runId']}/REPORT.md`.")
+else:
+    runline = "No published acceptance run yet."
+text = "\n".join(out).replace("RUNLINE", runline)
 open(os.path.join(ROOT, "docs", "ACCEPTANCE_MATRIX.md"), "w", encoding="utf8", newline="\n").write(text + "\n")
 print("cases", len(cases), tot)

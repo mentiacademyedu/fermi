@@ -295,7 +295,13 @@ impl Slide {
         let cols = rows.iter().map(|r| r.len()).max().unwrap_or(1).max(1);
         let col_w = i(r.w) / cols as i64;
         let row_h = i(r.h) / rows.len().max(1) as i64;
-        let size = if cols > 5 || rows.len() > 8 { 13.0 } else if cols > 3 || rows.len() > 6 { 15.0 } else { 17.0 };
+        let size = if cols > 5 || rows.len() > 8 {
+            13.0
+        } else if cols > 3 || rows.len() > 6 {
+            15.0
+        } else {
+            17.0
+        };
         let mut x = format!(
             r#"<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="{id}" name="Table {id}"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="{}" y="{}"/><a:ext cx="{}" cy="{}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"/><a:tblGrid>"#,
             i(r.x),
@@ -314,7 +320,13 @@ impl Slide {
                 let cell = row.get(ci).map(String::as_str).unwrap_or("");
                 let mut p = para(cell, size, if head { pal.on_accent } else { pal.text }, head);
                 p.line = 1.0;
-                let fill = if head { pal.accent } else if ri % 2 == 0 { pal.surface } else { pal.bg };
+                let fill = if head {
+                    pal.accent
+                } else if ri % 2 == 0 {
+                    pal.surface
+                } else {
+                    pal.bg
+                };
                 let _ = write!(
                     x,
                     r#"<a:tc><a:txBody><a:bodyPr/><a:lstStyle/>{}</a:txBody><a:tcPr marL="{m}" marR="{m}" marT="{t}" marB="{t}" anchor="ctr"><a:solidFill><a:srgbClr val="{fill}"/></a:solidFill></a:tcPr></a:tc>"#,
@@ -522,7 +534,13 @@ impl Ctx<'_> {
                         s.text(b(0.7, y + (row - d) / 2.0, d, d), &[num], "ctr", Some(pal.accent), "ellipse", 0.0);
                         let mut line = para(&st.title, size, pal.text, true);
                         if !st.text.is_empty() {
-                            line.runs.push(Run { text: format!("  {}", st.text), size, bold: false, italic: false, color: pal.muted.to_string() });
+                            line.runs.push(Run {
+                                text: format!("  {}", st.text),
+                                size,
+                                bold: false,
+                                italic: false,
+                                color: pal.muted.to_string(),
+                            });
                         }
                         s.text(b(0.7 + d + 0.25, y, 11.9 - d - 0.25, row), &[line], "ctr", None, "rect", 0.0);
                     }
@@ -649,17 +667,18 @@ const CLR_MAP: &str = r#"bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent
 fn rels(items: &[(String, &str, String)]) -> String {
     let mut x = format!(r#"{DECL}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">"#);
     for (id, ty, target) in items {
-        let _ = write!(x, r#"<Relationship Id="{id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/{ty}" Target="{target}"/>"#);
+        let _ = write!(
+            x,
+            r#"<Relationship Id="{id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/{ty}" Target="{target}"/>"#
+        );
     }
     x.push_str("</Relationships>");
     x
 }
 
 fn notes_xml(slide_no: usize, text: &str) -> String {
-    let paras: String = text
-        .lines()
-        .map(|l| format!(r#"<a:p><a:r><a:rPr lang="en-US" dirty="0"/><a:t>{}</a:t></a:r></a:p>"#, esc(l)))
-        .collect();
+    let paras: String =
+        text.lines().map(|l| format!(r#"<a:p><a:r><a:rPr lang="en-US" dirty="0"/><a:t>{}</a:t></a:r></a:p>"#, esc(l))).collect();
     format!(
         r#"{DECL}<p:notes {NS}><p:cSld><p:spTree>{EMPTY_TREE}<p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Image Placeholder {slide_no}"/><p:cNvSpPr><a:spLocks noGrp="1" noRot="1" noChangeAspect="1"/></p:cNvSpPr><p:nvPr><p:ph type="sldImg"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="Notes Placeholder {slide_no}"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>{}</p:txBody></p:sp></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>"#,
         if paras.is_empty() { "<a:p/>".to_string() } else { paras }
@@ -692,9 +711,15 @@ pub fn write(spec: &DeckSpec, out: &Path, base: &Path) -> Result<usize> {
         r#"{DECL}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Default Extension="jpeg" ContentType="image/jpeg"/><Default Extension="gif" ContentType="image/gif"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/><Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/notesMasters/notesMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesMaster+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/><Override PartName="/ppt/theme/theme2.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/><Override PartName="/ppt/presProps.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presProps+xml"/><Override PartName="/ppt/viewProps.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.viewProps+xml"/><Override PartName="/ppt/tableStyles.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.tableStyles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>"#
     );
     for k in 1..=total {
-        let _ = write!(ct, r#"<Override PartName="/ppt/slides/slide{k}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>"#);
+        let _ = write!(
+            ct,
+            r#"<Override PartName="/ppt/slides/slide{k}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>"#
+        );
         if spec.slides[k - 1].notes.as_ref().is_some_and(|n| !n.trim().is_empty()) {
-            let _ = write!(ct, r#"<Override PartName="/ppt/notesSlides/notesSlide{k}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>"#);
+            let _ = write!(
+                ct,
+                r#"<Override PartName="/ppt/notesSlides/notesSlide{k}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>"#
+            );
         }
     }
     ct.push_str("</Types>");
@@ -714,7 +739,9 @@ pub fn write(spec: &DeckSpec, out: &Path, base: &Path) -> Result<usize> {
     );
     put(
         "docProps/app.xml",
-        format!(r#"{DECL}<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>fermi</Application><Slides>{total}</Slides></Properties>"#),
+        format!(
+            r#"{DECL}<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>fermi</Application><Slides>{total}</Slides></Properties>"#
+        ),
     );
 
     let mut sld_ids = String::new();
@@ -740,11 +767,15 @@ pub fn write(spec: &DeckSpec, out: &Path, base: &Path) -> Result<usize> {
     put("ppt/presProps.xml", format!(r#"{DECL}<p:presentationPr {NS}/>"#));
     put(
         "ppt/viewProps.xml",
-        format!(r#"{DECL}<p:viewPr {NS}><p:normalViewPr><p:restoredLeft sz="15620"/><p:restoredTop sz="94660"/></p:normalViewPr><p:gridSpacing cx="76200" cy="76200"/></p:viewPr>"#),
+        format!(
+            r#"{DECL}<p:viewPr {NS}><p:normalViewPr><p:restoredLeft sz="15620"/><p:restoredTop sz="94660"/></p:normalViewPr><p:gridSpacing cx="76200" cy="76200"/></p:viewPr>"#
+        ),
     );
     put(
         "ppt/tableStyles.xml",
-        format!(r#"{DECL}<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}}"/>"#),
+        format!(
+            r#"{DECL}<a:tblStyleLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" def="{{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}}"/>"#
+        ),
     );
     put("ppt/theme/theme1.xml", theme_xml(&ctx.pal, theme));
     put("ppt/theme/theme2.xml", theme_xml(&palette("light"), "notes"));
@@ -756,11 +787,16 @@ pub fn write(spec: &DeckSpec, out: &Path, base: &Path) -> Result<usize> {
     );
     put(
         "ppt/slideMasters/_rels/slideMaster1.xml.rels",
-        rels(&[("rId1".into(), "slideLayout", "../slideLayouts/slideLayout1.xml".into()), ("rId2".into(), "theme", "../theme/theme1.xml".into())]),
+        rels(&[
+            ("rId1".into(), "slideLayout", "../slideLayouts/slideLayout1.xml".into()),
+            ("rId2".into(), "theme", "../theme/theme1.xml".into()),
+        ]),
     );
     put(
         "ppt/slideLayouts/slideLayout1.xml",
-        format!(r#"{DECL}<p:sldLayout {NS} type="blank" preserve="1"><p:cSld name="Blank"><p:spTree>{EMPTY_TREE}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>"#),
+        format!(
+            r#"{DECL}<p:sldLayout {NS} type="blank" preserve="1"><p:cSld name="Blank"><p:spTree>{EMPTY_TREE}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>"#
+        ),
     );
     put("ppt/slideLayouts/_rels/slideLayout1.xml.rels", rels(&[("rId1".into(), "slideMaster", "../slideMasters/slideMaster1.xml".into())]));
     put(
@@ -774,7 +810,10 @@ pub fn write(spec: &DeckSpec, out: &Path, base: &Path) -> Result<usize> {
     for (k, s) in slides.iter().enumerate() {
         let n = k + 1;
         let spec_s = &spec.slides[k];
-        put(&format!("ppt/slides/slide{n}.xml"), s.xml(if spec_s.layout.as_deref() == Some("section") { ctx.pal.accent } else { ctx.pal.bg }));
+        put(
+            &format!("ppt/slides/slide{n}.xml"),
+            s.xml(if spec_s.layout.as_deref() == Some("section") { ctx.pal.accent } else { ctx.pal.bg }),
+        );
         let mut r = vec![("rId1".to_string(), "slideLayout", "../slideLayouts/slideLayout1.xml".to_string())];
         let has_notes = spec_s.notes.as_ref().is_some_and(|t| !t.trim().is_empty());
         if has_notes {
@@ -782,7 +821,10 @@ pub fn write(spec: &DeckSpec, out: &Path, base: &Path) -> Result<usize> {
             put(&format!("ppt/notesSlides/notesSlide{n}.xml"), notes_xml(n, spec_s.notes.as_deref().unwrap_or("")));
             put(
                 &format!("ppt/notesSlides/_rels/notesSlide{n}.xml.rels"),
-                rels(&[("rId1".into(), "notesMaster", "../notesMasters/notesMaster1.xml".into()), ("rId2".into(), "slide", format!("../slides/slide{n}.xml"))]),
+                rels(&[
+                    ("rId1".into(), "notesMaster", "../notesMasters/notesMaster1.xml".into()),
+                    ("rId2".into(), "slide", format!("../slides/slide{n}.xml")),
+                ]),
             );
         }
         for (rid, media) in &s.images {
@@ -888,7 +930,12 @@ mod tests {
         let mut s = String::new();
         std::io::Read::read_to_string(&mut z.by_name("ppt/slides/slide6.xml").unwrap(), &mut s).unwrap();
         assert!(s.contains("a &lt; b &amp; c") && s.contains(r#"r:embed="rId3""#));
-        assert!(write(&DeckSpec { slides: vec![SlideSpec { layout: Some("nope".into()), ..Default::default() }], ..Default::default() }, &out, &dir).is_err());
+        assert!(write(
+            &DeckSpec { slides: vec![SlideSpec { layout: Some("nope".into()), ..Default::default() }], ..Default::default() },
+            &out,
+            &dir
+        )
+        .is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

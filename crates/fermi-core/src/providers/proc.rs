@@ -17,14 +17,7 @@ pub struct Proc {
 }
 
 impl Proc {
-    pub async fn spawn(
-        bin: &Path,
-        args: &[String],
-        envs: &[(String, String)],
-        cwd: &Path,
-        stdin_text: &str,
-        tx: &Tx,
-    ) -> Result<Proc> {
+    pub async fn spawn(bin: &Path, args: &[String], envs: &[(String, String)], cwd: &Path, stdin_text: &str, tx: &Tx) -> Result<Proc> {
         let mut cmd = Command::new(bin);
         cmd.args(args)
             .envs(envs.iter().map(|(k, v)| (k, v)))
@@ -35,6 +28,9 @@ impl Proc {
             .kill_on_drop(true);
         #[cfg(windows)]
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+                                         // Its own process group, so cancelling can stop what it started too.
+        #[cfg(unix)]
+        cmd.process_group(0);
         let mut child = cmd.spawn().with_context(|| format!("spawning {}", bin.display()))?;
 
         let mut stdin = child.stdin.take().expect("piped stdin");
@@ -76,6 +72,33 @@ impl Proc {
         Ok(None)
     }
 
+    /// Stops the CLI and every process it started (shell commands, servers,
+    /// test runs). Killing only the CLI would orphan them.
+    fn kill_tree(&mut self) {
+        let Some(pid) = self.child.id() else { return }; // already reaped
+        if !matches!(self.child.try_wait(), Ok(None)) {
+            return; // it exited on its own
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let _ = std::process::Command::new("taskkill")
+                .args(["/T", "/F", "/PID", &pid.to_string()])
+                .creation_flags(0x0800_0000)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+        #[cfg(unix)]
+        {
+            let _ = std::process::Command::new("kill")
+                .args(["-KILL", "--", &format!("-{pid}")])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+    }
+
     /// Waits for exit; returns (success, stderr tail).
     pub async fn finish(mut self) -> Result<(bool, String)> {
         let status = self.child.wait().await?;
@@ -83,5 +106,13 @@ impl Proc {
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         let tail = self.stderr_tail.lock().unwrap().iter().cloned().collect::<Vec<_>>().join("\n");
         Ok((status.success(), tail))
+    }
+}
+
+impl Drop for Proc {
+    /// A run that is cancelled or aborted drops its Proc while the CLI is
+    /// still working: stop the whole tree, not just the CLI.
+    fn drop(&mut self) {
+        self.kill_tree();
     }
 }

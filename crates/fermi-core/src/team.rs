@@ -306,7 +306,8 @@ fn unmerged(dir: &Path) -> Vec<String> {
 
 /// Build output agents leave behind when they run code, which `git add -A`
 /// would otherwise commit (only untracked files are affected).
-const JUNK: [&str; 9] = ["__pycache__/", "*.pyc", "*.pyo", ".pytest_cache/", ".mypy_cache/", ".ruff_cache/", "node_modules/", ".DS_Store", "Thumbs.db"];
+const JUNK: [&str; 9] =
+    ["__pycache__/", "*.pyc", "*.pyo", ".pytest_cache/", ".mypy_cache/", ".ruff_cache/", "node_modules/", ".DS_Store", "Thumbs.db"];
 
 /// Keeps fermi's marker files and build junk out of every worktree's
 /// `git status` (the repo's local `.git/info/exclude`, never committed).
@@ -385,7 +386,8 @@ pub fn parse_plan(v: &Value) -> Result<(String, Vec<TeamTask>)> {
         let role = Role::parse(role_s).with_context(|| format!("task {key}: unknown role `{role_s}`"))?;
         let description = it["description"].as_str().unwrap_or_default().to_string();
         let title = it["title"].as_str().map(String::from).unwrap_or_else(|| description.chars().take(60).collect());
-        let list = |k: &str| -> Vec<String> { it[k].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect() };
+        let list =
+            |k: &str| -> Vec<String> { it[k].as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect() };
         tasks.push(TeamTask {
             key,
             role,
@@ -437,10 +439,12 @@ fn json_in_text(text: &str) -> Option<Value> {
 
 fn last_text(hub: &Hub, id: u64) -> String {
     hub.get(id)
-        .and_then(|t| t.events.iter().rev().find_map(|e| match e {
-            Event::Text { text } => Some(text.clone()),
-            _ => None,
-        }))
+        .and_then(|t| {
+            t.events.iter().rev().find_map(|e| match e {
+                Event::Text { text } => Some(text.clone()),
+                _ => None,
+            })
+        })
         .unwrap_or_default()
 }
 
@@ -574,7 +578,10 @@ impl Teams {
         let mut runs = BTreeMap::new();
         for e in std::fs::read_dir(&dir).into_iter().flatten().filter_map(|e| e.ok()) {
             let p = e.path().join("run.json");
-            let Ok(mut run) = std::fs::read(&p).map_err(anyhow::Error::from).and_then(|b| Ok(serde_json::from_slice::<TeamRun>(&b)?)) else { continue };
+            let Ok(mut run) = std::fs::read(&p).map_err(anyhow::Error::from).and_then(|b| Ok(serde_json::from_slice::<TeamRun>(&b)?))
+            else {
+                continue;
+            };
             // A run that was going when fermi closed: its agents stopped with it.
             // (Unless another fermi window is running it: its agents are alive.)
             let agents: Vec<u64> = run.tasks.iter().filter_map(|t| t.task_id).chain(run.planner).collect();
@@ -772,7 +779,10 @@ impl Teams {
 
     fn read_plan(&self, run: &mut TeamRun, task_id: u64, ok: bool) -> Result<()> {
         let file = run.dir(&self.home).join("plan.json");
-        let v = std::fs::read(&file).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).or_else(|| json_in_text(&last_text(&self.hub, task_id)));
+        let v = std::fs::read(&file)
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
+            .or_else(|| json_in_text(&last_text(&self.hub, task_id)));
         match v.map(|v| parse_plan(&v)) {
             Some(Ok((summary, tasks))) => {
                 run.plan_summary = summary;
@@ -786,7 +796,11 @@ impl Teams {
             }
             None => {
                 run.status = RunStatus::Attention;
-                run.error = Some(if ok { "The architect didn't submit a plan. Resume to try again.".into() } else { "Planning failed. Resume to try again.".into() });
+                run.error = Some(if ok {
+                    "The architect didn't submit a plan. Resume to try again.".into()
+                } else {
+                    "Planning failed. Resume to try again.".into()
+                });
             }
         }
         Ok(())
@@ -801,16 +815,20 @@ impl Teams {
         };
         let hfile = dir.join(format!("{key}.handoff.json"));
         let local = wt.join(HANDOFF_FILE);
-        let mut handoff: Handoff = [&hfile, &local]
-            .iter()
-            .find_map(|p| std::fs::read(p).ok().and_then(|b| serde_json::from_slice(&b).ok()))
-            .unwrap_or_else(|| Handoff { summary: clip(&task_id.map(|i| last_text(&self.hub, i)).unwrap_or_default(), 2000), ..Default::default() });
+        let mut handoff: Handoff =
+            [&hfile, &local].iter().find_map(|p| std::fs::read(p).ok().and_then(|b| serde_json::from_slice(&b).ok())).unwrap_or_else(
+                || Handoff { summary: clip(&task_id.map(|i| last_text(&self.hub, i)).unwrap_or_default(), 2000), ..Default::default() },
+            );
         let _ = std::fs::remove_file(&local);
         let _ = std::fs::remove_file(wt.join(MARKER));
         if stage == Stage::Merge {
             let left = unmerged(&wt);
             if !left.is_empty() {
-                bail!("the conflict in {} isn't resolved yet; reply to the debugger or fix it by hand in {}", left.join(", "), wt.display());
+                bail!(
+                    "the conflict in {} isn't resolved yet; reply to the debugger or fix it by hand in {}",
+                    left.join(", "),
+                    wt.display()
+                );
             }
         }
         git(&wt, &["add", "-A"])?;
@@ -824,7 +842,9 @@ impl Teams {
             git_commit_args(&wt, &["commit", "-m", &msg])?;
         }
         let changed: Vec<String> = match &start {
-            Some(s) => git(&wt, &["diff", "--name-only", &format!("{s}..HEAD")]).map(|o| o.lines().map(String::from).collect()).unwrap_or_default(),
+            Some(s) => {
+                git(&wt, &["diff", "--name-only", &format!("{s}..HEAD")]).map(|o| o.lines().map(String::from).collect()).unwrap_or_default()
+            }
             None => vec![],
         };
         if handoff.files_changed.is_empty() {
@@ -872,7 +892,9 @@ impl Teams {
         let state = |k: &str| run.task(k).map(|t| t.state);
         let ready: Vec<String> = plan
             .iter()
-            .filter(|t| t.state == TaskState::Pending && t.depends_on.iter().all(|d| matches!(state(d), Some(TaskState::Done | TaskState::Skipped))))
+            .filter(|t| {
+                t.state == TaskState::Pending && t.depends_on.iter().all(|d| matches!(state(d), Some(TaskState::Done | TaskState::Skipped)))
+            })
             .map(|t| t.key.clone())
             .take(run.parallel.saturating_sub(busy))
             .collect();
@@ -893,7 +915,13 @@ impl Teams {
         let t = run.task(key).context("no such task")?.clone();
         let branch = format!("fermi/team-{}/{}-{}", run.short(), t.key, slug(&t.title));
         let wt = dir.join("wt").join(&t.key);
-        let deps: Vec<String> = t.depends_on.iter().filter_map(|d| run.task(d)).filter(|d| d.state == TaskState::Done).filter_map(|d| d.branch.clone()).collect();
+        let deps: Vec<String> = t
+            .depends_on
+            .iter()
+            .filter_map(|d| run.task(d))
+            .filter(|d| d.state == TaskState::Done)
+            .filter_map(|d| d.branch.clone())
+            .collect();
         let mut conflicts = vec![];
         if !wt.exists() {
             let start = deps.first().cloned().unwrap_or_else(|| run.base.clone());
@@ -1023,7 +1051,12 @@ impl Teams {
                 role,
                 title: title.into(),
                 description: desc.replace("BASE", &run.base[..run.base.len().min(12)]),
-                depends_on: run.tasks.iter().filter(|t| t.stage == Stage::Plan && t.state == TaskState::Done).map(|t| t.key.clone()).collect(),
+                depends_on: run
+                    .tasks
+                    .iter()
+                    .filter(|t| t.stage == Stage::Plan && t.state == TaskState::Done)
+                    .map(|t| t.key.clone())
+                    .collect(),
                 files: vec![],
                 done_when: String::new(),
                 stage: Stage::Check,
@@ -1068,7 +1101,8 @@ impl Teams {
 
     pub fn cancel(&self, id: u64) -> Result<()> {
         let ids: Vec<u64> = self.with(id, |run| {
-            let mut ids: Vec<u64> = run.tasks.iter().filter(|t| matches!(t.state, TaskState::Running | TaskState::Waiting)).filter_map(|t| t.task_id).collect();
+            let mut ids: Vec<u64> =
+                run.tasks.iter().filter(|t| matches!(t.state, TaskState::Running | TaskState::Waiting)).filter_map(|t| t.task_id).collect();
             if run.status == RunStatus::Planning {
                 ids.extend(run.planner);
             }
@@ -1101,7 +1135,8 @@ impl Teams {
             }
             // Interrupted integration steps run again from the start.
             run.tasks.retain(|t| t.stage == Stage::Plan || t.state != TaskState::Pending);
-            let plan_done = run.tasks.iter().filter(|t| t.stage == Stage::Plan).all(|t| matches!(t.state, TaskState::Done | TaskState::Skipped));
+            let plan_done =
+                run.tasks.iter().filter(|t| t.stage == Stage::Plan).all(|t| matches!(t.state, TaskState::Done | TaskState::Skipped));
             run.status = if plan_done { RunStatus::Integrating } else { RunStatus::Running };
             run.note("Resumed.");
             Ok(())
@@ -1123,7 +1158,8 @@ impl Teams {
                 run.tasks.retain(|x| x.key != key);
             }
             run.error = None;
-            let plan_done = run.tasks.iter().filter(|t| t.stage == Stage::Plan).all(|t| matches!(t.state, TaskState::Done | TaskState::Skipped));
+            let plan_done =
+                run.tasks.iter().filter(|t| t.stage == Stage::Plan).all(|t| matches!(t.state, TaskState::Done | TaskState::Skipped));
             run.status = if plan_done { RunStatus::Integrating } else { RunStatus::Running };
             Ok(())
         })?;

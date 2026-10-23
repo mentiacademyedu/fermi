@@ -25,7 +25,10 @@ fn newest_image(dir: &std::path::Path) -> Option<PathBuf> {
         .ok()?
         .filter_map(|e| e.ok())
         .filter(|e| {
-            e.path().extension().and_then(|x| x.to_str()).is_some_and(|x| matches!(x.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "webp"))
+            e.path()
+                .extension()
+                .and_then(|x| x.to_str())
+                .is_some_and(|x| matches!(x.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "webp"))
         })
         .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok())
         .map(|e| e.path())
@@ -55,11 +58,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
             let u = &v["usage"];
             RunResult::ok(
                 format!("Saved image to {}", out.display()),
-                Usage {
-                    input: u["input_tokens"].as_u64().unwrap_or(0),
-                    output: u["output_tokens"].as_u64().unwrap_or(0),
-                    cost_usd: None,
-                },
+                Usage { input: u["input_tokens"].as_u64().unwrap_or(0), output: u["output_tokens"].as_u64().unwrap_or(0), cost_usd: None },
             )
         }
         Auth::Cli => {
@@ -74,7 +73,8 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
             );
             let mut r = codex_cli::run(ctx, &prompt, ctx.model.cli.as_deref(), Some("read-only")).await?;
             if matches!(r.status, super::Status::Ok) {
-                let found = r.session.as_deref().and_then(|s| newest_image(&codex_cli::codex_home(ctx.account)?.join("generated_images").join(s)));
+                let found =
+                    r.session.as_deref().and_then(|s| newest_image(&codex_cli::codex_home(ctx.account)?.join("generated_images").join(s)));
                 match found {
                     Some(src) => {
                         std::fs::copy(&src, &out)?;

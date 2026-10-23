@@ -32,7 +32,11 @@ pub fn expand(p: &str) -> PathBuf {
 pub fn norm_path(p: &Path) -> String {
     let s = p.to_string_lossy().replace('\\', "/");
     let s = s.trim_end_matches('/').to_string();
-    if cfg!(windows) { s.to_lowercase() } else { s }
+    if cfg!(windows) {
+        s.to_lowercase()
+    } else {
+        s
+    }
 }
 
 /// `2h13m`, `45m`, `30s`.
@@ -82,7 +86,9 @@ pub fn resolve_bin(name: &str, overridden: Option<&str>) -> Result<PathBuf> {
             "gemini" => " Install the Gemini CLI: npm install -g @google/gemini-cli",
             _ => "",
         };
-        anyhow!("`{name}` isn't installed (not found on PATH).{install}  If it's installed somewhere else, set [bins].{name} in the config.")
+        anyhow!(
+            "`{name}` isn't installed (not found on PATH).{install}  If it's installed somewhere else, set [bins].{name} in the config."
+        )
     })?;
     cache.lock().unwrap().insert(name.to_string(), p.clone());
     Ok(p)

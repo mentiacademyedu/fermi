@@ -1,0 +1,10 @@
+{
+  "fixture": "F-CODE",
+  "version": 1,
+  "supportedLanguages": ["rust"],
+  "supportedFiles": ["app/src/main.rs", "engine/src/lib.rs", "util/src/lib.rs", "util/src/num.rs", "util/src/text.rs"],
+  "unsupportedFiles": ["README.md", "notes.json"],
+  "manifests": ["Cargo.toml", "app/Cargo.toml", "engine/Cargo.toml", "util/Cargo.toml"],
+  "packages": { "util": "util", "engine": "engine", "app": "app" },
+  "testCommand": "cargo test"
+}

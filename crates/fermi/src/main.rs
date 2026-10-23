@@ -1,8 +1,8 @@
 mod tui;
 
 use anyhow::Result;
-use fermi::{server, setup};
 use clap::{Parser, Subcommand};
+use fermi::{server, setup};
 use fermi_core::{Engine, Event, Task};
 use std::io::{IsTerminal, Read};
 use std::path::PathBuf;
@@ -118,10 +118,7 @@ enum SkillsCmd {
     /// Where skills and agents live, and what's in each place
     List,
     /// Write skills and agents (all, or the names given) to a .zip
-    Export {
-        out: PathBuf,
-        names: Vec<String>,
-    },
+    Export { out: PathBuf, names: Vec<String> },
     /// Install from a .zip / .skill archive, a folder, or a .md agent
     Import {
         src: PathBuf,
@@ -383,7 +380,13 @@ fn skills_cmd(cmd: SkillsCmd) -> Result<()> {
                             continue;
                         }
                         match skills::copy(&from, i.kind, &i.name, t, replace) {
-                            Ok(note) => println!("✓ {} {} → {}{}", kind_name(i.kind), i.name, t.label, note.map(|n| format!(" ({n})")).unwrap_or_default()),
+                            Ok(note) => println!(
+                                "✓ {} {} → {}{}",
+                                kind_name(i.kind),
+                                i.name,
+                                t.label,
+                                note.map(|n| format!(" ({n})")).unwrap_or_default()
+                            ),
                             Err(e) => println!("✗ {} {} → {}: {e:#}", kind_name(i.kind), i.name, t.label),
                         }
                     }
@@ -402,13 +405,14 @@ fn import(which: Vec<String>, limit: usize) -> Result<()> {
     let now = fermi_core::util::now();
     if which.is_empty() {
         // Sessions fermi ran itself, or imported already.
-        let known: std::collections::HashSet<String> = fermi_core::hub::load_history(&fermi_core::hub::history_dir(&engine.home), usize::MAX)
-            .into_iter()
-            .flat_map(|t| {
-                let origin = t.origin.and_then(|o| o.split_once(':').map(|x| x.1.to_string()));
-                t.session.into_iter().chain(t.past_sessions).chain(origin)
-            })
-            .collect();
+        let known: std::collections::HashSet<String> =
+            fermi_core::hub::load_history(&fermi_core::hub::history_dir(&engine.home), usize::MAX)
+                .into_iter()
+                .flat_map(|t| {
+                    let origin = t.origin.and_then(|o| o.split_once(':').map(|x| x.1.to_string()));
+                    t.session.into_iter().chain(t.past_sessions).chain(origin)
+                })
+                .collect();
         if found.is_empty() {
             println!("no Claude Code, Codex or Gemini CLI sessions found");
         }
@@ -424,8 +428,10 @@ fn import(which: Vec<String>, limit: usize) -> Result<()> {
                 if known.contains(&f.session) { "in fermi" } else { "" },
             );
         }
-        println!("
-import with: fermi import <number or session id> ...");
+        println!(
+            "
+import with: fermi import <number or session id> ..."
+        );
         return Ok(());
     }
     let dir = fermi_core::hub::history_dir(&engine.home);

@@ -5,13 +5,13 @@
 use anyhow::Result;
 use fermi::setup;
 use fermi_core::auth::{self, AuthInfo};
+use fermi_core::hub::{history_dir, load_history, Recorder, Scanner, TaskRec, TaskStatus, HEARTBEAT};
 use fermi_core::state::AcctState;
 use fermi_core::util::{fmt_dur, now};
-use fermi_core::hub::{history_dir, load_history, Recorder, Scanner, TaskRec, TaskStatus, HEARTBEAT};
 use fermi_core::{Auth, Engine, Event, Provider, Task};
 use ratatui::crossterm::event::{
-    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event as Input, KeyCode,
-    KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture, Event as Input, KeyCode, KeyEvent,
+    KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 use ratatui::crossterm::execute;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
@@ -516,7 +516,8 @@ impl App {
             Act::Login | Act::LoginButton => {
                 if self.engine.cfg.accounts.get(self.sel_acct).is_some_and(|a| a.auth == Auth::Api) {
                     let var = self.engine.cfg.accounts[self.sel_acct].api_key_env.clone().unwrap_or_default();
-                    self.note = Some((Kind::Warn, format!("API-key accounts don't log in: set {var} in your environment and restart fermi")));
+                    self.note =
+                        Some((Kind::Warn, format!("API-key accounts don't log in: set {var} in your environment and restart fermi")));
                     return Act::None;
                 }
                 Act::Login
@@ -674,8 +675,8 @@ impl App {
         let provider = f.provider.as_str();
         let key_env = f.api.then(|| f.key_env.trim().to_string());
         let profile = Some(f.profile.trim()).filter(|p| !p.is_empty());
-        let result = setup::add_account(f.id.trim(), provider, key_env.as_deref(), None, profile)
-            .and_then(|msg| Ok((msg, Engine::load()?)));
+        let result =
+            setup::add_account(f.id.trim(), provider, key_env.as_deref(), None, profile).and_then(|msg| Ok((msg, Engine::load()?)));
         match result {
             Ok((msg, engine)) => {
                 self.engine = engine;
@@ -931,11 +932,17 @@ impl App {
             Some(Modal::Help) => draw_help(f),
             Some(Modal::ConfirmQuit) => {
                 let n = self.running();
-                draw_box(f, 52, 5, " quit? ", vec![
-                    Line::from(format!("{n} task(s) still running. Quitting stops them.")),
-                    Line::from(""),
-                    Line::from(vec!["y".bold().cyan(), " quit   ".into(), "any other key".bold().cyan(), " stay".into()]),
-                ]);
+                draw_box(
+                    f,
+                    52,
+                    5,
+                    " quit? ",
+                    vec![
+                        Line::from(format!("{n} task(s) still running. Quitting stops them.")),
+                        Line::from(""),
+                        Line::from(vec!["y".bold().cyan(), " quit   ".into(), "any other key".bold().cyan(), " stay".into()]),
+                    ],
+                );
             }
             Some(Modal::Add(form)) => draw_form(f, form),
             None => {}
@@ -948,7 +955,13 @@ impl App {
             format!("  profile: {}  ·  {} running", self.profile_label(), self.running()).into(),
         ]);
         f.render_widget(left, area);
-        let buttons = [("+ account", Act::AddAccount), ("log in", Act::LoginButton), ("profile", Act::Profile), ("help", Act::Help), ("quit", Act::Quit)];
+        let buttons = [
+            ("+ account", Act::AddAccount),
+            ("log in", Act::LoginButton),
+            ("profile", Act::Profile),
+            ("help", Act::Help),
+            ("quit", Act::Quit),
+        ];
         let mut x = area.x + area.width;
         for (label, act) in buttons.iter().rev() {
             let w = label.chars().count() as u16 + 2;
@@ -1080,7 +1093,10 @@ impl App {
                     Line::from(Span::styled("Accounts: click one, then \"log in\". Add more with \"+ account\".", d)),
                     Line::from(Span::styled("Tab moves between panels. F1 or \"help\" shows every key.", d)),
                     Line::from(""),
-                    Line::from(Span::styled("Optional prefixes: @work (profile)  m=claude:opus (model)  e=high (effort)  a=claude-work (account)", d)),
+                    Line::from(Span::styled(
+                        "Optional prefixes: @work (profile)  m=claude:opus (model)  e=high (effort)  a=claude-work (account)",
+                        d,
+                    )),
                 ];
                 f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block.title(" output ")), area);
             }
@@ -1108,9 +1124,27 @@ impl App {
             return;
         }
         let hints: &[(&str, &str, Act)] = match self.focus {
-            Focus::Input => &[("Enter", "run", Act::Submit), ("Tab", "next panel", Act::NextFocus), ("Esc", "leave box", Act::None), ("F1", "help", Act::Help)],
-            Focus::Tasks => &[("↑↓", "select", Act::None), ("x", "cancel task", Act::Cancel), ("i", "type", Act::TypeTask), ("Tab", "next panel", Act::NextFocus), ("q", "quit", Act::Quit)],
-            Focus::Accounts => &[("↑↓", "select", Act::None), ("l", "log in", Act::Login), ("a", "add", Act::AddAccount), ("p", "profile", Act::Profile), ("Tab", "next panel", Act::NextFocus), ("q", "quit", Act::Quit)],
+            Focus::Input => &[
+                ("Enter", "run", Act::Submit),
+                ("Tab", "next panel", Act::NextFocus),
+                ("Esc", "leave box", Act::None),
+                ("F1", "help", Act::Help),
+            ],
+            Focus::Tasks => &[
+                ("↑↓", "select", Act::None),
+                ("x", "cancel task", Act::Cancel),
+                ("i", "type", Act::TypeTask),
+                ("Tab", "next panel", Act::NextFocus),
+                ("q", "quit", Act::Quit),
+            ],
+            Focus::Accounts => &[
+                ("↑↓", "select", Act::None),
+                ("l", "log in", Act::Login),
+                ("a", "add", Act::AddAccount),
+                ("p", "profile", Act::Profile),
+                ("Tab", "next panel", Act::NextFocus),
+                ("q", "quit", Act::Quit),
+            ],
         };
         let mut x = area.x + 1;
         let mut spans = vec![Span::raw(" ")];
@@ -1183,7 +1217,9 @@ fn draw_box(f: &mut Frame, w: u16, h: u16, title: &str, lines: Vec<Line>) {
 }
 
 fn draw_help(f: &mut Frame) {
-    let k = |key: &str, what: &str| Line::from(vec![Span::styled(format!(" {key:<16}"), Style::new().fg(Color::Cyan).bold()), Span::raw(what.to_string())]);
+    let k = |key: &str, what: &str| {
+        Line::from(vec![Span::styled(format!(" {key:<16}"), Style::new().fg(Color::Cyan).bold()), Span::raw(what.to_string())])
+    };
     let lines = vec![
         k("Tab / Shift+Tab", "move between panels: accounts, tasks, task box"),
         k("mouse", "click panels, rows and buttons; wheel scrolls output"),
@@ -1293,7 +1329,10 @@ mod tests {
         let (probe_tx, _) = mpsc::unbounded_channel();
         let (ev_tx, _) = mpsc::unbounded_channel();
         let mut a = App::new(engine, None, PathBuf::from("/"), probe_tx);
-        a.auth.insert("claude-personal".into(), AuthInfo { logged_in: Some(true), email: Some("me@example.com".into()), plan: Some("pro".into()) });
+        a.auth.insert(
+            "claude-personal".into(),
+            AuthInfo { logged_in: Some(true), email: Some("me@example.com".into()), plan: Some("pro".into()) },
+        );
         a.auth.insert("claude-work".into(), AuthInfo { logged_in: Some(false), ..Default::default() });
         (a, ev_tx)
     }

@@ -70,15 +70,7 @@ impl ModelSpec {
 
 #[allow(clippy::too_many_arguments)]
 fn m(id: &str, label: &str, caps: &[Cap], tier: u8, auto: bool, cli: Option<&str>, api: &str) -> ModelSpec {
-    ModelSpec {
-        id: id.into(),
-        caps: caps.to_vec(),
-        tier,
-        auto,
-        cli: cli.map(Into::into),
-        api: Some(api.into()),
-        label: Some(label.into()),
-    }
+    ModelSpec { id: id.into(), caps: caps.to_vec(), tier, auto, cli: cli.map(Into::into), api: Some(api.into()), label: Some(label.into()) }
 }
 
 /// Built-in catalog. Order breaks ties in auto mode. Users override or extend

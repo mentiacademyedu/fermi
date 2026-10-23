@@ -74,9 +74,13 @@ impl Task {
     /// What the model is sent: the context (if any), then the prompt.
     pub fn input(&self) -> std::borrow::Cow<'_, str> {
         match &self.context {
-            Some(c) => format!("{c}
+            Some(c) => format!(
+                "{c}
 
-{}", self.prompt).into(),
+{}",
+                self.prompt
+            )
+            .into(),
             None => self.prompt.as_str().into(),
         }
     }
@@ -140,13 +144,7 @@ impl Engine {
 
     /// Next account to try for `provider`. Priority order unless the profile
     /// rotates, in which case the least busy / least used account wins.
-    pub fn pick_account(
-        &self,
-        profile: &Profile,
-        provider: Provider,
-        forced: Option<&str>,
-        tried: &HashSet<String>,
-    ) -> Option<Account> {
+    pub fn pick_account(&self, profile: &Profile, provider: Provider, forced: Option<&str>, tried: &HashSet<String>) -> Option<Account> {
         let snap = self.store.snapshot();
         let t = now();
         let mut avail: Vec<&Account> = match forced {
@@ -156,8 +154,7 @@ impl Engine {
         avail.retain(|a| {
             a.provider == provider
                 && !tried.contains(&a.id)
-                && (forced.is_some()
-                    || (!snap.get(&a.id).is_some_and(|s| s.limited(t)) && a.credentials_present() != Some(false)))
+                && (forced.is_some() || (!snap.get(&a.id).is_some_and(|s| s.limited(t)) && a.credentials_present() != Some(false)))
         });
         if profile.rotate {
             avail.sort_by(|a, b| {
@@ -175,17 +172,20 @@ impl Engine {
     pub async fn run(&self, task: &Task, tx: &Tx) -> Result<Outcome> {
         let r = self.run_inner(task, tx).await;
         match &r {
-            Ok(o) => emit(tx, Event::Done {
-                ok: true,
-                summary: format!(
-                    "{} @ {} · {} in / {} out{}",
-                    o.model,
-                    o.account,
-                    fmt_tokens(o.usage.input),
-                    fmt_tokens(o.usage.output),
-                    o.usage.cost_usd.map(|c| format!(" · ${c:.4}")).unwrap_or_default()
-                ),
-            }),
+            Ok(o) => emit(
+                tx,
+                Event::Done {
+                    ok: true,
+                    summary: format!(
+                        "{} @ {} · {} in / {} out{}",
+                        o.model,
+                        o.account,
+                        fmt_tokens(o.usage.input),
+                        fmt_tokens(o.usage.output),
+                        o.usage.cost_usd.map(|c| format!(" · ${c:.4}")).unwrap_or_default()
+                    ),
+                },
+            ),
             Err(e) => emit(tx, Event::Done { ok: false, summary: format!("{e:#}") }),
         }
         r
@@ -201,26 +201,27 @@ impl Engine {
             let Some(provider) = model.provider() else { continue };
             while let Some(acct) = self.pick_account(profile, provider, task.account.as_deref(), &tried) {
                 tried.insert(acct.id.clone());
-                emit(tx, Event::Routed {
-                    profile: profile.name.clone(),
-                    model: model.id.clone(),
-                    label: model.name().to_string(),
-                    effort: task.effort.clone().or_else(|| profile.effort.clone()),
-                    account: acct.id.clone(),
-                    why: match (&task.resume, &task.model) {
-                        (Some(_), _) => "continuing the conversation".into(),
-                        (None, _) if task.context.is_some() => "continuing; the conversation so far was passed on".into(),
-                        (None, Some(_)) => "chosen".into(),
-                        (None, None) => plan.need.why.clone(),
+                emit(
+                    tx,
+                    Event::Routed {
+                        profile: profile.name.clone(),
+                        model: model.id.clone(),
+                        label: model.name().to_string(),
+                        effort: task.effort.clone().or_else(|| profile.effort.clone()),
+                        account: acct.id.clone(),
+                        why: match (&task.resume, &task.model) {
+                            (Some(_), _) => "continuing the conversation".into(),
+                            (None, _) if task.context.is_some() => "continuing; the conversation so far was passed on".into(),
+                            (None, Some(_)) => "chosen".into(),
+                            (None, None) => plan.need.why.clone(),
+                        },
                     },
-                });
+                );
 
                 let started = Instant::now();
                 self.store.begin(&acct.id);
                 let ctx = RunCtx { engine: self, profile, account: &acct, model, task, tx };
-                let res = providers::run(&ctx)
-                    .await
-                    .unwrap_or_else(|e| RunResult::failed(format!("{e:#}"), false));
+                let res = providers::run(&ctx).await.unwrap_or_else(|e| RunResult::failed(format!("{e:#}"), false));
                 self.store.end(&acct.id);
 
                 let status = match &res.status {

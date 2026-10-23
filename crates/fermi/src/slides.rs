@@ -111,11 +111,7 @@ pub fn save(path: &Path, changed: &HashMap<String, String>, remove: &[String]) -
         }
     }
     let dir = path.parent().context("deck has no folder")?;
-    let tmp = dir.join(format!(
-        ".{}.fermi-{}.tmp",
-        path.file_name().and_then(|n| n.to_str()).unwrap_or("deck"),
-        std::process::id()
-    ));
+    let tmp = dir.join(format!(".{}.fermi-{}.tmp", path.file_name().and_then(|n| n.to_str()).unwrap_or("deck"), std::process::id()));
     let res = (|| -> Result<()> {
         let mut out = zip::ZipWriter::new(std::fs::File::create(&tmp)?);
         let opts = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);

@@ -76,10 +76,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
             }
             "tool_use" => {
                 flush(&mut pending, &mut text);
-                emit(ctx.tx, Event::Tool {
-                    name: v["tool_name"].as_str().unwrap_or("tool").to_string(),
-                    detail: brief(&v["parameters"]),
-                });
+                emit(ctx.tx, Event::Tool { name: v["tool_name"].as_str().unwrap_or("tool").to_string(), detail: brief(&v["parameters"]) });
             }
             "tool_result" if v["status"] == "error" => {
                 let msg = v["error"]["message"].as_str().unwrap_or("tool failed");
@@ -109,9 +106,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     let (success, stderr) = p.finish().await?;
     let mut res = match error {
         Some(msg) => classify_error(msg, None),
-        None if !done || !success => {
-            classify_error(if stderr.is_empty() { "gemini exited without a result".into() } else { stderr }, None)
-        }
+        None if !done || !success => classify_error(if stderr.is_empty() { "gemini exited without a result".into() } else { stderr }, None),
         None => RunResult::ok(text, usage),
     };
     res.usage = usage;

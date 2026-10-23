@@ -1,0 +1,20 @@
+{
+  "fixture": "F-CODE",
+  "version": 1,
+  "definitions": [
+    { "id": "util::normalize", "name": "normalize", "kind": "function", "file": "util/src/lib.rs", "line": 5, "end": 7 },
+    { "id": "util::tests::normalize_trims", "name": "normalize_trims", "kind": "function", "file": "util/src/lib.rs", "line": 14, "end": 16, "test": true },
+    { "id": "util::text::helper", "name": "helper", "kind": "function", "file": "util/src/text.rs", "line": 2, "end": 4 },
+    { "id": "util::text::ping", "name": "ping", "kind": "function", "file": "util/src/text.rs", "line": 7, "end": 9 },
+    { "id": "util::text::pong", "name": "pong", "kind": "function", "file": "util/src/text.rs", "line": 11, "end": 13 },
+    { "id": "util::num::helper", "name": "helper", "kind": "function", "file": "util/src/num.rs", "line": 2, "end": 4 },
+    { "id": "engine::process", "name": "process", "kind": "function", "file": "engine/src/lib.rs", "line": 5, "end": 7 },
+    { "id": "engine::describe", "name": "describe", "kind": "function", "file": "engine/src/lib.rs", "line": 10, "end": 13 },
+    { "id": "engine::tests::process_scores", "name": "process_scores", "kind": "function", "file": "engine/src/lib.rs", "line": 20, "end": 22, "test": true },
+    { "id": "app::main", "name": "main", "kind": "function", "file": "app/src/main.rs", "line": 5, "end": 8 }
+  ],
+  "nonDefinitions": [
+    { "text": "normalize", "file": "app/src/main.rs", "line": 4, "why": "comment" },
+    { "text": "normalize", "file": "app/src/main.rs", "line": 6, "why": "string literal" }
+  ]
+}

@@ -26,7 +26,7 @@ use tree_sitter_tags::{TagsConfiguration, TagsContext};
 const MAX_FILES: usize = 40_000;
 const MAX_FILE_BYTES: u64 = 1_000_000;
 /// Bump when the stored format or the extraction changes.
-const FORMAT: u32 = 4;
+const FORMAT: u32 = 5;
 
 // ── languages ───────────────────────────────────────────────────────────────
 
@@ -86,7 +86,9 @@ fn configs() -> &'static Vec<Option<TagsConfiguration>> {
         // Our patterns go first: for the same name the first matching pattern wins.
         let js = format!("{JS_EXTRA}{}", tree_sitter_javascript::TAGS_QUERY);
         let ts = format!("{JS_EXTRA}{}{}", tree_sitter_javascript::TAGS_QUERY, tree_sitter_typescript::TAGS_QUERY);
-        let make = |lang: tree_sitter::Language, q: &str| TagsConfiguration::new(lang, q, "").map_err(|e| eprintln!("fermi: code index query: {e:?}")).ok();
+        let make = |lang: tree_sitter::Language, q: &str| {
+            TagsConfiguration::new(lang, q, "").map_err(|e| eprintln!("fermi: code index query: {e:?}")).ok()
+        };
         vec![
             make(tree_sitter_rust::LANGUAGE.into(), &format!("{RUST_EXTRA}{}", tree_sitter_rust::TAGS_QUERY)),
             make(tree_sitter_python::LANGUAGE.into(), &format!("{PY_EXTRA}{}", tree_sitter_python::TAGS_QUERY)),
@@ -162,7 +164,19 @@ struct Stored {
     format: u32,
     files: BTreeMap<String, FileIdx>,
     manifests: BTreeMap<String, String>,
+    /// Files seen but not indexed (no supported language), so nobody
+    /// mistakes them for covered code.
+    #[serde(default)]
+    unsupported: Vec<String>,
+    /// The git commit the index was last brought up to date with.
+    #[serde(default)]
+    revision: Option<String>,
 }
+
+/// What the call graph and impact analysis can and can't see.
+pub const SCOPE: &str = "Static analysis of indexed files (Rust, Python, JavaScript, TypeScript, Go): calls resolved by name \
+    within the file, then through imports. Not covered: dynamic dispatch (trait objects, interfaces, callbacks, reflection), \
+    macros that generate calls, and code outside the index (dependencies, generated or unsupported files).";
 
 /// A symbol's place: (file number, symbol number). `u32::MAX` as the symbol
 /// stands for a file's top-level code.
@@ -233,6 +247,7 @@ impl Index {
         let started = std::time::Instant::now();
         let mut seen: Vec<(String, u64, u64)> = vec![];
         let mut manifests = BTreeMap::new();
+        let mut unsupported: Vec<String> = vec![];
         let walker = ignore::WalkBuilder::new(&self.root).hidden(true).git_ignore(true).git_global(false).parents(true).build();
         for e in walker.filter_map(|e| e.ok()) {
             if !e.file_type().is_some_and(|t| t.is_file()) {
@@ -248,8 +263,12 @@ impl Index {
                 }
                 continue;
             }
-            let vendored = rel.split('/').any(|seg| matches!(seg, "node_modules" | "vendor" | "third_party" | "third-party" | "dist" | "build"));
+            let vendored =
+                rel.split('/').any(|seg| matches!(seg, "node_modules" | "vendor" | "third_party" | "third-party" | "dist" | "build"));
             if lang_of(&rel).is_none() || vendored || rel.ends_with(".min.js") {
+                if !vendored && unsupported.len() < 2000 {
+                    unsupported.push(rel);
+                }
                 continue;
             }
             let Ok(m) = e.metadata() else { continue };
@@ -265,10 +284,8 @@ impl Index {
         let before = self.stored.files.len();
         self.stored.files.retain(|k, _| present.contains(k.as_str()));
         let removed = before - self.stored.files.len();
-        let todo: Vec<&(String, u64, u64)> = seen
-            .iter()
-            .filter(|(rel, mt, sz)| self.stored.files.get(rel).is_none_or(|f| f.mtime != *mt || f.size != *sz))
-            .collect();
+        let todo: Vec<&(String, u64, u64)> =
+            seen.iter().filter(|(rel, mt, sz)| self.stored.files.get(rel).is_none_or(|f| f.mtime != *mt || f.size != *sz)).collect();
         let parsed = todo.len();
         let root = self.root.clone();
         let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).min(12);
@@ -297,7 +314,15 @@ impl Index {
                 results.extend(j.join().unwrap_or_default());
             }
         });
-        let changed = parsed > 0 || removed > 0 || manifests != self.stored.manifests;
+        unsupported.sort();
+        let revision = git_head(&self.root);
+        let changed = parsed > 0
+            || removed > 0
+            || manifests != self.stored.manifests
+            || unsupported != self.stored.unsupported
+            || revision != self.stored.revision;
+        self.stored.unsupported = unsupported;
+        self.stored.revision = revision;
         for (rel, f) in results {
             self.stored.files.insert(rel, f);
         }
@@ -361,7 +386,11 @@ fn parse_file(ctx: &mut TagsContext, lang: usize, src: &[u8], rel: &str) -> Opti
             let doc = tag.docs.clone().filter(|d| !d.trim().is_empty()).or_else(|| doc_above(&lines, line as usize, LANGS[lang].id));
             defs.push((tag.range.start, tag.range.end, Sym { name, kind, line, end, sig, doc, parent: None, test: false }));
         } else if kind == "import" || kind == "modfile" {
-            let spec = if kind == "modfile" { format!("mod:{name}") } else { name.trim_matches(|c| c == '"' || c == '\'' || c == '`').to_string() };
+            let spec = if kind == "modfile" {
+                format!("mod:{name}")
+            } else {
+                name.trim_matches(|c| c == '"' || c == '\'' || c == '`').to_string()
+            };
             imports.push((spec, line));
         } else {
             refs.push((tag.name_range.start, Ref { name, kind, line, from: None }));
@@ -506,7 +535,14 @@ impl Index {
             // Go files in one package see each other without imports.
             if f.lang == "go" {
                 let dir = path.rsplit_once('/').map(|x| x.0).unwrap_or("");
-                deps.extend(self.stored.files.keys().filter(|p| *p != path && p.rsplit_once('/').map(|x| x.0).unwrap_or("") == dir && p.ends_with(".go")).filter_map(|p| g.file_no.get(p)).copied());
+                deps.extend(
+                    self.stored
+                        .files
+                        .keys()
+                        .filter(|p| *p != path && p.rsplit_once('/').map(|x| x.0).unwrap_or("") == dir && p.ends_with(".go"))
+                        .filter_map(|p| g.file_no.get(p))
+                        .copied(),
+                );
             }
             deps.sort_unstable();
             deps.dedup();
@@ -535,7 +571,16 @@ impl Index {
                 // `x.name()` can only be a method, of this file or one it imports.
                 let cands: Vec<SymId> = if method {
                     let files = &self.stored.files;
-                    all.iter().copied().filter(|c| g.paths.get(c.0 as usize).and_then(|p| files.get(p)).and_then(|f| f.syms.get(c.1 as usize)).is_some_and(|s| s.kind == "method" || s.parent.is_some())).collect()
+                    all.iter()
+                        .copied()
+                        .filter(|c| {
+                            g.paths
+                                .get(c.0 as usize)
+                                .and_then(|p| files.get(p))
+                                .and_then(|f| f.syms.get(c.1 as usize))
+                                .is_some_and(|s| s.kind == "method" || s.parent.is_some())
+                        })
+                        .collect()
                 } else {
                     all.clone()
                 };
@@ -663,10 +708,11 @@ impl<'a> ResolveCtx<'a> {
         for (path, text) in &s.manifests {
             let dir = dir_of(path);
             if path.ends_with("Cargo.toml") {
-                let name = text.lines().skip_while(|l| l.trim() != "[package]").skip(1).take_while(|l| !l.trim().starts_with('[')).find_map(|l| {
-                    let (k, v) = l.split_once('=')?;
-                    (k.trim() == "name").then(|| v.trim().trim_matches('"').replace('-', "_"))
-                });
+                let name =
+                    text.lines().skip_while(|l| l.trim() != "[package]").skip(1).take_while(|l| !l.trim().starts_with('[')).find_map(|l| {
+                        let (k, v) = l.split_once('=')?;
+                        (k.trim() == "name").then(|| v.trim().trim_matches('"').replace('-', "_"))
+                    });
                 if let Some(n) = name {
                     crates.insert(n, join(dir, "src"));
                 }
@@ -762,7 +808,12 @@ impl<'a> ResolveCtx<'a> {
         let Some(base) = base else { return Resolved::Unknown };
         match self.rust_find(&base, rest) {
             Some(f) => Resolved::Files(vec![f]),
-            None => ["lib.rs", "main.rs", "mod.rs"].iter().map(|r| join(&base, r)).find(|p| self.has(p)).map(|p| Resolved::Files(vec![p])).unwrap_or(Resolved::Unknown),
+            None => ["lib.rs", "main.rs", "mod.rs"]
+                .iter()
+                .map(|r| join(&base, r))
+                .find(|p| self.has(p))
+                .map(|p| Resolved::Files(vec![p]))
+                .unwrap_or(Resolved::Unknown),
         }
     }
 
@@ -831,7 +882,12 @@ impl<'a> ResolveCtx<'a> {
         if let Some((module, dir)) = &self.go_module {
             if let Some(rest) = spec.strip_prefix(module.as_str()) {
                 let d = join(dir, rest.trim_start_matches('/'));
-                let files: Vec<String> = self.files.iter().filter(|f| dir_of(f) == d && f.ends_with(".go") && !f.ends_with("_test.go")).map(|f| f.to_string()).collect();
+                let files: Vec<String> = self
+                    .files
+                    .iter()
+                    .filter(|f| dir_of(f) == d && f.ends_with(".go") && !f.ends_with("_test.go"))
+                    .map(|f| f.to_string())
+                    .collect();
                 return if files.is_empty() { Resolved::Unknown } else { Resolved::Files(files) };
             }
         }
@@ -863,11 +919,30 @@ impl Index {
         if id.1 == TOP {
             let file = self.graph.paths.get(id.0 as usize)?.clone();
             let test = self.files().get(&file).is_some_and(|f| f.test);
-            return Some(SymRef { name: "(top level)".into(), kind: "file".into(), line: 1, end: 1, sig: String::new(), test, owner: None, file });
+            return Some(SymRef {
+                name: "(top level)".into(),
+                kind: "file".into(),
+                line: 1,
+                end: 1,
+                sig: String::new(),
+                test,
+                owner: None,
+                file,
+            });
         }
         let (file, s) = self.sym(id)?;
-        let owner = s.parent.and_then(|p| self.files().get(file)?.syms.get(p as usize)).filter(|p| p.kind != "module").map(|p| p.name.clone());
-        Some(SymRef { name: s.name.clone(), kind: s.kind.clone(), file: file.to_string(), line: s.line, end: s.end, sig: s.sig.clone(), test: s.test, owner })
+        let owner =
+            s.parent.and_then(|p| self.files().get(file)?.syms.get(p as usize)).filter(|p| p.kind != "module").map(|p| p.name.clone());
+        Some(SymRef {
+            name: s.name.clone(),
+            kind: s.kind.clone(),
+            file: file.to_string(),
+            line: s.line,
+            end: s.end,
+            sig: s.sig.clone(),
+            test: s.test,
+            owner,
+        })
     }
 
     pub fn stats(&self) -> Value {
@@ -894,6 +969,7 @@ impl Index {
             "tests": tests, "functions": funcs, "reached_by_tests": reached,
             "test_reach": if funcs > 0 { (reached as f64 / funcs as f64 * 100.0).round() } else { 0.0 },
             "lcov": !self.graph.coverage.is_empty(),
+            "unsupported": self.stored.unsupported, "revision": self.stored.revision, "scope": SCOPE,
         })
     }
 
@@ -907,7 +983,15 @@ impl Index {
         for (n, f) in self.files().values().enumerate() {
             for (k, s) in f.syms.iter().enumerate().filter(|(_, s)| s.kind != "impl") {
                 let name = s.name.to_lowercase();
-                let rank = if name == q { 0 } else if name.starts_with(&q) { 1 } else if name.contains(&q) { 2 } else { continue };
+                let rank = if name == q {
+                    0
+                } else if name.starts_with(&q) {
+                    1
+                } else if name.contains(&q) {
+                    2
+                } else {
+                    continue;
+                };
                 let kind = match s.kind.as_str() {
                     "function" | "method" => 0,
                     "class" | "interface" | "type" => 1,
@@ -925,7 +1009,14 @@ impl Index {
         if let Some((file, line)) = target.rsplit_once(':').and_then(|(f, l)| Some((f, l.parse::<u32>().ok()?))) {
             let file = file.replace('\\', "/");
             if let (Some(n), Some(f)) = (self.graph.file_no.get(&file), self.files().get(&file)) {
-                return f.syms.iter().enumerate().filter(|(_, s)| s.line <= line && line <= s.end).max_by_key(|(_, s)| s.line).map(|(k, _)| vec![(*n, k as u32)]).unwrap_or_default();
+                return f
+                    .syms
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, s)| s.line <= line && line <= s.end)
+                    .max_by_key(|(_, s)| s.line)
+                    .map(|(k, _)| vec![(*n, k as u32)])
+                    .unwrap_or_default();
             }
         }
         // `Type::method` or `Type.method`.
@@ -935,9 +1026,28 @@ impl Index {
         };
         let mut ids: Vec<SymId> = self.graph.by_name.get(name).cloned().unwrap_or_default();
         if let Some(o) = owner {
-            let owned: Vec<SymId> = ids.iter().copied().filter(|id| self.sym_ref(*id).and_then(|r| r.owner).as_deref() == Some(o)).collect();
+            let owned: Vec<SymId> =
+                ids.iter().copied().filter(|id| self.sym_ref(*id).and_then(|r| r.owner).as_deref() == Some(o)).collect();
             if !owned.is_empty() {
                 ids = owned;
+            } else {
+                // A module path (`util::text::helper`): keep definitions whose file
+                // matches it, e.g. `util/src/text.rs` or `text/mod.rs`.
+                let segs: Vec<&str> = target.split("::").flat_map(|s| s.split('.')).collect();
+                let modules = &segs[..segs.len() - 1];
+                let in_module: Vec<SymId> = ids
+                    .iter()
+                    .copied()
+                    .filter(|id| {
+                        let path = self.graph.paths.get(id.0 as usize).map(String::as_str).unwrap_or("");
+                        let parts: Vec<&str> = path.trim_end_matches(".rs").trim_end_matches("/mod").split(['/', '.']).collect();
+                        let last = modules.last().copied().unwrap_or("");
+                        parts.last() == Some(&last) && modules.iter().all(|m| parts.contains(m) || *m == "crate")
+                    })
+                    .collect();
+                if !in_module.is_empty() {
+                    ids = in_module;
+                }
             }
         }
         ids
@@ -958,7 +1068,9 @@ impl Index {
         let mut out: Vec<SymRef> = self.graph.tested_by.get(&id).into_iter().flatten().filter_map(|t| self.sym_ref(*t)).collect();
         // Test files importing the symbol's file count too.
         for imp in self.graph.importers.get(&id.0).into_iter().flatten() {
-            if self.graph.paths.get(*imp as usize).and_then(|p| self.files().get(p)).is_some_and(|f| f.test) && !out.iter().any(|t| t.file == self.graph.paths[*imp as usize]) {
+            if self.graph.paths.get(*imp as usize).and_then(|p| self.files().get(p)).is_some_and(|f| f.test)
+                && !out.iter().any(|t| t.file == self.graph.paths[*imp as usize])
+            {
                 if let Some(r) = self.sym_ref((*imp, TOP)) {
                     out.push(r);
                 }
@@ -984,18 +1096,40 @@ impl Index {
             .filter_map(|id| {
                 let r = self.sym_ref(*id)?;
                 let (_, s) = self.sym(*id)?;
-                let callers: Vec<Value> = self.graph.callers.get(id).into_iter().flatten().take(60).filter_map(|(c, line)| Some(json!({ "caller": self.sym_ref(*c)?, "line": line }))).collect();
-                let callees: Vec<SymRef> = self.graph.callees.get(id).into_iter().flatten().take(60).filter_map(|(c, _)| self.sym_ref(*c)).collect();
+                let callers: Vec<Value> = self
+                    .graph
+                    .callers
+                    .get(id)
+                    .into_iter()
+                    .flatten()
+                    .take(60)
+                    .filter_map(|(c, line)| Some(json!({ "caller": self.sym_ref(*c)?, "line": line })))
+                    .collect();
+                let callees: Vec<SymRef> =
+                    self.graph.callees.get(id).into_iter().flatten().take(60).filter_map(|(c, _)| self.sym_ref(*c)).collect();
                 let unresolved: Vec<String> = {
                     let f = self.files().get(&r.file)?;
                     let known: HashSet<&str> = callees.iter().map(|c| c.name.as_str()).collect();
-                    let mut v: Vec<String> = f.refs.iter().filter(|x| x.from == Some(id.1) && x.kind == "call" && !known.contains(x.name.as_str())).map(|x| x.name.clone()).collect();
+                    let mut v: Vec<String> = f
+                        .refs
+                        .iter()
+                        .filter(|x| x.from == Some(id.1) && x.kind == "call" && !known.contains(x.name.as_str()))
+                        .map(|x| x.name.clone())
+                        .collect();
                     v.sort();
                     v.dedup();
                     v.truncate(40);
                     v
                 };
-                let importers: Vec<&String> = self.graph.importers.get(&id.0).into_iter().flatten().filter_map(|i| self.graph.paths.get(*i as usize)).take(40).collect();
+                let importers: Vec<&String> = self
+                    .graph
+                    .importers
+                    .get(&id.0)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|i| self.graph.paths.get(*i as usize))
+                    .take(40)
+                    .collect();
                 Some(json!({
                     "symbol": r, "doc": s.doc, "body": self.body(&r.file, s.line, s.end, 80),
                     "callers": callers, "callers_total": self.graph.callers.get(id).map(Vec::len).unwrap_or(0),
@@ -1005,7 +1139,7 @@ impl Index {
                 }))
             })
             .collect();
-        json!({ "query": target, "matches": ids.len(), "symbols": details })
+        json!({ "query": target, "matches": ids.len(), "symbols": details, "scope": SCOPE })
     }
 
     /// A file's outline, imports and importers.
@@ -1017,7 +1151,8 @@ impl Index {
         };
         let outline: Vec<Value> = f.syms.iter().map(|s| json!({ "name": s.name, "kind": s.kind, "line": s.line, "end": s.end, "parent": s.parent, "test": s.test, "sig": s.sig })).collect();
         let deps: Vec<&String> = self.graph.deps.get(&n).into_iter().flatten().filter_map(|i| self.graph.paths.get(*i as usize)).collect();
-        let importers: Vec<&String> = self.graph.importers.get(&n).into_iter().flatten().filter_map(|i| self.graph.paths.get(*i as usize)).collect();
+        let importers: Vec<&String> =
+            self.graph.importers.get(&n).into_iter().flatten().filter_map(|i| self.graph.paths.get(*i as usize)).collect();
         json!({ "file": rel, "lang": f.lang, "test": f.test, "symbols": outline, "imports": deps, "external": self.graph.externals.get(&n), "imported_by": importers })
     }
 
@@ -1039,7 +1174,9 @@ impl Index {
         let mut rows: Vec<Value> = vec![];
         for (name, manifests) in &declared {
             let files = used.iter().find(|(u, _)| norm(u) == norm(name)).map(|x| x.1.clone()).unwrap_or_default();
-            rows.push(json!({ "name": name, "manifests": manifests, "used_in": files.len(), "files": files.iter().take(20).collect::<Vec<_>>() }));
+            rows.push(
+                json!({ "name": name, "manifests": manifests, "used_in": files.len(), "files": files.iter().take(20).collect::<Vec<_>>() }),
+            );
         }
         let undeclared: Vec<&String> = used.keys().filter(|u| !declared.keys().any(|d| norm(d) == norm(u))).collect();
         json!({ "dependencies": rows, "imported_but_not_declared": undeclared })
@@ -1059,7 +1196,10 @@ impl Index {
             for (k, s) in f.syms.iter().enumerate() {
                 let overlaps = ranges.is_empty() || ranges.iter().any(|(a, b)| *a <= s.end && s.line <= *b);
                 // Innermost only: skip a class when one of its methods changed.
-                let inner_changed = f.syms.iter().any(|c| c.parent == Some(k as u32) && (ranges.is_empty() || ranges.iter().any(|(a, b)| *a <= c.end && c.line <= *b)));
+                let inner_changed = f
+                    .syms
+                    .iter()
+                    .any(|c| c.parent == Some(k as u32) && (ranges.is_empty() || ranges.iter().any(|(a, b)| *a <= c.end && c.line <= *b)));
                 // A whole new file: its top-level symbols stand for it.
                 let shown = if ranges.is_empty() { s.parent.is_none() } else { !inner_changed };
                 if overlaps && shown && !matches!(s.kind.as_str(), "impl" | "module") {
@@ -1131,7 +1271,8 @@ impl Index {
             .filter_map(|c| self.sym_ref(*c))
             .filter(|r| !r.test && matches!(r.kind.as_str(), "function" | "method"))
             .collect();
-        let mut impacted: Vec<(u32, SymId, SymId)> = depth.iter().filter(|(_, (d, _))| *d > 0).map(|(s, (d, via))| (*d, *s, *via)).collect();
+        let mut impacted: Vec<(u32, SymId, SymId)> =
+            depth.iter().filter(|(_, (d, _))| *d > 0).map(|(s, (d, via))| (*d, *s, *via)).collect();
         impacted.sort();
         let impacted_json: Vec<Value> = impacted
             .iter()
@@ -1152,6 +1293,7 @@ impl Index {
             "tests": tests.into_values().collect::<Vec<_>>(),
             "untested_changes": untested,
             "risk": risk,
+            "scope": SCOPE,
         })
     }
 
@@ -1172,7 +1314,10 @@ impl Index {
             Ok(String::from_utf8_lossy(&out.stdout).into_owned())
         };
         let top = git(&["rev-parse", "--show-toplevel"])?;
-        let prefix = Path::new(top.trim()).canonicalize().ok().and_then(|t| self.root.canonicalize().ok()?.strip_prefix(t).ok().map(|p| p.to_string_lossy().replace('\\', "/")));
+        let prefix = Path::new(top.trim())
+            .canonicalize()
+            .ok()
+            .and_then(|t| self.root.canonicalize().ok()?.strip_prefix(t).ok().map(|p| p.to_string_lossy().replace('\\', "/")));
         let strip = |p: &str| -> Option<String> {
             match prefix.as_deref().filter(|x| !x.is_empty()) {
                 Some(pre) => p.strip_prefix(pre).map(|r| r.trim_start_matches('/').to_string()),
@@ -1295,6 +1440,19 @@ fn manifest_deps(path: &str, text: &str) -> Vec<String> {
     out
 }
 
+/// The current commit of a folder's repository, if it is one.
+fn git_head(dir: &Path) -> Option<String> {
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C").arg(dir).args(["rev-parse", "HEAD"]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let out = cmd.output().ok().filter(|o| o.status.success())?;
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
 /// A folder's full path, without Windows' `\\?\` prefix.
 pub fn canonical(p: &Path) -> Result<PathBuf> {
     let c = std::fs::canonicalize(p).with_context(|| format!("{} not found", p.display()))?;
@@ -1350,7 +1508,16 @@ pub mod text {
             out += &format!("{} definitions match; showing {}. Use Type::name or path:line to pick one.\n\n", v["matches"], syms.len());
         }
         for s in syms {
-            let r: SymRef = serde_json::from_value(s["symbol"].clone()).unwrap_or_else(|_| SymRef { name: "?".into(), kind: "?".into(), file: "?".into(), line: 0, end: 0, sig: String::new(), test: false, owner: None });
+            let r: SymRef = serde_json::from_value(s["symbol"].clone()).unwrap_or_else(|_| SymRef {
+                name: "?".into(),
+                kind: "?".into(),
+                file: "?".into(),
+                line: 0,
+                end: 0,
+                sig: String::new(),
+                test: false,
+                owner: None,
+            });
             out += &format!("## {} {} ({}–{})\n", r.kind, label(&r), loc(&r), r.end);
             if let Some(d) = s["doc"].as_str() {
                 out += &format!("Doc: {d}\n");
@@ -1362,10 +1529,21 @@ pub mod text {
             } else {
                 out += "\n";
                 for c in callers.iter().take(25) {
-                    out += &format!("  - {} {} at {}:{}\n", c["caller"]["kind"].as_str().unwrap_or(""), c["caller"]["name"].as_str().unwrap_or(""), c["caller"]["file"].as_str().unwrap_or(""), c["line"]);
+                    out += &format!(
+                        "  - {} {} at {}:{}\n",
+                        c["caller"]["kind"].as_str().unwrap_or(""),
+                        c["caller"]["name"].as_str().unwrap_or(""),
+                        c["caller"]["file"].as_str().unwrap_or(""),
+                        c["line"]
+                    );
                 }
             }
-            let callees: Vec<String> = s["callees"].as_array().into_iter().flatten().map(|c| format!("{} ({}:{})", c["name"].as_str().unwrap_or(""), c["file"].as_str().unwrap_or(""), c["line"])).collect();
+            let callees: Vec<String> = s["callees"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|c| format!("{} ({}:{})", c["name"].as_str().unwrap_or(""), c["file"].as_str().unwrap_or(""), c["line"]))
+                .collect();
             if !callees.is_empty() {
                 out += &format!("Calls: {}\n", callees.join(", "));
             }
@@ -1373,8 +1551,14 @@ pub mod text {
             if !ext.is_empty() {
                 out += &format!("Also calls (outside the repo or unresolved): {}\n", ext.join(", "));
             }
-            let tests: Vec<String> = s["tests"].as_array().into_iter().flatten().map(|t| format!("{} ({}:{})", t["name"].as_str().unwrap_or(""), t["file"].as_str().unwrap_or(""), t["line"])).collect();
-            out += &if tests.is_empty() { "Tests: none reach it\n".to_string() } else { format!("Tests reaching it: {}\n", tests.join(", ")) };
+            let tests: Vec<String> = s["tests"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|t| format!("{} ({}:{})", t["name"].as_str().unwrap_or(""), t["file"].as_str().unwrap_or(""), t["line"]))
+                .collect();
+            out +=
+                &if tests.is_empty() { "Tests: none reach it\n".to_string() } else { format!("Tests reaching it: {}\n", tests.join(", ")) };
             if let Some(c) = s["coverage"].as_f64() {
                 out += &format!("Line coverage (lcov): {c}%\n");
             }
@@ -1389,27 +1573,68 @@ pub mod text {
         if changed.is_empty() {
             return "No indexed code changed.".into();
         }
-        let mut out = format!("Risk: {} ({} symbols changed, {} callers affected).\n\nChanged:\n", v["risk"].as_str().unwrap_or("?"), changed.len(), v["impacted_total"]);
+        let mut out = format!(
+            "Risk: {} ({} symbols changed, {} callers affected).\n\nChanged:\n",
+            v["risk"].as_str().unwrap_or("?"),
+            changed.len(),
+            v["impacted_total"]
+        );
         for c in &changed {
-            out += &format!("  - {} {} at {}:{}\n", c["kind"].as_str().unwrap_or(""), c["name"].as_str().unwrap_or(""), c["file"].as_str().unwrap_or(""), c["line"]);
+            out += &format!(
+                "  - {} {} at {}:{}\n",
+                c["kind"].as_str().unwrap_or(""),
+                c["name"].as_str().unwrap_or(""),
+                c["file"].as_str().unwrap_or(""),
+                c["line"]
+            );
         }
         let imp = list("impacted");
         if !imp.is_empty() {
             out += "\nCould break (callers, nearest first):\n";
             for i in imp.iter().take(40) {
                 let s = &i["symbol"];
-                out += &format!("  - {} {} at {}:{} (depth {}, via {})\n", s["kind"].as_str().unwrap_or(""), s["name"].as_str().unwrap_or(""), s["file"].as_str().unwrap_or(""), s["line"], i["depth"], i["via"].as_str().unwrap_or(""));
+                out += &format!(
+                    "  - {} {} at {}:{} (depth {}, via {})\n",
+                    s["kind"].as_str().unwrap_or(""),
+                    s["name"].as_str().unwrap_or(""),
+                    s["file"].as_str().unwrap_or(""),
+                    s["line"],
+                    i["depth"],
+                    i["via"].as_str().unwrap_or("")
+                );
             }
         }
-        let files: Vec<String> = list("files").iter().filter(|f| f["depth"].as_u64().is_some_and(|d| d > 0)).map(|f| f["file"].as_str().unwrap_or("").to_string()).collect();
+        let files: Vec<String> = list("files")
+            .iter()
+            .filter(|f| f["depth"].as_u64().is_some_and(|d| d > 0))
+            .map(|f| f["file"].as_str().unwrap_or("").to_string())
+            .collect();
         if !files.is_empty() {
             out += &format!("\nFiles importing what changed: {}\n", files.join(", "));
         }
         let tests = list("tests");
-        out += &if tests.is_empty() { "\nTests to run: none found that reach this code.\n".to_string() } else { format!("\nTests to run:\n{}\n", tests.iter().map(|t| format!("  - {} ({}:{})", t["name"].as_str().unwrap_or(""), t["file"].as_str().unwrap_or(""), t["line"])).collect::<Vec<_>>().join("\n")) };
+        out += &if tests.is_empty() {
+            "\nTests to run: none found that reach this code.\n".to_string()
+        } else {
+            format!(
+                "\nTests to run:\n{}\n",
+                tests
+                    .iter()
+                    .map(|t| format!("  - {} ({}:{})", t["name"].as_str().unwrap_or(""), t["file"].as_str().unwrap_or(""), t["line"]))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            )
+        };
         let untested = list("untested_changes");
         if !untested.is_empty() {
-            out += &format!("\nChanged without any test reaching it: {}\n", untested.iter().map(|u| format!("{} ({}:{})", u["name"].as_str().unwrap_or(""), u["file"].as_str().unwrap_or(""), u["line"])).collect::<Vec<_>>().join(", "));
+            out += &format!(
+                "\nChanged without any test reaching it: {}\n",
+                untested
+                    .iter()
+                    .map(|u| format!("{} ({}:{})", u["name"].as_str().unwrap_or(""), u["file"].as_str().unwrap_or(""), u["line"]))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
         }
         out
     }
@@ -1418,10 +1643,21 @@ pub mod text {
         if let Some(e) = v["error"].as_str() {
             return e.to_string();
         }
-        let mut out = format!("{} ({}{})\n", v["file"].as_str().unwrap_or(""), v["lang"].as_str().unwrap_or(""), if v["test"] == true { ", tests" } else { "" });
+        let mut out = format!(
+            "{} ({}{})\n",
+            v["file"].as_str().unwrap_or(""),
+            v["lang"].as_str().unwrap_or(""),
+            if v["test"] == true { ", tests" } else { "" }
+        );
         for s in v["symbols"].as_array().into_iter().flatten() {
             let indent = if s["parent"].is_null() { "  " } else { "    " };
-            out += &format!("{indent}{} {} :{}  {}\n", s["kind"].as_str().unwrap_or(""), s["name"].as_str().unwrap_or(""), s["line"], s["sig"].as_str().unwrap_or(""));
+            out += &format!(
+                "{indent}{} {} :{}  {}\n",
+                s["kind"].as_str().unwrap_or(""),
+                s["name"].as_str().unwrap_or(""),
+                s["line"],
+                s["sig"].as_str().unwrap_or("")
+            );
         }
         let join = |k: &str| v[k].as_array().into_iter().flatten().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ");
         out += &format!("Imports: {}\nExternal: {}\nImported by: {}\n", join("imports"), join("external"), join("imported_by"));
@@ -1491,8 +1727,16 @@ mod tests {
         write(&dir, "app/util.py", "def slug(s):\n    \"\"\"Makes a URL slug.\"\"\"\n    return s.lower()\n\nclass Store:\n    def save(self, x):\n        return slug(x)\n");
         write(&dir, "app/main.py", "from app.util import slug\nimport requests\n\ndef run():\n    return slug('A')\n");
         write(&dir, "tests/test_util.py", "from app.util import slug\n\ndef test_slug():\n    assert slug('A') == 'a'\n");
-        write(&dir, "web/lib.ts", "export function fmt(n: number): string {\n  return n.toFixed(2);\n}\nexport interface Row { id: number }\n");
-        write(&dir, "web/view.tsx", "import { fmt } from './lib';\nimport React from 'react';\nexport function View() {\n  return <b>{fmt(1)}</b>;\n}\n");
+        write(
+            &dir,
+            "web/lib.ts",
+            "export function fmt(n: number): string {\n  return n.toFixed(2);\n}\nexport interface Row { id: number }\n",
+        );
+        write(
+            &dir,
+            "web/view.tsx",
+            "import { fmt } from './lib';\nimport React from 'react';\nexport function View() {\n  return <b>{fmt(1)}</b>;\n}\n",
+        );
         let idx = Index::open(&dir).unwrap();
         let s = &idx.symbol("slug")["symbols"][0];
         assert_eq!(s["doc"], "Makes a URL slug.");

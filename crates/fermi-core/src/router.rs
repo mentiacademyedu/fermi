@@ -14,29 +14,81 @@ pub struct Need {
 }
 
 const IMAGE: &[&str] = &[
-    "image", "picture", "photo", "logo", "illustration", "icon", "drawing", "draw ", "wallpaper",
-    "poster", "sprite", "artwork", "thumbnail", "imagen", "dibujo", "foto", "ilustraci", "portada",
+    "image",
+    "picture",
+    "photo",
+    "logo",
+    "illustration",
+    "icon",
+    "drawing",
+    "draw ",
+    "wallpaper",
+    "poster",
+    "sprite",
+    "artwork",
+    "thumbnail",
+    "imagen",
+    "dibujo",
+    "foto",
+    "ilustraci",
+    "portada",
 ];
 const CODE: &[&str] = &[
-    "bug", "fix", "function", "code", "compile", "error", "test", "refactor", "api", "endpoint",
-    "upload", "css", "html", "component", "class ", "module", "crate", "repo", "script", "build",
-    "deploy", "database", "query", ".rs", ".ts", ".tsx", ".py", ".js", ".go", "código", "codigo",
+    "bug",
+    "fix",
+    "function",
+    "code",
+    "compile",
+    "error",
+    "test",
+    "refactor",
+    "api",
+    "endpoint",
+    "upload",
+    "css",
+    "html",
+    "component",
+    "class ",
+    "module",
+    "crate",
+    "repo",
+    "script",
+    "build",
+    "deploy",
+    "database",
+    "query",
+    ".rs",
+    ".ts",
+    ".tsx",
+    ".py",
+    ".js",
+    ".go",
+    "código",
+    "codigo",
 ];
 const HEAVY: &[&str] = &[
-    "architect", "design a", "refactor", "migrate", "debug", "investigate", "root cause", "plan ",
-    "security", "optimi", "performance", "from scratch", "implement", "rewrite",
+    "architect",
+    "design a",
+    "refactor",
+    "migrate",
+    "debug",
+    "investigate",
+    "root cause",
+    "plan ",
+    "security",
+    "optimi",
+    "performance",
+    "from scratch",
+    "implement",
+    "rewrite",
 ];
-const LIGHT: &[&str] = &[
-    "summarize", "summarise", "translate", "typo", "rename", "reformat", "one-liner", "quick question",
-    "resume", "traduce",
-];
+const LIGHT: &[&str] =
+    &["summarize", "summarise", "translate", "typo", "rename", "reformat", "one-liner", "quick question", "resume", "traduce"];
 
 /// `w` occurs at a word start ("api" matches "api calls", not "capital").
 /// Extensions like ".rs" match anywhere.
 fn has_word(p: &str, w: &str) -> bool {
-    p.match_indices(w).any(|(i, _)| {
-        w.starts_with('.') || p[..i].chars().next_back().is_none_or(|c| !c.is_alphanumeric())
-    })
+    p.match_indices(w).any(|(i, _)| w.starts_with('.') || p[..i].chars().next_back().is_none_or(|c| !c.is_alphanumeric()))
 }
 
 pub fn classify(prompt: &str) -> Need {
@@ -72,11 +124,7 @@ pub fn classify(prompt: &str) -> Need {
 /// tier up over one tier down).
 fn score(m: &ModelSpec, need: &Need) -> u32 {
     let cap = if m.has(need.cap) { 0 } else { 10 };
-    let tier = if m.tier >= need.tier {
-        (m.tier - need.tier) as u32 * 2
-    } else {
-        (need.tier - m.tier) as u32 * 2 + 1
-    };
+    let tier = if m.tier >= need.tier { (m.tier - need.tier) as u32 * 2 } else { (need.tier - m.tier) as u32 * 2 + 1 };
     cap + tier
 }
 
@@ -88,9 +136,7 @@ pub fn candidates(
     need: &Need,
     forced: Option<&str>,
 ) -> Result<Vec<ModelSpec>> {
-    let find = |id: &str| {
-        catalog.iter().find(|m| m.id == id).cloned().ok_or_else(|| anyhow!("unknown model `{id}`"))
-    };
+    let find = |id: &str| catalog.iter().find(|m| m.id == id).cloned().ok_or_else(|| anyhow!("unknown model `{id}`"));
     let reachable = |m: &ModelSpec| accounts.iter().any(|a| Some(a.provider) == m.provider());
 
     if let Some(id) = forced {

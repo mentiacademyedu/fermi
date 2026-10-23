@@ -63,10 +63,7 @@ pub async fn probe(cfg: &Config, a: &Account) -> AuthInfo {
         (Auth::Cli, Provider::Claude) => {
             let Ok(bin) = resolve_bin("claude", cfg.bins.claude.as_deref()) else { return fallback };
             let mut cmd = tokio::process::Command::new(bin);
-            cmd.args(["auth", "status", "--json"])
-                .stdin(Stdio::null())
-                .stderr(Stdio::null())
-                .kill_on_drop(true);
+            cmd.args(["auth", "status", "--json"]).stdin(Stdio::null()).stderr(Stdio::null()).kill_on_drop(true);
             if let Some(home) = a.home_dir() {
                 cmd.env("CLAUDE_CONFIG_DIR", home);
             }

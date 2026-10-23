@@ -792,14 +792,8 @@ impl Hub {
         // Tasks other programs were running whose files went quiet: the
         // program closed or crashed, so nobody will ever finish them.
         let at = now();
-        let quiet: Vec<u64> = self
-            .tasks
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|t| t.is_stale(at) && !owned.contains(&t.id))
-            .map(|t| t.id)
-            .collect();
+        let quiet: Vec<u64> =
+            self.tasks.lock().unwrap().iter().filter(|t| t.is_stale(at) && !owned.contains(&t.id)).map(|t| t.id).collect();
         for id in quiet {
             if let Some(rec) = settle_if_stale(&self.dir, id) {
                 if let Ok(m) = std::fs::metadata(self.dir.join(format!("{id}.json"))).and_then(|m| m.modified()) {
@@ -969,7 +963,14 @@ mod tests {
         let engine = Engine { catalog: cfg.catalog(), store: crate::state::Store::open(&home), cfg, home: home.clone(), depth: 0 };
         let mut t = TaskRec::new(1, &Task::new("fix the bug", &home), "ui");
         for ev in [
-            Event::Routed { profile: "p".into(), model: "claude:opus".into(), label: "Opus".into(), effort: None, account: "c".into(), why: String::new() },
+            Event::Routed {
+                profile: "p".into(),
+                model: "claude:opus".into(),
+                label: "Opus".into(),
+                effort: None,
+                account: "c".into(),
+                why: String::new(),
+            },
             Event::Session { id: "s1".into() },
             Event::Tool { name: "Bash".into(), detail: "cargo test".into() },
             Event::Text { text: "Fixed it.".into() },

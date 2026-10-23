@@ -1,0 +1,19 @@
+[package]
+name = "acceptance-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Acceptance tests for fermi (docs/FERMI_ADE_Verification_and_Acceptance_Testing)"
+
+[[bin]]
+name = "fake-cli"
+path = "src/bin/fake-cli.rs"
+
+[dependencies]
+fermi-core = { path = "../fermi-core" }
+fermi = { path = "../fermi" }
+anyhow.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+sha2 = "0.10"

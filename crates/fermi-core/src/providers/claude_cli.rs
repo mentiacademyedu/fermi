@@ -74,29 +74,23 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
                                 emit(ctx.tx, Event::Text { text: t.to_string() });
                             }
                         }
-                        Some("tool_use") => emit(ctx.tx, Event::Tool {
-                            name: block["name"].as_str().unwrap_or("tool").to_string(),
-                            detail: brief(&block["input"]),
-                        }),
+                        Some("tool_use") => emit(
+                            ctx.tx,
+                            Event::Tool { name: block["name"].as_str().unwrap_or("tool").to_string(), detail: brief(&block["input"]) },
+                        ),
                         _ => {}
                     }
                 }
             }
             "rate_limit_event" => {
                 let info = &v["rate_limit_info"];
-                let util = info["unifiedWindows"]
-                    .as_object()
-                    .and_then(|w| w.values().filter_map(|x| x["utilization"].as_f64()).reduce(f64::max));
+                let util =
+                    info["unifiedWindows"].as_object().and_then(|w| w.values().filter_map(|x| x["utilization"].as_f64()).reduce(f64::max));
                 resets = info["resetsAt"].as_u64().or(resets);
                 let is_blocked = info["status"].as_str() == Some("rejected");
                 blocked |= is_blocked;
                 e.store.observe_window(&ctx.account.id, util, resets);
-                emit(ctx.tx, Event::Limit {
-                    account: ctx.account.id.clone(),
-                    utilization: util,
-                    resets_at: resets,
-                    blocked: is_blocked,
-                });
+                emit(ctx.tx, Event::Limit { account: ctx.account.id.clone(), utilization: util, resets_at: resets, blocked: is_blocked });
             }
             "result" => {
                 got_result = true;

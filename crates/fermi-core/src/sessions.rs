@@ -178,7 +178,8 @@ pub fn discover(cfg: &Config) -> Vec<Found> {
     let chunk = files.len().div_ceil(threads).max(1);
     let mut out = vec![];
     std::thread::scope(|scope| {
-        let jobs: Vec<_> = files.chunks(chunk).map(|c| scope.spawn(move || c.iter().cloned().filter_map(describe).collect::<Vec<_>>())).collect();
+        let jobs: Vec<_> =
+            files.chunks(chunk).map(|c| scope.spawn(move || c.iter().cloned().filter_map(describe).collect::<Vec<_>>())).collect();
         for j in jobs {
             out.extend(j.join().unwrap_or_default());
         }
@@ -316,11 +317,20 @@ fn lines(text: &str) -> impl Iterator<Item = Value> + '_ {
 /// Text a CLI injected into a user turn rather than something the user typed.
 fn injected(text: &str) -> bool {
     let t = text.trim_start();
-    ["<local-command-", "<system-reminder>", "<command-message>", "<environment_context>", "<user_instructions>",
-        "<permissions instructions>", "<app-context>", "# AGENTS.md instructions", "Caveat: The messages below",
-        "[Request interrupted"]
-        .iter()
-        .any(|p| t.starts_with(p))
+    [
+        "<local-command-",
+        "<system-reminder>",
+        "<command-message>",
+        "<environment_context>",
+        "<user_instructions>",
+        "<permissions instructions>",
+        "<app-context>",
+        "# AGENTS.md instructions",
+        "Caveat: The messages below",
+        "[Request interrupted",
+    ]
+    .iter()
+    .any(|p| t.starts_with(p))
 }
 
 /// `<command-name>/model</command-name><command-args>opus</command-args>` → `/model opus`.
@@ -413,8 +423,7 @@ fn parse_codex(text: &str) -> Parsed {
                 p.stamp(&v["timestamp"]);
                 match pl["type"].as_str().unwrap_or_default() {
                     "message" => {
-                        let text: Vec<&str> =
-                            pl["content"].as_array().into_iter().flatten().filter_map(|c| c["text"].as_str()).collect();
+                        let text: Vec<&str> = pl["content"].as_array().into_iter().flatten().filter_map(|c| c["text"].as_str()).collect();
                         let text = text.join("\n");
                         match pl["role"].as_str() {
                             Some("user") if !injected(&text) => p.user(text),
@@ -541,7 +550,8 @@ pub fn parse_time(s: &str) -> Option<u64> {
     let rest = rest.trim_start_matches(|c: char| c == '.' || c.is_ascii_digit());
     if let Some(sign) = rest.chars().next().filter(|c| *c == '+' || *c == '-') {
         let off = rest[1..].replace(':', "");
-        if let (Some(oh), Some(om)) = (off.get(0..2).and_then(|x| x.parse::<i64>().ok()), off.get(2..4).and_then(|x| x.parse::<i64>().ok())) {
+        if let (Some(oh), Some(om)) = (off.get(0..2).and_then(|x| x.parse::<i64>().ok()), off.get(2..4).and_then(|x| x.parse::<i64>().ok()))
+        {
             let o = oh * 3600 + om * 60;
             t += if sign == '+' { -o } else { o };
         }
@@ -690,7 +700,11 @@ mod tests {
 
     #[test]
     fn handed_off_sessions_show_the_new_message() {
-        let prompt = format!("{} that started with X.]\n\n<conversation>\nUser: a\n</conversation>\n\n{}\n\nWhat now?", crate::hub::HANDOFF_START, crate::hub::HANDOFF_MARK);
+        let prompt = format!(
+            "{} that started with X.]\n\n<conversation>\nUser: a\n</conversation>\n\n{}\n\nWhat now?",
+            crate::hub::HANDOFF_START,
+            crate::hub::HANDOFF_MARK
+        );
         let line = serde_json::json!({ "type": "user", "message": { "content": prompt } }).to_string();
         let p = parse(Source::ClaudeCode, Path::new("/x/s.jsonl"), &line);
         assert!(matches!(&p.events[..], [Event::User { text }] if text == "What now?"));

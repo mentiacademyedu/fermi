@@ -1,0 +1,23 @@
+{
+  "fixture": "F-CODE",
+  "version": 1,
+  "fileImports": {
+    "util/src/lib.rs": ["util/src/num.rs", "util/src/text.rs"],
+    "engine/src/lib.rs": ["util/src/lib.rs", "util/src/text.rs"],
+    "app/src/main.rs": ["engine/src/lib.rs", "util/src/num.rs"]
+  },
+  "packageDependencies": { "engine": ["util"], "app": ["engine", "util"] },
+  "impact": {
+    "util::normalize": {
+      "change": { "file": "util/src/lib.rs", "lines": [5, 7] },
+      "affectedSymbols": ["engine::process", "engine::describe", "app::main"],
+      "affectedPackages": ["util", "engine", "app"],
+      "tests": ["util::tests::normalize_trims", "engine::tests::process_scores"]
+    },
+    "util::text::ping": {
+      "change": { "file": "util/src/text.rs", "lines": [7, 9] },
+      "affectedSymbols": ["util::text::pong"],
+      "note": "ping and pong call each other: traversal must terminate"
+    }
+  }
+}

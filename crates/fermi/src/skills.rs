@@ -109,10 +109,8 @@ pub fn places(cfg: &Config, projects: &[PathBuf]) -> Vec<Place> {
 
 /// Folder and file names we create: no paths, no hidden names.
 pub fn check_name(name: &str) -> Result<()> {
-    let ok = !name.is_empty()
-        && name.len() <= 100
-        && !name.starts_with('.')
-        && name.chars().all(|c| c.is_alphanumeric() || "._- ".contains(c));
+    let ok =
+        !name.is_empty() && name.len() <= 100 && !name.starts_with('.') && name.chars().all(|c| c.is_alphanumeric() || "._- ".contains(c));
     if !ok {
         bail!("`{name}` isn't a usable name");
     }
@@ -417,9 +415,12 @@ pub fn export(items: &[(&Place, Kind, String)], out: &Path) -> Result<usize> {
             listed.push(serde_json::json!({ "kind": kind, "name": name, "from": place.label }));
         }
         zip.start_file("fermi-bundle.json", opts)?;
-        zip.write_all(serde_json::to_string_pretty(&serde_json::json!({
-            "format": "fermi-skills/1", "exported": fermi_core::util::now(), "items": listed,
-        }))?.as_bytes())?;
+        zip.write_all(
+            serde_json::to_string_pretty(&serde_json::json!({
+                "format": "fermi-skills/1", "exported": fermi_core::util::now(), "items": listed,
+            }))?
+            .as_bytes(),
+        )?;
         zip.finish()?;
         Ok(listed.len())
     })();
@@ -568,7 +569,8 @@ mod tests {
     #[test]
     fn front_matter_and_flavors() {
         let claude = "---\nname: reviewer\ndescription: Reviews code\ntools: Read, Grep\nmodel: sonnet\ncolor: blue\n---\nBe strict.\n";
-        let gemini = "---\nname: reviewer\ndescription: >\n  Reviews code\n  carefully\nkind: local\ntools:\n  - read_file\n---\nBe strict.\n";
+        let gemini =
+            "---\nname: reviewer\ndescription: >\n  Reviews code\n  carefully\nkind: local\ntools:\n  - read_file\n---\nBe strict.\n";
         let (fm, body) = front_matter(gemini);
         assert_eq!(fm_get(&fm, "description"), Some("Reviews code carefully"));
         assert_eq!(body, "Be strict.\n");
@@ -588,7 +590,8 @@ mod tests {
         std::fs::write(a.join("skills/pdf/scripts/x.py"), "print(1)").unwrap();
         std::fs::create_dir_all(a.join("agents")).unwrap();
         std::fs::write(a.join("agents/reviewer.md"), "---\nname: reviewer\ndescription: Reviews\ntools: Read\n---\nBe strict.").unwrap();
-        let (pa, pb, pc) = (place(&a, "a", Some(Provider::Claude)), place(&b, "b", Some(Provider::Gemini)), place(&c, "c", Some(Provider::Openai)));
+        let (pa, pb, pc) =
+            (place(&a, "a", Some(Provider::Claude)), place(&b, "b", Some(Provider::Gemini)), place(&c, "c", Some(Provider::Openai)));
 
         let items = scan(&pa);
         assert_eq!(items.iter().map(|i| (i.kind, i.name.as_str())).collect::<Vec<_>>(), [(Kind::Skill, "pdf"), (Kind::Agent, "reviewer")]);

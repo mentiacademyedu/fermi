@@ -1,2 +1,6 @@
 /target
 /crates/fermi-desktop/gen/
+
+# Acceptance evidence (CI keeps it as a build artifact)
+tests/reports/
+lcov.info

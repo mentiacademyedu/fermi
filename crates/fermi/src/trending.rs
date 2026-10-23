@@ -100,43 +100,45 @@ fn number(s: &str) -> Option<u64> {
 }
 
 pub fn parse_trending(html: &str) -> Vec<Repo> {
-    html.split("<article class=\"Box-row\"").skip(1).filter_map(|a| {
-        let heading = between(a, "<h2", "</h2>")?;
-        let path = between(heading, "href=\"/", "\"")?;
-        let (owner, name) = path.split_once('/')?;
-        let ok = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
-        if !ok(owner) || !ok(name) {
-            return None;
-        }
-        let description = between(a, "<p class=\"col-9", "</p>")
-            .and_then(|p| p.split_once('>').map(|(_, t)| unescape(strip_tags(t).trim())))
-            .filter(|d| !d.is_empty());
-        let language = between(a, "itemprop=\"programmingLanguage\">", "<").map(|l| unescape(l.trim()));
-        let color = between(a, "repo-language-color\" style=\"background-color: ", "\"").map(|c| c.trim().to_string());
-        // Skip the rest of the opening tag (its classes contain digits) before reading the number.
-        let count = |link: &str| {
-            between(a, &format!("href=\"/{path}/{link}\""), "</a>")
-                .and_then(|t| t.split_once('>').map(|(_, rest)| strip_tags(rest)))
-                .and_then(|t| number(&t))
-        };
-        let gained = ["stars today", "stars this week", "stars this month"].iter().find_map(|label| {
-            let end = a.find(label)?;
-            let start = a[..end].rfind('>')? + 1;
-            number(&a[start..end])
-        });
-        Some(Repo {
-            owner: owner.into(),
-            name: name.into(),
-            url: format!("https://github.com/{owner}/{name}"),
-            description,
-            language,
-            color,
-            stars: count("stargazers").unwrap_or(0),
-            forks: count("forks").unwrap_or(0),
-            gained,
+    html.split("<article class=\"Box-row\"")
+        .skip(1)
+        .filter_map(|a| {
+            let heading = between(a, "<h2", "</h2>")?;
+            let path = between(heading, "href=\"/", "\"")?;
+            let (owner, name) = path.split_once('/')?;
+            let ok = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+            if !ok(owner) || !ok(name) {
+                return None;
+            }
+            let description = between(a, "<p class=\"col-9", "</p>")
+                .and_then(|p| p.split_once('>').map(|(_, t)| unescape(strip_tags(t).trim())))
+                .filter(|d| !d.is_empty());
+            let language = between(a, "itemprop=\"programmingLanguage\">", "<").map(|l| unescape(l.trim()));
+            let color = between(a, "repo-language-color\" style=\"background-color: ", "\"").map(|c| c.trim().to_string());
+            // Skip the rest of the opening tag (its classes contain digits) before reading the number.
+            let count = |link: &str| {
+                between(a, &format!("href=\"/{path}/{link}\""), "</a>")
+                    .and_then(|t| t.split_once('>').map(|(_, rest)| strip_tags(rest)))
+                    .and_then(|t| number(&t))
+            };
+            let gained = ["stars today", "stars this week", "stars this month"].iter().find_map(|label| {
+                let end = a.find(label)?;
+                let start = a[..end].rfind('>')? + 1;
+                number(&a[start..end])
+            });
+            Some(Repo {
+                owner: owner.into(),
+                name: name.into(),
+                url: format!("https://github.com/{owner}/{name}"),
+                description,
+                language,
+                color,
+                stars: count("stargazers").unwrap_or(0),
+                forks: count("forks").unwrap_or(0),
+                gained,
+            })
         })
-    })
-    .collect()
+        .collect()
 }
 
 async fn search_api(since: &str, language: Option<&str>) -> Result<Vec<Repo>> {
@@ -198,7 +200,8 @@ fn chrono_like_date(ts: u64) -> String {
 
 /// Clones `owner/name` (shallow) into `parent/name`.
 pub fn clone(owner: &str, name: &str, parent: &std::path::Path) -> Result<std::path::PathBuf> {
-    let ok = |s: &str| !s.is_empty() && s != "." && s != ".." && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+    let ok =
+        |s: &str| !s.is_empty() && s != "." && s != ".." && s.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
     if !ok(owner) || !ok(name) {
         bail!("not a GitHub repository name");
     }

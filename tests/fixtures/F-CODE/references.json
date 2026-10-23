@@ -1,0 +1,20 @@
+{
+  "fixture": "F-CODE",
+  "version": 1,
+  "scope": "static calls between indexed Rust files",
+  "callers": {
+    "util::normalize": [
+      { "caller": "util::tests::normalize_trims", "file": "util/src/lib.rs", "line": 15 },
+      { "caller": "engine::process", "file": "engine/src/lib.rs", "line": 6 }
+    ],
+    "util::text::helper": [{ "caller": "engine::process", "file": "engine/src/lib.rs", "line": 6 }],
+    "util::num::helper": [{ "caller": "app::main", "file": "app/src/main.rs", "line": 7 }],
+    "util::text::ping": [{ "caller": "util::text::pong", "file": "util/src/text.rs", "line": 12 }],
+    "util::text::pong": [{ "caller": "util::text::ping", "file": "util/src/text.rs", "line": 8 }],
+    "engine::process": [
+      { "caller": "engine::describe", "file": "engine/src/lib.rs", "line": 11 },
+      { "caller": "engine::tests::process_scores", "file": "engine/src/lib.rs", "line": 21 }
+    ],
+    "engine::describe": [{ "caller": "app::main", "file": "app/src/main.rs", "line": 7 }]
+  }
+}
