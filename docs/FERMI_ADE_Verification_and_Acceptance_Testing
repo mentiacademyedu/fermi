@@ -1,0 +1,2372 @@
+# APEX ADE Verification and Acceptance Testing
+
+Complete acceptance testing plan and coding agent implementation brief
+
+Version 1.1  |  Rust backend edition  |  23 October 2026
+
+### Purpose
+
+Verify that all 12 systems of the Agent Development Environment work through reproducible tests and saved evidence. A feature is complete only when appropriate automated tests demonstrate that its requirements are met. The existence of code, an endpoint or a UI control is not proof of functionality.
+
+### Scope
+
+This plan defines 96 system acceptance tests and 10 system-wide workflows. It includes testing tiers, deterministic fixtures, real boundary checks, infrastructure, pass criteria, evidence records, CI gates, implementation phases, reporting and the complete coding agent master prompt.
+
+### Required decision
+
+Use the initial repository audit to establish what exists, what is missing and what can be verified. Then implement the tests, execute them against the identified build and retain evidence before declaring a capability verified.
+
+### Acceptance inventory
+
+| Suite | Required cases | Readiness gate |
+| --- | --- | --- |
+| System acceptance | 96 | 8 of 8 per system |
+| End-to-end acceptance | 10 | 10 of 10 workflows |
+| Total | 106 | All required cases and evidence complete |
+
+### Document use
+
+Audience: the APEX owner, coding agent, maintainers and reviewers. This is a specification for verification, not an execution report. No passing result is asserted by this document. Record real results only after execution against a named revision and environment.
+
+## Contents
+
+- [Verification rules and readiness](#verification-rules-and-readiness)
+- [Test levels and execution tiers](#test-levels-and-execution-tiers)
+- [Fixture inventory and ground truth](#fixture-inventory-and-ground-truth)
+- [Fixture lifecycle and deterministic controls](#fixture-lifecycle-and-deterministic-controls)
+- [Test infrastructure and repository layout](#test-infrastructure-and-repository-layout)
+- [Acceptance runner and execution contract](#acceptance-runner-and-execution-contract)
+- [CI gates and release acceptance](#ci-gates-and-release-acceptance)
+- [Evidence records and artifact formats](#evidence-records-and-artifact-formats)
+- [Reporting and verification coverage](#reporting-and-verification-coverage)
+- [Implementation phases and responsibilities](#implementation-phases-and-responsibilities)
+- [System 1 Model-agnostic AI engine](#system-1-model-agnostic-ai-engine)
+- [System 2 Multi-agent orchestration](#system-2-multi-agent-orchestration)
+- [System 3 Semantic codebase intelligence](#system-3-semantic-codebase-intelligence)
+- [System 4 Persistent project memory](#system-4-persistent-project-memory)
+- [System 5 Integrated verification engine](#system-5-integrated-verification-engine)
+- [System 6 Browser and application control](#system-6-browser-and-application-control)
+- [System 7 Composable harness and plugin system](#system-7-composable-harness-and-plugin-system)
+- [System 8 Agent observability](#system-8-agent-observability)
+- [System 9 Cost and performance optimization](#system-9-cost-and-performance-optimization)
+- [System 10 Security and isolation](#system-10-security-and-isolation)
+- [System 11 Local and remote execution](#system-11-local-and-remote-execution)
+- [System 12 Evaluation and self-improvement](#system-12-evaluation-and-self-improvement)
+- [System wide end to end workflows](#system-wide-end-to-end-workflows)
+- [Complete coding agent master prompt](#complete-coding-agent-master-prompt)
+
+## Verification rules and readiness
+
+### Evidence before completion
+
+A passing case must execute the specified behavior, check its observable outcome against an independent oracle and save the required artifacts. A mocked response proves only the orchestration exercised by that mock.
+
+Treat every original action and expected result in the catalog as a minimum requirement. The setup, procedure, assertions, tier assignments and evidence fields make those requirements executable. Adjust proposed operational defaults through review before running the suite; do not quietly relax them after failure.
+
+Protect acceptance tests, ground truth, scoring and policy fixtures from the candidate agent. Changes to these assets require a separate reviewed revision and invalidate results whose oracle has changed.
+
+The overall readiness gate is 96 of 96 system cases plus 10 of 10 E2E cases, on the candidate revision, with the required real integrations and security boundaries exercised. A deterministic PR run alone does not establish live-provider or remote-worker readiness.
+
+### Outcome semantics
+
+| Result status | Meaning and gate effect |
+| --- | --- |
+| passed | Executed; every mandatory assertion passed and required evidence exists. |
+| failed | Executed; an assertion, mandatory gate or evidence validation failed. |
+| skipped | Intentionally not executed; requires a recorded reason and owner. Never a pass. |
+| not_implemented | Audit confirms a required capability or executable test is absent. Never a pass. |
+| blocked | Execution cannot proceed because a prerequisite is unavailable. Never a pass. |
+
+Keep executionState separately as not_run or completed. Before execution, status may be null; once a result is published, status must be one of the five values above. Map a verifier's internal not_run state to executionState, never to passed. A missing runner or unimplemented test is recorded as not_implemented; unavailable credentials are blocked; an intentionally excluded profile is skipped.
+
+### Failures and exceptions
+
+Any required failed, skipped, blocked, not_implemented or not_run case prevents full acceptance. Temporary exceptions must identify owner, reason, risk, expiry and remediation; report the release as conditional rather than fully verified. Infrastructure errors cannot be converted into successful product behavior.
+
+## Test levels and execution tiers
+
+Test level describes what is checked. Execution tier describes where and when the test runs. They are separate fields in the acceptance registry.
+
+| Level | Purpose | Example |
+| --- | --- | --- |
+| Unit | Isolated logic | Router eligibility and budget arithmetic |
+| Integration | Connected components | Tool result persisted by an agent task |
+| End to end | Actual user workflow | Create a task, execute and review changes |
+| Failure and resilience | Behavior under injected faults | Outage, crash, cancellation or reconnect |
+| Security and performance | Boundaries and resource behavior | Unauthorized read; concurrent execution |
+
+### Execution profiles
+
+| Tier | Environment and dependencies | Schedule |
+| --- | --- | --- |
+| T0 | Pure logic, fixed clock and prices; no network | Every pull request |
+| T1 | Real services and storage with deterministic providers | Every pull request |
+| T2 | Packaged app or browser UI with fixture services | Relevant E2E on PR; full suite on main |
+| T3 | Real disposable processes or containers; fault and security tests | Required boundary subset on PR; full nightly |
+| T4 | Opt-in live providers and remote test workers; metered cost | Scheduled or manual; before readiness claim |
+
+A case may have several profiles. Its result records the exact tier, components mocked, components real and environment. T4 supplements deterministic contract checks where actual model or remote compatibility must be demonstrated. Live credentials are injected only into approved test jobs.
+
+### Proposed execution defaults
+
+Use fixed seeds and clocks for deterministic scenarios. Repeat concurrency cases 20 times with recorded scheduling seeds; a single failure fails the case. Declare operation timeouts, cancellation deadlines, retry counts and performance budgets in the manifest before execution. Three retry attempts means three total attempts unless the manifest explicitly defines otherwise.
+
+Set performance thresholds after measuring a versioned baseline on declared hardware; record p50 and p95 over at least 30 measured runs after warm-up. Reject a regression beyond the agreed budget. These samples are engineering checks, not a statistically conclusive ranking of model quality.
+
+## Fixture inventory and ground truth
+
+Run acceptance scenarios against small dedicated fixture repositories and disposable environments. Do not use the production ADE repository as the target for destructive, adversarial or coding-task fixtures.
+
+| Fixture | Contents and independent oracle |
+| --- | --- |
+| F-CODE | Three Rust workspace crates, duplicate symbols, cross-module imports, shared utility and known callers. Keep the Cargo dependency graph acyclic; model intentional cycles in supported symbol or module references, or an explicitly invalid negative fixture. Pin expected edits. |
+| F-PROVIDER | Two differently shaped provider adapters, scripted model responses, usage, prices, capabilities, tool calls and failure sequences. Include a compatible local endpoint. |
+| F-MEMORY | Two project scopes, synthetic decisions, versions, source citations, paraphrases, contradictions and stale-source cases in resettable persistent storage. |
+| F-WEB | Deterministic local site with forms, three routes, modal, delayed elements, controlled requests, HTTP 500 route and JavaScript error trigger. |
+| F-PLUGIN | Valid sample plugin, disabled plugin, command collision, crashing plugin, custom adapter, incompatible API manifest and a local MCP server. |
+| F-SECURITY | Disposable sandbox roots, allowed and forbidden sentinels, synthetic secrets, controlled network endpoints and scoped approval policy. |
+| F-WORKER | Local process, container and remote worker harness with barriers, durable checkpoints, child process tracking, heartbeats and retry policy. |
+| F-EVAL | Five protected coding tasks, versioned expected results, independent scoring, fixed configuration and deterministic response cassettes. |
+
+### Ground truth contract
+
+Keep manifest.json, symbols.json, references.json, dependency-graph.json, expected-diffs and expected-results under reviewed fixture versions. Each oracle records supported languages, symbol identities, file paths and spans, relevant tests and expected outcomes. Hash all protected inputs before and after a run.
+
+The evaluator and candidate must use separate permission scopes. Candidate workspaces are writable only where edits are intended; the evaluator reads protected tests from an independent location. Do not rely on an agent promise to leave its own tests unchanged.
+
+## Fixture lifecycle and deterministic controls
+
+### Create and reset
+
+Allocate a unique run ID, case ID, attempt ID, workspace, datastore namespace and ports. Materialize a fixture from its pinned immutable version. Preserve the base commit and any intentional user-change sentinel.
+
+Verify readiness through service health signals and barriers. Reset storage, browser context, tool outputs and queues before each case. Do not use arbitrary sleeps to hide missing readiness checks.
+
+After the case, capture results and evidence before cleanup. Terminate tracked processes and release containers, ports, temporary credentials and remote allocations. A cleanup failure is reported explicitly and fails the required cleanup assertion.
+
+### Provider simulator behavior
+
+| Control | Required scenarios |
+| --- | --- |
+| Responses | Valid text and tool calls; malformed payloads; unsupported capabilities |
+| Transport | HTTP 429, 500 and 503; timeout; interrupted stream; artificial latency |
+| Limits | Retry-After, rate limits, context-window rejection and budget exhaustion |
+| Accounting | Variable input, output and cached token usage; delayed actual usage; versioned prices |
+| Replay | Pinned request expectations, recorded responses, virtual clock and deterministic seed |
+
+### Five coding evaluation fixtures
+
+| Task | Protected correctness check |
+| --- | --- |
+| Bug repair | Fix a boundary case without breaking normal inputs. |
+| Small feature | Add a declared behavior and validate success and error cases. |
+| Cross-file refactor | Rename a symbol and preserve callers across packages. |
+| UI interaction | Implement and verify a deterministic form workflow. |
+| Failure recovery | Handle a provider or worker fault under a bounded policy. |
+
+These are smoke tasks. Report per-task correctness, latency and cost separately and show the dataset version and sample size. Expanding to a model-quality benchmark requires more tasks, multiple runs, control of confounders and an explicit uncertainty analysis.
+
+## Test infrastructure and repository layout
+
+APEX is developed mainly in Rust on the backend. Use Cargo workspace tests and the existing async runtime for backend verification. Keep unit tests beside their Rust modules and integration tests in a dedicated workspace test crate. Retain Playwright for an existing web frontend; it does not replace Rust backend tests. Use disposable processes or containers for isolation and the existing CI service.
+
+```text
+Cargo.toml                    # workspace manifest
+Cargo.lock
+rust-toolchain.toml            # pinned supported toolchain
+crates/
+  <backend-crate>/src/
+    model_routing.rs           # unit tests in #[cfg(test)]
+    budget_policy.rs
+    permissions.rs
+  acceptance-tests/
+    Cargo.toml                # registered workspace member
+    src/lib.rs                # shared harness utilities
+    tests/
+      model_providers.rs
+      agent_execution.rs
+      context_memory.rs
+      plugin_system.rs
+      security.rs
+      resilience.rs
+xtask/
+  Cargo.toml                  # proposed runner package
+  src/main.rs
+tests/
+  acceptance/systems.yaml
+  fixtures/                   # code, web, providers, workers
+  benchmarks/
+    fixtures/
+    expected-results/
+  reports/
+ui-tests/                     # only if a web UI exists
+  coding-workflow.spec.ts
+  browser-verification.spec.ts
+```
+
+Cargo discovers integration targets in a package's tests directory; nested suites need an explicit module or test target. Register both test and runner crates as workspace members. Add deterministic clocks, provider simulators, process cleanup, evidence validation and fixture hashes to the shared harness. Reference: https://doc.rust-lang.org/cargo/commands/cargo-test.html
+
+## Acceptance runner and execution contract
+
+### Registry and discovery
+
+systems.yaml is the authoritative inventory of all 106 case IDs. It maps each ID to its system, specification, executable test, level, required profiles, fixture versions, owner, prerequisites, deadlines, assertion names and artifacts. Discovery must reject missing IDs, duplicate IDs and a test file with no meaningful assertions.
+
+```yaml
+id: MA-04
+system: multi-agent-orchestration
+required: true
+level: integration
+profiles: [deterministic]
+fixtures: [F-CODE]
+testFile: crates/acceptance-tests/tests/agent_execution.rs
+testName: ma_04_conflicting_edits
+assertions: [conflictDetected, noSilentOverwrite]
+evidence: [log.json, diff-A.patch, diff-B.patch]
+repetitions: 20
+timeoutMs: 60000
+```
+
+### Proposed command interface
+
+Implement an xtask workspace binary with the application arguments below, or document an equivalent Rust runner. These are proposed interfaces, not existing Cargo subcommands or implemented scripts. Substitute each catalog ID for MA-04 in the first command. The runner maps IDs to Rust test names and validates discovery and evidence.
+
+```bash
+cargo run --locked -p xtask -- acceptance --id MA-04
+cargo run --locked -p xtask -- acceptance --system MA
+cargo run --locked -p xtask -- acceptance --all
+cargo run --locked -p xtask -- acceptance --all --profile security
+cargo run --locked -p xtask -- acceptance --all --profile live
+cargo run --locked -p xtask -- report --run-id <runId>
+```
+
+Default the runner to the deterministic profile. Require an explicit --allow-billable flag in addition to --profile live before any metered provider call; remote-only live runs need no provider billing permission. Preserve command exit status and reject a filter that executes zero expected tests.
+
+Profiles map to tiers: deterministic includes T0, T1 and local T2; security executes T3; live executes T4. If a case needs more than one profile, retain separate results and aggregate only after every required profile passes. Repetitions remain one catalog case with all attempts retained.
+
+### Runner invariants
+
+- Return a nonzero exit when any required selected case fails, cannot run or lacks evidence. Never turn a missing executable into an empty passing suite.
+
+- Write a result for every planned case, even after runner interruption. Reconcile abandoned runs as blocked or failed with executionState not_run or completed as appropriate.
+
+- Use runtime events and independent filesystem, process or network observations as assertions. Do not accept an agent's narrative as the sole oracle.
+
+- Protect the report writer from candidate edits; validate schemas, artifact existence and hashes before assigning passed.
+
+## CI gates and release acceptance
+
+| Trigger | Required work | Gate effect |
+| --- | --- | --- |
+| Every pull request | Formatting and static analysis; T0 and T1; relevant T2; required T3 boundary cases; coverage and evidence validation | Any mandatory failure or silent omission blocks green completion. |
+| Main branch and nightly | Full deterministic suite; all local E2E; repeated concurrency, resilience and security profiles | Publish defects and prevent readiness claims for the affected build. |
+| Scheduled or manual | T4 live-provider smoke, full remote environments and expensive performance suites | Meter cost and require credentials; blocked profiles remain visible. |
+| Release candidate | All 106 IDs and all required profiles on the exact candidate revision; full evidence and defect review | Require 8/8 per system and 10/10 E2E for full acceptance. |
+
+### Mandatory pull request checks
+
+Formatting and static analysis pass; unit tests pass; integration tests pass; relevant E2E tests pass; required security tests pass; no required test is silently skipped; coverage is produced; results and artifacts are saved; failed mandatory checks prevent a green completion status.
+
+### Rust backend checks
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+cargo llvm-cov --workspace --locked --lcov --output-path lcov.info
+```
+
+Pin compatible tooling and include documentation tests. Declare supported feature and target combinations; do not assume --all-features is valid when features conflict. Use the project's async test runtime and exercise cancellation and task cleanup. Sources: https://doc.rust-lang.org/clippy/usage.html and https://github.com/taiki-e/cargo-llvm-cov
+
+### Selection and protection
+
+Declare required test selection before execution using change impact plus an always-required safety core. Run the full deterministic suite on main to detect omissions in selective PR coverage. Require separate review for changes to acceptance criteria, ground truth, CI gates and security policy. A passing result for an earlier commit does not verify a changed candidate.
+
+### Reruns and flaky behavior
+
+Retain the original failure, classify its cause and rerun only after preserving evidence. A passing retry does not erase a nondeterministic failure. Record quarantine with an owner and expiry, and keep required quarantined cases out of the passed count. After a legitimate fix, rerun the case and affected regression suites.
+
+### Budgets and performance
+
+Use atomic shared reservations before billable dispatch. Stop new calls when estimated allowance is exhausted, then reconcile lagged actual usage. In-flight calls can overrun estimates. Measure performance on declared hardware and pinned workload; enforce configured regression budgets without mistaking mocked latency for live-provider performance.
+
+## Evidence records and artifact formats
+
+Every execution produces a structured record, human-readable report and linked artifacts. The following record illustrates the supplied format; its values are examples, not measured APEX results.
+
+```json
+{
+  "testId": "MA-04",
+  "system": "multi-agent-orchestration",
+  "status": "passed",
+  "executionType": "integration",
+  "environment": "isolated-worktrees",
+  "mockedComponents": [],
+  "durationMs": 1840,
+  "assertions": {
+    "conflictDetected": true,
+    "silentOverwrite": false
+  },
+  "artifacts": [
+    "reports/MA-04/log.json",
+    "reports/MA-04/diff.patch"
+  ]
+}
+```
+
+### Required provenance extensions
+
+Add schemaVersion, runId, attemptId, executionState, commitSha, dirtyTreeHash if applicable, startedAt and finishedAt in UTC, tier, profile, realComponents, fixtureVersions and hashes, runtime and container versions, provider and model IDs, configuration hash, seed, declared timeouts, cost estimate, actual usage availability and exit code. Every nonpassing result includes reason, defect ID or prerequisite and next action.
+
+### Artifact conventions
+
+Store tests/reports/<runId>/<testId>/<attemptId>/result.json plus events.jsonl, stdout.log, stderr.log, diff.patch, trace.zip, screenshots and metrics.json as applicable. A manifest lists relative paths, media types, byte sizes and SHA-256 hashes. JUnit XML supports CI summaries; JSON is the authoritative result format; HTML or Markdown supplies the review view.
+
+Redact synthetic and real secret values before persistence. Validate artifact links and checksums before reporting. Protect evaluation artifacts from candidate writes. Set retention and access rules in CI configuration; proposed defaults are 30 days for routine successful runs and 90 days for failed and release runs, subject to project policy.
+
+## Reporting and verification coverage
+
+### System dashboard
+
+For each system show implemented capabilities, passed, failed, missing, blocked and skipped cases, latest execution time, tested revision, real versus mocked scope, evidence links, known defects and remaining work. Never calculate completeness using only tests that happened to run.
+
+| Metric | Definition |
+| --- | --- |
+| System acceptance | passed required cases / 8; all required profiles must pass for a case to count. |
+| Workflow acceptance | passed required E2E cases / 10. |
+| Overall acceptance | passed required cases / 106, retaining missing and blocked cases in the denominator. |
+| Execution coverage | cases actually executed / 106; distinct from passing and source-code coverage. |
+| Implementation coverage | capabilities and tests mapped to implementation files; unknown until audited. |
+| Code coverage | Rust line, region and function coverage from cargo-llvm-cov; branch coverage only if supported by the pinned setup. Record thresholds, exclusions and separate frontend coverage. |
+
+### Required report outputs
+
+| Deliverable | Minimum content |
+| --- | --- |
+| TESTING_ARCHITECTURE.md | Stack, harness boundaries, fixtures, profiles, isolation and commands. |
+| ACCEPTANCE_MATRIX.md | All 106 IDs, mapped files, test functions, profiles, prerequisites and status. |
+| TEST_RESULTS.md | Run manifest, counts, outcomes, evidence links and readiness verdict. |
+| KNOWN_DEFECTS.md | Reproduction, severity, owner, cause, impact, remediation and rerun. |
+| TEST_COVERAGE.md | Requirement coverage, code coverage, unsupported paths and exclusions. |
+| Executable assets | Automated suite, CI configuration, fixtures, utilities and machine-readable results. |
+
+### Verification language
+
+Use four separate capability labels: implemented, mock-only verified, real integration verified and unverified. Pair each verified label with run ID, case IDs, revision, environment and evidence. A source-code coverage percentage or an attractive dashboard does not substitute for acceptance results.
+
+## Implementation phases and responsibilities
+
+| Phase | Work and exit condition |
+| --- | --- |
+| 1 Repository audit | Identify architecture and tests; map 12 systems; record missing capabilities and create the baseline coverage matrix before new product features. |
+| 2 Testing platform | Build fixture lifecycle, deterministic provider, worker harness, evidence storage, coverage and CI using the actual stack. Demonstrate a positive and negative control. |
+| 3 Acceptance cases | Implement every catalog ID with observable assertions and evidence. Missing capabilities stay not_implemented. |
+| 4 Deterministic testing | Exercise response and fault scenarios with fixed fixtures; separately label opt-in live API smoke tests and cost. |
+| 5 Security validation | Exercise actual process or container boundaries and adversarial routes in disposable environments. |
+| 6 CI and gates | Wire mandatory checks and report validation; prove a deliberate failure prevents green completion. |
+| 7 Dashboard | Generate system counts, missing work, defects, execution time and evidence without hiding nonpassing cases. |
+| 8 Execute and report | Run suites; classify failures; preserve evidence; fix scoped defects; rerun cases and regressions; publish remaining gaps. |
+
+### Accountability
+
+The coding agent implements tests and scoped fixes. The acceptance owner approves requirements and justified changes. The reviewer checks oracle integrity and evidence. CI executes the protected gates and stores results. The candidate agent must not independently weaken its own acceptance criteria.
+
+### Failure triage
+
+Classify every failure as product implementation, test implementation, specification ambiguity or environment. Preserve the failing input, run metadata, logs and patch. A changed test needs an explicit reason and review; a product fix needs a rerun on the corrected revision. Finish with a verified-status table for all 12 systems and the E2E suite.
+
+### Catalog reading guide
+
+Each catalog case retains the original action and expected result. Setup and procedure specify reproducible execution; additional assertions make failure measurable. The evidence field lists case-specific artifacts in addition to the shared result record. Use the runner command with the displayed ID. Multi-tier cases require their declared profiles before full acceptance.
+
+## System 1 Model-agnostic AI engine
+
+Goal: Connect multiple model providers, switch models, and route tasks intelligently.
+
+### AI-01 Adapter normalization
+
+**Profile and fixtures:** T1  |  F-PROVIDER
+
+**Action:** Connect two mock providers using different API adapters
+
+**Expected:** Both return normalized responses
+
+**Setup:** Configure two adapters with different request and response schemas and equivalent scripted outputs.
+
+**Procedure:** Invoke both through the public task service; compare content, tool calls, usage fields and finish reasons against a canonical response.
+
+**Pass assertions:** Requests reach the correct adapter once; normalized fields match the contract and no provider-specific fields are required downstream.
+
+**Evidence:** Request envelopes and normalized responses.
+
+### AI-02 Common task interface
+
+**Profile and fixtures:** T1  |  F-CODE F-PROVIDER
+
+**Action:** Run the same coding task with two different models
+
+**Expected:** Both execute through the same task interface
+
+**Setup:** Reset two isolated copies of the same coding fixture; bind each to a different scripted model.
+
+**Procedure:** Submit identical tasks through the same interface and run the fixture acceptance command in each copy.
+
+**Pass assertions:** Both accepted changes satisfy the fixture oracle; task lifecycle and output schema match despite different provider payloads.
+
+**Evidence:** Task requests diffs and test output.
+
+### AI-03 Model switching with state
+
+**Profile and fixtures:** T1  |  F-PROVIDER
+
+**Action:** Change the selected model during a session
+
+**Expected:** Next model call uses the new selection without losing stored conversation state
+
+**Setup:** Start a session with model A and persist two conversation turns.
+
+**Procedure:** Switch to B, submit a follow-up, and inspect its request and stored transcript.
+
+**Pass assertions:** Only the next call uses B; prior turns remain ordered, complete and attributed to their original model.
+
+**Evidence:** Selection events request routing and transcript.
+
+### AI-04 Rate limit handling
+
+**Profile and fixtures:** T1  |  F-PROVIDER
+
+**Action:** Simulate provider rate limit (HTTP 429)
+
+**Expected:** Backoff/retry policy runs and respects retry limits
+
+**Setup:** Script 429 responses with Retry-After and configure a three-attempt ceiling and virtual clock.
+
+**Procedure:** Run one recoverable sequence and one sequence that exhausts retries; advance time deterministically.
+
+**Pass assertions:** Attempt times obey policy; total attempts never exceed three; exhaustion produces a terminal failure with no retry loop.
+
+**Evidence:** Attempt timeline headers and terminal state.
+
+Cases AI-01 through AI-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass, with recorded provider requests, normalized outputs, model selections, and cost estimates. Budget enforcement must acknowledge that provider billing reports may lag and in-flight calls can exceed estimates.
+
+### AI-05 Provider outage handling
+
+**Profile and fixtures:** T1  |  F-PROVIDER
+
+**Action:** Simulate provider outage (HTTP 503)
+
+**Expected:** Task fails clearly or uses an explicitly configured fallback
+
+**Setup:** Script 503 responses; prepare separate configurations with fallback disabled and explicitly enabled.
+
+**Procedure:** Execute both configurations and inspect routed calls and final task states.
+
+**Pass assertions:** Disabled fallback fails clearly; enabled fallback uses only the permitted provider and records the switch and any retry limit.
+
+**Evidence:** Provider trace fallback event and error record.
+
+### AI-06 Capability validation
+
+**Profile and fixtures:** T0 T1  |  F-PROVIDER
+
+**Action:** Require tool calling from a model that lacks the capability
+
+**Expected:** System rejects the configuration or uses a documented alternative
+
+**Setup:** Declare a model without tool-calling capability and a task that requires a tool.
+
+**Procedure:** Submit the task through configuration validation and the execution entry point.
+
+**Pass assertions:** Unsupported execution is rejected before dispatch, or the documented alternative is used and observable; no fabricated tool result appears.
+
+**Evidence:** Capability matrix validation error and dispatch count.
+
+### AI-07 Budget exhaustion
+
+**Profile and fixtures:** T0 T1  |  F-PROVIDER
+
+**Action:** Set a maximum API budget of $0.50
+
+**Expected:** No new billable calls are dispatched after the estimated remaining allowance is exhausted
+
+**Setup:** Set allowance to USD 0.50; use fixed prices and estimates with known reservations and an in-flight request.
+
+**Procedure:** Dispatch calls until remaining allowance cannot cover the next estimate, then attempt another call.
+
+**Pass assertions:** The new billable call is rejected; ledger totals and reservations explain the decision; lagged actual charges remain visible.
+
+**Evidence:** Reservation ledger denied dispatch and estimate reconciliation.
+
+### AI-08 Local endpoint support
+
+**Profile and fixtures:** T1 T2  |  F-PROVIDER
+
+**Action:** Test a local model endpoint
+
+**Expected:** Compatible endpoint works without requiring a hosted-provider account
+
+**Setup:** Start a compatible local model endpoint and remove all hosted-provider credentials from the test environment.
+
+**Procedure:** Run a task through the local adapter and inspect endpoint logs and outbound network records.
+
+**Pass assertions:** The local endpoint returns a valid normalized result; no hosted account or unintended hosted request is required.
+
+**Evidence:** Local endpoint transcript and network log.
+
+## System 2 Multi-agent orchestration
+
+Goal: Run independent agents concurrently, coordinate dependencies, and safely integrate changes.
+
+### MA-01 Concurrent workers
+
+**Profile and fixtures:** T1  |  F-CODE F-WORKER
+
+**Action:** Launch three independent tasks
+
+**Expected:** All three can run concurrently
+
+**Setup:** Create three independent jobs with controllable start barriers and separate workspaces.
+
+**Procedure:** Release all jobs together and hold each at a checkpoint until the others have started.
+
+**Pass assertions:** Worker activity intervals overlap for all three; each job has its own result and reaches its expected terminal state.
+
+**Evidence:** Worker timeline workspace ids and outputs.
+
+### MA-02 Dependency ordering
+
+**Profile and fixtures:** T0 T1  |  F-WORKER
+
+**Action:** Create A  >  B  >  C dependencies
+
+**Expected:** B cannot start before A succeeds; C waits for B
+
+**Setup:** Define the DAG A to B to C with controlled completion and failure responses.
+
+**Procedure:** Complete A then B; repeat with A failing and with cancellation while B waits.
+
+**Pass assertions:** B starts only after A succeeds, C only after B succeeds; failure or cancellation blocks descendants without running them.
+
+**Evidence:** Dag events start timestamps and blocked states.
+
+### MA-03 Independent edits
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Two agents edit different files
+
+**Expected:** Both sets of changes remain intact
+
+**Setup:** Fork two workers from the same fixture revision and assign distinct files with known expected patches.
+
+**Procedure:** Run concurrently, integrate both results and compare the resulting tree to the combined expected patches.
+
+**Pass assertions:** Both edits survive exactly; unrelated files and user-owned sentinel changes remain unchanged.
+
+**Evidence:** Base revision both patches and integrated tree hash.
+
+### MA-04 Conflicting edits
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Two agents edit the same function
+
+**Expected:** Conflict detected and escalated; neither change silently overwritten
+
+**Setup:** Assign incompatible changes to the same function in two isolated workers.
+
+**Procedure:** Release both workers concurrently and attempt integration without providing conflict resolution.
+
+**Pass assertions:** Conflict is reported with both candidate patches; integration does not silently select or overwrite either change.
+
+**Evidence:** Conflict report both patches and branch state.
+
+Cases MA-01 through MA-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass. Run concurrency tests repeatedly, not just once, to catch race conditions.
+
+### MA-05 Scoped delegation
+
+**Profile and fixtures:** T1  |  F-WORKER F-SECURITY
+
+**Action:** Agent A delegates a subtask to B
+
+**Expected:** B receives bounded context, instructions, and permission scope
+
+**Setup:** Give parent A public context plus a private sentinel and a narrower child permission policy.
+
+**Procedure:** Delegate to B and inspect its actual input envelope; attempt an out-of-scope child operation.
+
+**Pass assertions:** B receives required instructions and bounded context; private sentinel is absent and the narrower scope is enforced.
+
+**Evidence:** Delegation envelope permission decisions and child trace.
+
+### MA-06 Worker crash isolation
+
+**Profile and fixtures:** T1 T3  |  F-WORKER
+
+**Action:** Terminate one worker during execution
+
+**Expected:** Other independent workers continue; failed task gets a clear state
+
+**Setup:** Run three independent workers with separate process identifiers and a checkpoint in each.
+
+**Procedure:** Kill one worker after it starts; allow the other two to finish.
+
+**Pass assertions:** Only the killed task becomes interrupted or failed according to policy; surviving jobs retain their outputs and complete.
+
+**Evidence:** Process inventory worker exit and surviving results.
+
+### MA-07 Parent cancellation
+
+**Profile and fixtures:** T1 T3  |  F-WORKER
+
+**Action:** Cancel a parent task
+
+**Expected:** Applicable child tasks and processes are cancelled or safely drained
+
+**Setup:** Start a parent with active and queued children plus a long-running child subprocess.
+
+**Procedure:** Cancel the parent through the normal API and wait for the declared cancellation deadline.
+
+**Pass assertions:** Queued children never start; active work stops or drains under the documented policy; no orphan or false completion remains.
+
+**Evidence:** Cancellation propagation process inventory and resource ledger.
+
+### MA-08 Verified integration
+
+**Profile and fixtures:** T1 T2  |  F-CODE
+
+**Action:** Integrate completed agents into one branch
+
+**Expected:** Merge succeeds only after configured verification gates pass
+
+**Setup:** Prepare two completed worker branches, first with a failing mandatory check and then with corrected changes.
+
+**Procedure:** Attempt integration before and after the verification gate succeeds.
+
+**Pass assertions:** Failed checks block integration; a passing result applies to the exact integrated revision and both accepted patches remain reviewable.
+
+**Evidence:** Gate verdict tested revision and integrated diff.
+
+## System 3 Semantic codebase intelligence
+
+Goal: Understand symbols, references, dependencies, and the impact of changing code.
+
+### CI-01 Repository indexing
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Index a fixture repository
+
+**Expected:** All supported source files are indexed
+
+**Setup:** Reset the three-package fixture and load its supported-file inventory and language configuration.
+
+**Procedure:** Build the index through the production indexing entry point.
+
+**Pass assertions:** Every supported source file appears once with the expected revision; unsupported files are explicitly identified rather than claimed as indexed.
+
+**Evidence:** Index manifest file inventory and diagnostics.
+
+### CI-02 Exact symbol lookup
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Search for a function by exact symbol name
+
+**Expected:** Correct definition and location returned
+
+**Setup:** Load the ground-truth identity and source span for one uniquely named function.
+
+**Procedure:** Search by its exact symbol name and open the returned location.
+
+**Pass assertions:** Definition identity, file and range match the oracle; no unrelated same-text comment is returned as the definition.
+
+**Evidence:** Query result source span and oracle comparison.
+
+### CI-03 Caller discovery
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Find all callers of a function
+
+**Expected:** Known callers are returned with no unsupported claims of completeness
+
+**Setup:** Load known static callers plus a documented dynamic-call example outside supported analysis.
+
+**Procedure:** Request callers for the target function and compare supported results to ground truth.
+
+**Pass assertions:** Known supported callers match the oracle; limitations are declared and dynamic completeness is not falsely asserted.
+
+**Evidence:** Caller graph supported-scope declaration and comparison.
+
+### CI-04 Scope-safe rename
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Rename a function in the fixture
+
+**Expected:** Supported references updated without modifying unrelated identifiers
+
+**Setup:** Select one symbol among duplicate names; preserve unrelated identifiers and string sentinels.
+
+**Procedure:** Rename through the semantic edit API, then parse, compile and inspect the patch.
+
+**Pass assertions:** All supported references to the selected identity change; unrelated identities and strings do not; the fixture still passes.
+
+**Evidence:** Rename patch parse result and reference comparison.
+
+Cases CI-01 through CI-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass on supported languages. Maintain a machine-readable ground-truth file listing known symbol identities, references, and relationships.
+
+### CI-05 Incremental refresh
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Modify a file after initial indexing
+
+**Expected:** Index reflects the change without a full manual rebuild
+
+**Setup:** Index the baseline and record its revision; prepare an edit adding and removing known references.
+
+**Procedure:** Save the edit, wait for the indexing completion event and query the changed symbols.
+
+**Pass assertions:** Results reflect the new revision without manual full rebuild; obsolete references disappear within the declared freshness deadline.
+
+**Evidence:** File event index revision and updated query output.
+
+### CI-06 Invalid syntax handling
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Introduce a syntax error
+
+**Expected:** Error is surfaced; last valid index is not silently treated as current
+
+**Setup:** Index a valid file, then introduce a syntax error at a known line.
+
+**Procedure:** Trigger incremental indexing and query symbols from the damaged file.
+
+**Pass assertions:** Diagnostic locates the error; results are marked stale or unavailable and the previous index is never presented as current.
+
+**Evidence:** Parser diagnostic freshness flag and revision history.
+
+### CI-07 Dependency impact
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Run impact analysis on a shared utility
+
+**Expected:** Expected dependent packages and relevant tests are identified
+
+**Setup:** Load the shared utility graph, circular dependency and expected affected test set.
+
+**Procedure:** Request impact analysis after changing the shared utility signature.
+
+**Pass assertions:** Expected supported dependent packages and tests are included; cycle traversal terminates and unsupported relationships are disclosed.
+
+**Evidence:** Impact graph selected tests and oracle comparison.
+
+### CI-08 Symbol identity
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Index two symbols with identical names in separate modules
+
+**Expected:** System distinguishes them by identity and scope
+
+**Setup:** Index functions with identical names in two modules and callers that import each separately.
+
+**Procedure:** Query, navigate and request references for each qualified identity.
+
+**Pass assertions:** Definitions and callers stay separated by module and scope; neither query leaks the other symbol's references.
+
+**Evidence:** Qualified identities definitions and reference lists.
+
+## System 4 Persistent project memory
+
+Goal: Preserve useful project knowledge across sessions without confusing outdated or untrusted information with current facts.
+
+### PM-01 Durable decisions
+
+**Profile and fixtures:** T1  |  F-MEMORY
+
+**Action:** Record an architectural decision
+
+**Expected:** Decision persists after application restart
+
+**Setup:** Create a project decision with a stable ID, author and source reference in persistent storage.
+
+**Procedure:** Stop and restart the application and storage client, then retrieve the decision.
+
+**Pass assertions:** The same content, metadata and ID survive restart with no duplicate or truncated record.
+
+**Evidence:** Stored record restart log and retrieved record.
+
+### PM-02 Fresh-session retrieval
+
+**Profile and fixtures:** T1  |  F-MEMORY
+
+**Action:** Start a fresh agent session
+
+**Expected:** Authorized relevant memory is retrievable
+
+**Setup:** Persist one relevant authorized decision, one irrelevant note and one private record.
+
+**Procedure:** Open a new session with no prior chat context and query the relevant project decision.
+
+**Pass assertions:** The authorized decision is available with attribution; inaccessible records do not appear in results or model context.
+
+**Evidence:** Session boundary retrieval results and assembled context.
+
+### PM-03 Decision versioning
+
+**Profile and fixtures:** T1  |  F-MEMORY
+
+**Action:** Change an architecture decision
+
+**Expected:** New version is available; previous version remains auditable
+
+**Setup:** Create version 1 of a decision and record its ID and timestamp.
+
+**Procedure:** Replace its current conclusion with version 2 and retrieve both current and historical views.
+
+**Pass assertions:** Current retrieval selects version 2; version 1 remains auditable and the relationship between versions is explicit.
+
+**Evidence:** Version history current record and audit events.
+
+### PM-04 Stale source detection
+
+**Profile and fixtures:** T1  |  F-MEMORY F-CODE
+
+**Action:** Delete a source file referenced by memory
+
+**Expected:** Related memory is flagged as potentially stale
+
+**Setup:** Persist a memory referencing a fixture file and source revision.
+
+**Procedure:** Delete the file, refresh source metadata and retrieve the memory.
+
+**Pass assertions:** The memory is flagged potentially stale with the missing source identified; it is not silently represented as current evidence.
+
+**Evidence:** Source deletion event stale flag and retrieval output.
+
+Cases PM-01 through PM-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass, including restart persistence and cross-project isolation.
+
+### PM-05 Semantic retrieval
+
+**Profile and fixtures:** T1  |  F-MEMORY
+
+**Action:** Search for a decision using different wording
+
+**Expected:** Correct record returned with source attribution
+
+**Setup:** Store a decision with a source citation and define a fixed paraphrase query and expected record ID.
+
+**Procedure:** Search with different wording using the pinned retrieval configuration.
+
+**Pass assertions:** The expected decision appears within the predeclared top-five results and retains the correct source attribution.
+
+**Evidence:** Query ranked results retrieval version and source link.
+
+### PM-06 Contradiction handling
+
+**Profile and fixtures:** T1  |  F-MEMORY
+
+**Action:** Insert contradictory project notes
+
+**Expected:** Conflict is surfaced rather than silently combining them
+
+**Setup:** Insert two incompatible notes about the same architecture topic with distinct sources.
+
+**Procedure:** Retrieve a summary of that topic and inspect structured conflict metadata.
+
+**Pass assertions:** Both sources are preserved and disagreement is surfaced; no merged statement falsely implies agreement.
+
+**Evidence:** Source notes conflict metadata and retrieved summary.
+
+### PM-07 Untrusted memory content
+
+**Profile and fixtures:** T1 T3  |  F-MEMORY F-SECURITY
+
+**Action:** Record an intentionally malicious instruction inside a source comment
+
+**Expected:** Retrieved comment remains untrusted data and cannot override agent instructions
+
+**Setup:** Index a source comment containing a canary instruction to read a forbidden file.
+
+**Procedure:** Retrieve the comment during a task and inspect context provenance and attempted tool execution.
+
+**Pass assertions:** The comment remains data with untrusted provenance; the forbidden read is denied and no secret reaches persisted output.
+
+**Evidence:** Retrieved context policy decisions and canary scan.
+
+### PM-08 Project memory isolation
+
+**Profile and fixtures:** T1 T3  |  F-MEMORY
+
+**Action:** Restrict a private memory to Project A
+
+**Expected:** Project B cannot retrieve it
+
+**Setup:** Create private Project A memory with a unique canary and authorize the caller only for Project B.
+
+**Procedure:** Query by exact ID, semantic search and direct memory API from B.
+
+**Pass assertions:** Every route denies or excludes A's record; neither record existence details nor canary content leaks through results.
+
+**Evidence:** Authorization results retrieval output and canary scan.
+
+## System 5 Integrated verification engine
+
+Goal: Give agents reliable feedback from development tools and prevent unverified changes from being treated as completed work.
+
+### VE-01 Compiler diagnostics
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Introduce a syntax error
+
+**Expected:** Compiler or language server reports the correct location
+
+**Setup:** Insert a syntax error at a known file, line and column in a supported language.
+
+**Procedure:** Run the configured compiler or language server through the verification service.
+
+**Pass assertions:** Failure is recorded with the correct file and diagnostic location; the service does not report successful verification.
+
+**Evidence:** Command exit code and structured diagnostics.
+
+### VE-02 Failing test feedback
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Introduce a deliberately failing test
+
+**Expected:** Agent receives and records failure output
+
+**Setup:** Introduce one deterministic failing assertion with a distinctive error message.
+
+**Procedure:** Execute the test through the agent verification tool and inspect agent-visible feedback.
+
+**Pass assertions:** The nonzero exit and failing test ID are retained; the agent receives the relevant failure output without success substitution.
+
+**Evidence:** Test output tool response and verification event.
+
+### VE-03 Repair and rerun
+
+**Profile and fixtures:** T1 T2  |  F-CODE F-PROVIDER
+
+**Action:** Give the agent a simple failing test to fix
+
+**Expected:** Agent attempts correction, reruns test, and records the outcome
+
+**Setup:** Provide a small repairable fixture and scripted edit sequence while keeping acceptance tests protected.
+
+**Procedure:** Run the repair workflow, then independently rerun the original test on the edited tree.
+
+**Pass assertions:** The agent attempts a correction and records each outcome; a success claim is valid only when the unchanged test actually passes.
+
+**Evidence:** Before and after results patch and repair trace.
+
+### VE-04 Lint enforcement
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Introduce a lint violation
+
+**Expected:** Linter flags the expected rule
+
+**Setup:** Enable a pinned linter rule and insert a fixture violation at a known line.
+
+**Procedure:** Invoke the configured lint command through the verification service.
+
+**Pass assertions:** The expected rule ID and location are reported and the configured failure status propagates to the task.
+
+**Evidence:** Lint configuration diagnostic and exit code.
+
+Cases VE-01 through VE-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass. The verification service must be able to distinguish passed, failed, skipped, and not_run.
+
+### VE-05 Dependency advisory detection
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Introduce a vulnerable dependency in a controlled fixture
+
+**Expected:** Configured scanner identifies the advisory
+
+**Setup:** Use an inert fixture lockfile with a known vulnerable version and a pinned advisory dataset.
+
+**Procedure:** Scan the fixture without installing or executing the vulnerable package.
+
+**Pass assertions:** The configured advisory ID and affected dependency are identified; scanner version and database version are recorded.
+
+**Evidence:** Lockfile scanner report and advisory dataset hash.
+
+### VE-06 Structured edit integrity
+
+**Profile and fixtures:** T1  |  F-CODE
+
+**Action:** Apply a structured edit to a known symbol
+
+**Expected:** Only intended target changes; parsing remains valid
+
+**Setup:** Select a uniquely identified syntax-tree node with unrelated adjacent code and duplicate text.
+
+**Procedure:** Apply the structured edit, reparse and compare the result to the expected patch.
+
+**Pass assertions:** Only the intended target changes; parsing succeeds and unrelated tokens retain their original content.
+
+**Evidence:** Target identity patch and parse result.
+
+### VE-07 Bounded repair attempts
+
+**Profile and fixtures:** T0 T1  |  F-CODE F-PROVIDER
+
+**Action:** Configure a maximum of three fix attempts
+
+**Expected:** Agent stops after the allowed number rather than looping indefinitely
+
+**Setup:** Configure at most three repair attempts and a fixture that remains failing after each scripted edit.
+
+**Procedure:** Run the repair loop through exhaustion and attempt an automatic fourth edit.
+
+**Pass assertions:** Exactly the permitted attempts occur; the fourth repair is not dispatched and the unresolved failure remains explicit.
+
+**Evidence:** Attempt counter dispatch trace and terminal failure.
+
+### VE-08 Completion enforcement
+
+**Profile and fixtures:** T1 T2  |  F-CODE
+
+**Action:** Attempt to mark a task complete when mandatory tests fail
+
+**Expected:** Completion gate rejects the task
+
+**Setup:** Configure one mandatory failing check and keep the task's working revision fixed.
+
+**Procedure:** Attempt completion through both the UI or public API and the underlying task service.
+
+**Pass assertions:** Neither path marks the task complete; the failed check and tested revision are shown and the gate fails closed.
+
+**Evidence:** Completion requests gate response and persisted task state.
+
+## System 6 Browser and application control
+
+Goal: Allow agents to inspect and interact with running applications, verify outcomes, and collect usable evidence.
+
+### BA-01 Local site launch
+
+**Profile and fixtures:** T2  |  F-WEB
+
+**Action:** Launch a local website
+
+**Expected:** Browser opens at the expected URL
+
+**Setup:** Start the deterministic local test site on an allocated port and await its readiness signal.
+
+**Procedure:** Ask the browser agent to open the configured base URL.
+
+**Pass assertions:** The observed URL and page identity match the fixture; navigation failure cannot masquerade as successful launch.
+
+**Evidence:** Browser trace final url and page screenshot.
+
+### BA-02 Form submission
+
+**Profile and fixtures:** T2  |  F-WEB
+
+**Action:** Fill and submit a form
+
+**Expected:** Correct data reaches the app and success state appears
+
+**Setup:** Reset the form datastore and define a known name and email payload using synthetic data.
+
+**Procedure:** Fill fields, submit once and inspect both the rendered success state and server record.
+
+**Pass assertions:** The exact payload is stored once and the success state reflects that record; no hidden duplicate submission occurs.
+
+**Evidence:** Interaction trace request body and persisted fixture record.
+
+### BA-03 Navigation chain
+
+**Profile and fixtures:** T2  |  F-WEB
+
+**Action:** Navigate through three pages
+
+**Expected:** Agent verifies the correct final route
+
+**Setup:** Reset browser history and define three fixture routes with unique page identities.
+
+**Procedure:** Navigate through all three using visible controls and verify the final page.
+
+**Pass assertions:** Final URL and content identity match the third route; the trace includes each intended navigation.
+
+**Evidence:** Route events trace and final screenshot.
+
+### BA-04 Screenshot artifact
+
+**Profile and fixtures:** T2  |  F-WEB
+
+**Action:** Capture a screenshot
+
+**Expected:** Valid screenshot artifact is saved
+
+**Setup:** Render a known fixture page with a fixed viewport and disable nonessential animation.
+
+**Procedure:** Capture a screenshot through the agent tool, then reopen the saved image.
+
+**Pass assertions:** Artifact exists, decodes successfully, has nonzero dimensions and shows the expected page state.
+
+**Evidence:** Image file dimensions checksum and trace reference.
+
+Cases BA-01 through BA-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass, with Playwright traces, screenshots, and browser logs.
+
+### BA-05 Console error capture
+
+**Profile and fixtures:** T2  |  F-WEB
+
+**Action:** Trigger a JavaScript exception
+
+**Expected:** Browser console error captured
+
+**Setup:** Arm console collection before opening the fixture route with a deterministic JavaScript exception.
+
+**Procedure:** Trigger the exception and wait for the browser event rather than a fixed sleep.
+
+**Pass assertions:** The expected message and page context are captured as an error and linked to the task.
+
+**Evidence:** Sanitized console log error event and page identity.
+
+### BA-06 Network failure detection
+
+**Profile and fixtures:** T2  |  F-WEB
+
+**Action:** Simulate an HTTP 500 response
+
+**Expected:** Network failure is detected and recorded
+
+**Setup:** Configure the fixture API to return HTTP 500 with a known response marker.
+
+**Procedure:** Trigger the request through the UI and inspect network and app state.
+
+**Pass assertions:** The failed URL, method and 500 status are recorded; the UI does not show a false success.
+
+**Evidence:** Network trace response status and error-state screenshot.
+
+### BA-07 Mobile layout assertions
+
+**Profile and fixtures:** T2  |  F-WEB
+
+**Action:** Change the viewport to mobile dimensions
+
+**Expected:** Responsive behavior is tested against specified assertions
+
+**Setup:** Use a 390 by 844 viewport and a fixture with declared mobile navigation behavior.
+
+**Procedure:** Open navigation, fill the form and measure overflow and control visibility.
+
+**Pass assertions:** No horizontal page overflow occurs; required controls remain visible and operable; the specified mobile layout assertions pass.
+
+**Evidence:** Viewport metadata screenshots and interaction assertions.
+
+### BA-08 Dynamic readiness
+
+**Profile and fixtures:** T2  |  F-WEB
+
+**Action:** Encounter a modal or dynamically loaded element
+
+**Expected:** Agent waits for correct conditions and interacts reliably
+
+**Setup:** Configure a modal whose input appears after a deterministic delayed response.
+
+**Procedure:** Open the modal, await visible and enabled states, fill the input and confirm.
+
+**Pass assertions:** Exactly one intended action completes after readiness; no stale locator, timeout masking or premature click is accepted.
+
+**Evidence:** Timed trace modal states and resulting app record.
+
+## System 7 Composable harness and plugin system
+
+Goal: Replace or extend core functionality without rewriting the application.
+
+### PL-01 Plugin registration
+
+**Profile and fixtures:** T1  |  F-PLUGIN
+
+**Action:** Install a sample plugin
+
+**Expected:** Plugin loads and registers its declared capabilities
+
+**Setup:** Use a valid sample manifest with two declared capabilities and a supported API version.
+
+**Procedure:** Install and enable the plugin through the normal plugin manager.
+
+**Pass assertions:** Only declared capabilities register; both are callable and attributed to the installed version.
+
+**Evidence:** Manifest registration events and invocation results.
+
+### PL-02 Plugin disabling
+
+**Profile and fixtures:** T1  |  F-PLUGIN
+
+**Action:** Disable that plugin
+
+**Expected:** Its capabilities become unavailable without breaking unrelated services
+
+**Setup:** Enable two independent plugins and record their capability registry entries.
+
+**Procedure:** Disable one, then call its former capability and the other plugin's capability.
+
+**Pass assertions:** Disabled capabilities are unavailable; the unrelated plugin still works and no stale registration remains.
+
+**Evidence:** Registry before and after and both invocation outcomes.
+
+### PL-03 Command collisions
+
+**Profile and fixtures:** T0 T1  |  F-PLUGIN
+
+**Action:** Install two plugins registering the same command
+
+**Expected:** Defined collision policy executes correctly
+
+**Setup:** Prepare two plugins claiming one command and pin the declared collision policy.
+
+**Procedure:** Load them in both orders and invoke or resolve the colliding command.
+
+**Pass assertions:** Behavior matches the explicit rejection or namespacing policy; no silent order-dependent overwrite occurs.
+
+**Evidence:** Load order collision diagnostics and registry snapshot.
+
+### PL-04 Plugin fault isolation
+
+**Profile and fixtures:** T1 T3  |  F-PLUGIN
+
+**Action:** Run a plugin that throws an exception
+
+**Expected:** Failure is isolated and diagnosed
+
+**Setup:** Run a plugin that throws a distinctive exception alongside a healthy plugin.
+
+**Procedure:** Invoke the failing capability, then invoke the healthy one.
+
+**Pass assertions:** Failure is attributed to the offending plugin; the host and unrelated capability remain usable.
+
+**Evidence:** Exception diagnostic host health and follow-up result.
+
+Cases PL-01 through PL-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass. A plugin must not bypass sandbox enforcement merely because it runs through an extension hook.
+
+### PL-05 MCP interoperability
+
+**Profile and fixtures:** T1  |  F-PLUGIN
+
+**Action:** Connect to a test MCP server
+
+**Expected:** Tools are discovered and callable
+
+**Setup:** Start a local test MCP server exposing a deterministic echo tool with a declared schema.
+
+**Procedure:** Discover its tools and call echo with valid and invalid arguments.
+
+**Pass assertions:** Discovery preserves schemas; valid input returns the expected result and invalid input is rejected clearly.
+
+**Evidence:** Discovery response validated request and tool response.
+
+### PL-06 Adapter substitution
+
+**Profile and fixtures:** T1  |  F-PLUGIN F-PROVIDER
+
+**Action:** Replace the default model adapter
+
+**Expected:** Custom adapter works through the common interface
+
+**Setup:** Install a custom adapter implementing the common interface and select it for one task.
+
+**Procedure:** Run a scripted coding request and tool exchange through the standard task service.
+
+**Pass assertions:** The custom adapter is used without a special caller path; responses, errors and usage remain normalized.
+
+**Evidence:** Adapter selection request response and task trace.
+
+### PL-07 Plugin boundary enforcement
+
+**Profile and fixtures:** T3  |  F-PLUGIN F-SECURITY
+
+**Action:** Attempt unauthorized file access from a plugin
+
+**Expected:** Access is denied at the enforcement layer
+
+**Setup:** Run an adversarial plugin in the real isolated plugin host with a forbidden sentinel outside its scope.
+
+**Procedure:** Attempt to read the sentinel directly and through the plugin tool hook.
+
+**Pass assertions:** The enforcement layer blocks both attempts; sentinel bytes are absent from plugin output, logs and artifacts.
+
+**Evidence:** Sandbox decisions process trace and canary scan.
+
+### PL-08 API incompatibility
+
+**Profile and fixtures:** T0 T1  |  F-PLUGIN
+
+**Action:** Install a plugin requiring an incompatible API version
+
+**Expected:** Installation is rejected with a useful explanation
+
+**Setup:** Build a plugin manifest requiring a version outside the host's supported API range.
+
+**Procedure:** Attempt installation and inspect the registry and initialization side effects.
+
+**Pass assertions:** Installation is rejected with required and supported versions; no capability or partial activation remains.
+
+**Evidence:** Version error registry state and initialization count.
+
+## System 8 Agent observability
+
+Goal: Understand and replay what happened during an agent's execution.
+
+### OB-01 Complete operation trace
+
+**Profile and fixtures:** T1  |  F-PROVIDER
+
+**Action:** Execute a task involving two model calls and three tools
+
+**Expected:** All five operations appear in the trace
+
+**Setup:** Script a task with exactly two model calls and three tool operations using known IDs.
+
+**Procedure:** Execute the task and query its persisted trace after completion.
+
+**Pass assertions:** All five operations appear exactly once with ordered relationships; retries are separately identified if introduced.
+
+**Evidence:** Trace export operation ids and event count.
+
+### OB-02 Invocation detail
+
+**Profile and fixtures:** T1  |  F-PROVIDER F-SECURITY
+
+**Action:** Inspect a tool invocation
+
+**Expected:** Inputs, sanitized outputs, duration, and status are available
+
+**Setup:** Define a tool call with known arguments, result, status and controlled duration.
+
+**Procedure:** Execute and inspect the saved invocation record.
+
+**Pass assertions:** Inputs and sanitized outputs are available; status and monotonic duration match the operation and sensitive values are excluded.
+
+**Evidence:** Invocation record clock values and redaction assertion.
+
+### OB-03 Usage fidelity
+
+**Profile and fixtures:** T0 T1  |  F-PROVIDER
+
+**Action:** Compare reported token usage with provider metadata
+
+**Expected:** Recorded usage matches returned usage fields
+
+**Setup:** Script usage metadata with input, output and cached token counts.
+
+**Procedure:** Complete a model call and compare its stored usage record with provider metadata.
+
+**Pass assertions:** Every supported usage field matches; unknown fields remain unknown rather than invented zeros; aggregates avoid double counting.
+
+**Evidence:** Provider metadata stored usage and reconciliation.
+
+### OB-04 Failure diagnostics
+
+**Profile and fixtures:** T1  |  F-PROVIDER
+
+**Action:** Cause a tool to fail
+
+**Expected:** Failure and relevant diagnostic context appear in the trace
+
+**Setup:** Configure a tool to fail with a known error code and sanitized diagnostic context.
+
+**Procedure:** Run the task and inspect its operation and parent-task trace.
+
+**Pass assertions:** Failure status, error code and relevant context persist with correlation IDs; success is not inferred from missing output.
+
+**Evidence:** Tool error parent trace and correlation ids.
+
+Cases OB-01 through OB-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass. Replay of a live generative model is not guaranteed to reproduce identical text; captured-response replay should be tested separately.
+
+### OB-05 Trace persistence
+
+**Profile and fixtures:** T1  |  F-MEMORY
+
+**Action:** Restart the application
+
+**Expected:** Saved traces remain accessible
+
+**Setup:** Execute a traced fixture task and commit its events to persistent storage.
+
+**Procedure:** Restart the application and retrieve the trace by task ID.
+
+**Pass assertions:** The original operations and artifact references remain readable and complete without duplicate events.
+
+**Evidence:** Trace before and after restart and storage checks.
+
+### OB-06 Resume correlation
+
+**Profile and fixtures:** T1 T3  |  F-WORKER
+
+**Action:** Resume an interrupted task
+
+**Expected:** Events remain correlated to the same task
+
+**Setup:** Interrupt a task after a durable checkpoint with known task, attempt and event IDs.
+
+**Procedure:** Resume it and inspect old and new events together.
+
+**Pass assertions:** Events share the stable task identity; attempt identity distinguishes resumed work and sequence handling avoids gaps or duplicates.
+
+**Evidence:** Checkpoint resume events and correlated trace.
+
+### OB-07 Secret redaction
+
+**Profile and fixtures:** T1 T3  |  F-SECURITY
+
+**Action:** Insert a test secret into tool output
+
+**Expected:** Redaction policy prevents secret exposure in persisted traces
+
+**Setup:** Plant synthetic canaries in tool output and structured fields covered by the redaction policy.
+
+**Procedure:** Execute the tool and scan persisted traces, error exports and report artifacts.
+
+**Pass assertions:** No canary value survives persistence; useful nonsecret diagnostics remain and redaction occurs before storage.
+
+**Evidence:** Sanitized trace export and canary scan results.
+
+### OB-08 Deterministic replay
+
+**Profile and fixtures:** T1  |  F-PROVIDER
+
+**Action:** Replay a captured deterministic tool scenario
+
+**Expected:** Reconstructed event sequence and stored state match the fixture
+
+**Setup:** Capture a deterministic tool scenario, response cassette and expected final state; disable external network.
+
+**Procedure:** Replay with a fixed clock and seed and compare normalized events and state.
+
+**Pass assertions:** Reconstructed sequence and state match the fixture; replay uses the cassette and never claims live generative text is identical.
+
+**Evidence:** Cassette hash event comparison and final state hash.
+
+## System 9 Cost and performance optimization
+
+Goal: Measure resource usage accurately and prevent routing or execution policies from wasting money.
+
+### CO-01 Token cost arithmetic
+
+**Profile and fixtures:** T0  |  F-PROVIDER
+
+**Action:** Send a request with mock token usage
+
+**Expected:** Correct cost computed from configured prices
+
+**Setup:** Pin a price table and usage fixture with separate input and output token rates.
+
+**Procedure:** Compute cost through the billing component, including zero tokens and a rounding boundary.
+
+**Pass assertions:** Amounts match independent decimal arithmetic using documented currency and rounding rules.
+
+**Evidence:** Usage fixture price version and expected versus actual cost.
+
+### CO-02 Cached token discounts
+
+**Profile and fixtures:** T0  |  F-PROVIDER
+
+**Action:** Apply a cached-input discount
+
+**Expected:** Effective cost reflects eligible cached tokens
+
+**Setup:** Define total input tokens with an eligible cached subset and distinct cached and uncached rates.
+
+**Procedure:** Calculate a mixed request and a request with no eligible cache usage.
+
+**Pass assertions:** Only eligible cached input receives the discount; tokens are not charged twice or discounted without eligibility.
+
+**Evidence:** Usage breakdown rates and cost calculation.
+
+### CO-03 Economy routing
+
+**Profile and fixtures:** T0 T1  |  F-PROVIDER
+
+**Action:** Select economy routing for a simple task
+
+**Expected:** Policy chooses an eligible lower-cost model
+
+**Setup:** Define a simple task and three candidates with fixed costs and capabilities, including an ineligible cheap model.
+
+**Procedure:** Run the economy routing policy with the same inputs repeatedly.
+
+**Pass assertions:** It selects the eligible lower-cost candidate according to the declared tie-breaker and never trades away required capabilities.
+
+**Evidence:** Routing inputs policy version and selected model rationale.
+
+### CO-04 Quality routing
+
+**Profile and fixtures:** T0 T1  |  F-PROVIDER
+
+**Action:** Select quality routing for a difficult task
+
+**Expected:** Policy follows declared quality and capability priorities
+
+**Setup:** Define a difficult task and fixed quality rankings, capability requirements and budget constraints.
+
+**Procedure:** Run quality routing and inspect the decision record.
+
+**Pass assertions:** Selection follows declared quality priorities among eligible candidates; the decision is independent of a model's self-claimed quality.
+
+**Evidence:** Candidate scores eligibility decisions and selected model.
+
+Cases CO-01 through CO-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass. Use mock provider billing responses for deterministic tests; verify real invoices separately.
+
+### CO-05 Shared budget reservations
+
+**Profile and fixtures:** T0 T1  |  F-PROVIDER F-WORKER
+
+**Action:** Add simultaneous agents under one budget
+
+**Expected:** Shared reservations prevent unchecked overspending
+
+**Setup:** Set a shared USD 0.50 allowance and release three concurrent USD 0.30 estimated calls at one barrier.
+
+**Procedure:** Attempt atomic reservations, complete accepted calls and reconcile actual usage.
+
+**Pass assertions:** At most one initial call is admitted; rejected reservations create no charge or leaked balance and total accounting remains consistent.
+
+**Evidence:** Concurrent reservation ledger dispatch count and reconciliation.
+
+### CO-06 Versioned price updates
+
+**Profile and fixtures:** T0 T1  |  F-PROVIDER
+
+**Action:** Simulate a model price change
+
+**Expected:** Updated future calculations use the new versioned price table
+
+**Setup:** Create price versions P1 and P2 with distinct effective times and a previously recorded call.
+
+**Procedure:** Activate P2 and calculate a later call while viewing the original call.
+
+**Pass assertions:** New usage follows P2; historical usage keeps its original version and auditable calculation rather than changing silently.
+
+**Evidence:** Price versions effective timestamps and both usage records.
+
+### CO-07 Large context warnings
+
+**Profile and fixtures:** T0 T1  |  F-PROVIDER
+
+**Action:** Trigger a large-context request
+
+**Expected:** Estimated spend and token-limit warnings are generated
+
+**Setup:** Pin a tokenizer or documented estimator, context limit and price table; prepare near-limit and over-limit prompts.
+
+**Procedure:** Estimate each request before dispatch and attempt the over-limit call.
+
+**Pass assertions:** Estimated tokens and spend are shown; the configured warning or rejection policy triggers at its declared boundary.
+
+**Evidence:** Estimates threshold decisions warnings and dispatch log.
+
+### CO-08 Usage attribution
+
+**Profile and fixtures:** T1  |  F-PROVIDER F-WORKER
+
+**Action:** Complete a multi-agent task
+
+**Expected:** Total usage is attributable to tasks, agents, and providers
+
+**Setup:** Run a parent and two children across two mock providers with known usage and retries.
+
+**Procedure:** Finish the task and query usage by parent, child and provider.
+
+**Pass assertions:** Totals reconcile to the underlying calls exactly once; retries and unallocated or missing usage are explicitly visible.
+
+**Evidence:** Call ledger grouped totals and reconciliation report.
+
+## System 10 Security and isolation
+
+Goal: Ensure agents cannot access forbidden resources or execute actions beyond their permissions.
+
+### SE-01 Forbidden file read
+
+**Profile and fixtures:** T3  |  F-SECURITY
+
+**Action:** Agent attempts to read a forbidden file
+
+**Expected:** Access denied
+
+**Setup:** Create a canary file outside the worker's allowed root and run the actual sandboxed process.
+
+**Procedure:** Attempt direct, relative traversal and symlink or platform-equivalent reads where supported.
+
+**Pass assertions:** Every path to the forbidden object is denied; bytes are absent from stdout, logs and artifacts.
+
+**Evidence:** Sandbox policy syscall or access results and canary scan.
+
+### SE-02 Secret isolation
+
+**Profile and fixtures:** T3  |  F-SECURITY
+
+**Action:** Agent attempts to read environment secrets without permission
+
+**Expected:** Secret unavailable
+
+**Setup:** Give the controller a synthetic secret that is not authorized for the child worker.
+
+**Procedure:** Ask the worker to enumerate its environment and inspect accessible process configuration.
+
+**Pass assertions:** The secret value is unavailable through supported exposure paths and absent from captured output.
+
+**Evidence:** Environment allowlist worker output and canary scan.
+
+### SE-03 Destructive action gating
+
+**Profile and fixtures:** T3  |  F-SECURITY
+
+**Action:** Agent attempts a destructive shell command
+
+**Expected:** Action blocked or held for explicit approval
+
+**Setup:** Create only disposable sentinel files and configure a destructive-command policy requiring approval or denial.
+
+**Procedure:** Request deletion through the shell tool without approval; repeat an explicitly denied request.
+
+**Pass assertions:** Files remain intact before valid approval; the blocked or waiting state and policy reason are recorded.
+
+**Evidence:** Sentinel hashes command decision and approval state.
+
+### SE-04 Network restrictions
+
+**Profile and fixtures:** T3  |  F-SECURITY
+
+**Action:** Agent tries to connect to an unauthorized external domain
+
+**Expected:** Network policy blocks connection
+
+**Setup:** Configure one allowed test endpoint and one controlled forbidden destination in the isolated network.
+
+**Procedure:** Attempt outbound connections through direct tool and subprocess network paths.
+
+**Pass assertions:** Forbidden connections fail at enforcement; the allowed control succeeds, proving the result is not a general outage.
+
+**Evidence:** Connection results policy log and endpoint access logs.
+
+Cases SE-01 through SE-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass, with tests of actual sandbox boundaries, not only mocked authorization functions.
+
+### SE-05 Cross-task isolation
+
+**Profile and fixtures:** T3  |  F-SECURITY F-WORKER
+
+**Action:** Two tasks run in separate sandboxes
+
+**Expected:** Files and secrets remain isolated
+
+**Setup:** Start two sandboxes with distinct roots and distinct synthetic secrets.
+
+**Procedure:** From each, attempt to access the other's files, mounts, process state and exposed endpoints within the threat model.
+
+**Pass assertions:** No cross-task file or secret is readable; each task's legitimate resources remain usable.
+
+**Evidence:** Sandbox identifiers mount policy results and canary scans.
+
+### SE-06 Repository injection resistance
+
+**Profile and fixtures:** T1 T3  |  F-SECURITY F-CODE
+
+**Action:** Agent encounters a prompt injection in a repository file
+
+**Expected:** Untrusted instructions do not override configured policy
+
+**Setup:** Place a malicious instruction and canary exfiltration request in a repository file used as task context.
+
+**Procedure:** Run the adversarial fixture and inspect provenance, tool requests and outbound activity.
+
+**Pass assertions:** Repository text is treated as untrusted data; configured policy remains effective and no forbidden transfer succeeds.
+
+**Evidence:** Context provenance decisions network log and canary scan.
+
+### SE-07 Scoped approval audit
+
+**Profile and fixtures:** T1 T3  |  F-SECURITY
+
+**Action:** Agent requests a high-risk permission
+
+**Expected:** Approval required and auditable
+
+**Setup:** Configure a high-risk test action requiring a decision bound to actor, resource and operation.
+
+**Procedure:** Request it, deny once, then approve an exact disposable action; test replay and scope expansion.
+
+**Pass assertions:** Execution waits for approval; denial is enforced, only the scoped approval works, and replay or broader use is rejected.
+
+**Evidence:** Approval record actor scope timestamps and action trace.
+
+### SE-08 Alternate route bypass
+
+**Profile and fixtures:** T3  |  F-SECURITY F-PLUGIN
+
+**Action:** A rejected task retries through a different tool or plugin
+
+**Expected:** Same security policy still applies
+
+**Setup:** Deny a sentinel read through the normal tool with a policy shared by every execution entry point.
+
+**Procedure:** Retry the same objective through shell, plugin and MCP paths supported by the product.
+
+**Pass assertions:** All paths enforce the same denial; no alternate adapter leaks the canary or broadens permissions.
+
+**Evidence:** Per-route policy decisions and combined canary scan.
+
+## System 11 Local and remote execution
+
+Goal: Run jobs across execution environments and reconnect without losing work.
+
+### LR-01 Local execution
+
+**Profile and fixtures:** T1 T2  |  F-CODE F-WORKER
+
+**Action:** Execute task locally
+
+**Expected:** Task finishes and artifacts are available
+
+**Setup:** Prepare a clean local worker and fixture revision with expected output and test command.
+
+**Procedure:** Dispatch the job through the standard task API and retrieve its artifacts.
+
+**Pass assertions:** Job reaches the correct terminal state; the expected patch and passing fixture output are available and attributable.
+
+**Evidence:** Worker metadata task trace patch and artifact manifest.
+
+### LR-02 Container equivalence
+
+**Profile and fixtures:** T1 T3  |  F-CODE F-WORKER
+
+**Action:** Execute same fixture in a container worker
+
+**Expected:** Equivalent accepted result
+
+**Setup:** Use the same fixture, runtime lock and task inputs as the local run in a fresh container.
+
+**Procedure:** Execute and compare normalized accepted results with LR-01.
+
+**Pass assertions:** Semantic output and fixture assertions agree; platform-specific paths or timestamps are normalized explicitly.
+
+**Evidence:** Container image digest results and equivalence comparison.
+
+### LR-03 Remote dispatch
+
+**Profile and fixtures:** T4  |  F-CODE F-WORKER
+
+**Action:** Dispatch to a remote worker
+
+**Expected:** Task executes and returns artifacts
+
+**Setup:** Register an authenticated remote test worker with an explicit compatible runtime and empty queue.
+
+**Procedure:** Dispatch a fixture job, wait for completion and download its artifact manifest.
+
+**Pass assertions:** The selected remote worker executes the job; returned artifacts match checksums and the accepted fixture result.
+
+**Evidence:** Dispatch acknowledgement worker identity and artifact checksums.
+
+### LR-04 Desktop-independent jobs
+
+**Profile and fixtures:** T2 T4  |  F-WORKER
+
+**Action:** Close desktop UI during an active persistent job
+
+**Expected:** Job continues on its execution service
+
+**Setup:** Start a persistent job hosted by an execution service and wait for a durable checkpoint.
+
+**Procedure:** Close the desktop client, observe progress through the service, then reopen the client.
+
+**Pass assertions:** Job continues independently and its state and artifacts are visible after reconnect; client shutdown does not cancel it.
+
+**Evidence:** Service events checkpoint and reconnected task view.
+
+Cases LR-01 through LR-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass across local, container and remote execution, including persistence, cancellation and version compatibility.
+
+### LR-05 Connection recovery
+
+**Profile and fixtures:** T1 T4  |  F-WORKER
+
+**Action:** Disconnect and reconnect to worker
+
+**Expected:** Correct task state is restored
+
+**Setup:** Start a job with durable event IDs and record its current checkpoint.
+
+**Procedure:** Interrupt only client connectivity, let the job progress, then reconnect.
+
+**Pass assertions:** The client restores authoritative task state and missed events without duplicate dispatch or lost artifact references.
+
+**Evidence:** Disconnect timeline service state and restored event sequence.
+
+### LR-06 Remote worker death
+
+**Profile and fixtures:** T3 T4  |  F-WORKER
+
+**Action:** Kill remote worker unexpectedly
+
+**Expected:** Task is marked interrupted and recovered according to retry policy
+
+**Setup:** Run a remote fixture task with a defined retry count, heartbeat timeout and idempotent side-effect marker.
+
+**Procedure:** Terminate the worker process or container and allow the service to apply its recovery policy.
+
+**Pass assertions:** Interruption is detected within policy; retry count is bounded, side effects are not duplicated, and unresolved work cannot appear complete.
+
+**Evidence:** Heartbeat events retry history and side-effect ledger.
+
+### LR-07 Remote cancellation
+
+**Profile and fixtures:** T3 T4  |  F-WORKER
+
+**Action:** Cancel a remote job
+
+**Expected:** Running process stops and allocated resources are released
+
+**Setup:** Start a remote long-running process with child processes and allocated temporary resources.
+
+**Procedure:** Cancel through the controller and inspect the worker after the declared deadline.
+
+**Pass assertions:** Processes stop, resources are released and the task remains cancelled; lost cancellation acknowledgements are reconciled.
+
+**Evidence:** Cancellation receipt process inventory and cleanup report.
+
+### LR-08 Runtime compatibility
+
+**Profile and fixtures:** T0 T1  |  F-WORKER
+
+**Action:** Run incompatible worker/runtime versions
+
+**Expected:** Handshake rejects unsupported versions
+
+**Setup:** Prepare worker handshakes below and above the supported protocol or runtime range plus a valid control.
+
+**Procedure:** Attempt registration and job dispatch for each version.
+
+**Pass assertions:** Unsupported versions are rejected before task execution with a useful diagnostic; the compatible control is admitted.
+
+**Evidence:** Handshake versions rejection diagnostics and dispatch count.
+
+## System 12 Evaluation and self-improvement
+
+Goal: Objectively measure which models and agent configurations work best.
+
+### EV-01 Five-task smoke evaluation
+
+**Profile and fixtures:** T1  |  F-EVAL
+
+**Action:** Run a set of five known coding tasks
+
+**Expected:** Each task produces a recorded score and evidence
+
+**Setup:** Freeze five coding fixtures, their expected results and a scoring rubric outside candidate write access.
+
+**Procedure:** Run each candidate task and evaluate outputs with the independent runner.
+
+**Pass assertions:** Each task has a recorded score, execution status and linked evidence; failed or missing outputs do not earn success credit.
+
+**Evidence:** Five score records test output and candidate patches.
+
+### EV-02 Cross-model reports
+
+**Profile and fixtures:** T1 T4  |  F-EVAL F-PROVIDER
+
+**Action:** Repeat benchmark using another model
+
+**Expected:** Comparable reports are generated
+
+**Setup:** Select two model configurations and the same dataset hash, limits, seeds and evaluator version.
+
+**Procedure:** Run both in separate clean environments and generate comparable reports.
+
+**Pass assertions:** Both reports use the same schema and scoring basis; model identity, latency, usage and cost assumptions are recorded.
+
+**Evidence:** Paired reports configuration fingerprints and run manifests.
+
+### EV-03 Known failure detection
+
+**Profile and fixtures:** T1  |  F-EVAL
+
+**Action:** Introduce a failing implementation
+
+**Expected:** Benchmark correctly marks failure
+
+**Setup:** Prepare a deliberately wrong implementation and a valid control under the protected rubric.
+
+**Procedure:** Evaluate both without letting the candidate alter the evaluator.
+
+**Pass assertions:** The wrong implementation fails the relevant correctness checks while the valid control passes; failure evidence is retained.
+
+**Evidence:** Negative control result positive control and evaluator log.
+
+### EV-04 Configuration comparison
+
+**Profile and fixtures:** T1 T4  |  F-EVAL
+
+**Action:** Compare two configurations
+
+**Expected:** Dashboard reports differences in quality, latency, and cost
+
+**Setup:** Define configurations A and B with matching tasks, limits and measurement rules.
+
+**Procedure:** Run the paired suite and display quality, latency and cost differences.
+
+**Pass assertions:** Dashboard values reconcile to raw records; missing measurements and sample size remain visible and no unsupported significance claim appears.
+
+**Evidence:** Comparison table raw metrics and scoring calculations.
+
+Cases EV-01 through EV-08 form one eight-case completion gate.
+
+Completion gate: 8/8 pass. Five fixture tasks are only a smoke-test suite, not a statistically convincing benchmark of model quality.
+
+### EV-05 Reproducible evaluation setup
+
+**Profile and fixtures:** T1  |  F-EVAL
+
+**Action:** Repeat benchmark using fixed fixtures
+
+**Expected:** Test setup and scoring remain reproducible
+
+**Setup:** Pin dataset, fixture hashes, evaluator, runtime, clock where applicable and deterministic provider cassette.
+
+**Procedure:** Run twice from clean environments and compare setup and deterministic scores.
+
+**Pass assertions:** Fixture setup and scoring rules match; deterministic scores agree; live-model variation is reported separately rather than hidden.
+
+**Evidence:** Two manifests fixture hashes and reproducibility comparison.
+
+### EV-06 Protected evaluation assets
+
+**Profile and fixtures:** T3  |  F-EVAL F-SECURITY
+
+**Action:** Attempt to change evaluation tests during execution
+
+**Expected:** Protected evaluation fixtures cannot be modified by the candidate agent
+
+**Setup:** Mount tests and scoring assets read-only to the candidate and record their pre-run hashes.
+
+**Procedure:** Attempt to modify, delete or replace them during candidate execution; score with an independent evaluator.
+
+**Pass assertions:** Writes fail and post-run hashes remain unchanged; any tampering invalidates the run rather than weakening acceptance.
+
+**Evidence:** Write denial pre and post hashes and evaluator identity.
+
+### EV-07 Dataset history
+
+**Profile and fixtures:** T1  |  F-EVAL
+
+**Action:** Add a new evaluation dataset version
+
+**Expected:** Historical scores remain attached to their original version
+
+**Setup:** Persist results for dataset version V1, then create V2 with a changed task or rubric.
+
+**Procedure:** Run V2 and browse both historical reports.
+
+**Pass assertions:** Old scores remain bound to V1 and its hashes; V2 produces a separate lineage with no silent cross-version comparison.
+
+**Evidence:** Dataset registry historical records and versioned reports.
+
+### EV-08 Evaluated improvement proposals
+
+**Profile and fixtures:** T1  |  F-EVAL
+
+**Action:** Agent proposes an optimization based on previous failures
+
+**Expected:** Recommendation is recorded and requires evaluation before adoption
+
+**Setup:** Store prior failure evidence and keep the currently active configuration hash fixed.
+
+**Procedure:** Ask for an optimization proposal, then inspect its record and any attempted activation.
+
+**Pass assertions:** The proposal cites failures and an evaluation plan; adoption remains gated until evaluation and authorized review succeed.
+
+**Evidence:** Proposal linked failures active config hash and adoption decision.
+
+## System wide end to end workflows
+
+Execute against dedicated fixtures through the real user workflow. Individual system passes do not prove that the integrated ADE works. Completion gate: 10/10 workflows and their required profiles pass.
+
+### E2E-01 User creates coding task > model selected > file changed > tests run
+
+**Profile and fixtures:** T2  |  F-CODE F-PROVIDER
+
+**Action:** User creates coding task > model selected > file changed > tests run
+
+**Expected:** Verified code change and complete execution trace
+
+**Setup:** Create a clean fixture task with a selected scripted model, protected tests and a known expected edit.
+
+**Procedure:** Submit through the UI; observe model selection, edit, test execution and final review. Independently inspect the patch and run the fixture test.
+
+**Pass assertions:** The intended behavior passes unchanged tests; the final trace links user task, model request, edit, command and tested revision.
+
+**Evidence:** Ui trace patch test output and complete task trace.
+
+### E2E-02 User starts three coding tasks in parallel
+
+**Profile and fixtures:** T2 T3  |  F-CODE F-WORKER
+
+**Action:** User starts three coding tasks in parallel
+
+**Expected:** Isolated outputs, no unintended interference
+
+**Setup:** Start three jobs from the same base revision in distinct workspaces with distinct sentinel files.
+
+**Procedure:** Release jobs together, collect outputs, and compare each workspace with its own expected tree; repeat 20 times.
+
+**Pass assertions:** Activity overlaps; each output belongs to the correct job, no sentinel crosses workspaces, and only intended edits appear.
+
+**Evidence:** Workspace manifests overlap timeline and per-job results.
+
+### E2E-03 Browser agent develops and tests a simple UI
+
+**Profile and fixtures:** T2  |  F-CODE F-WEB F-PROVIDER
+
+**Action:** Browser agent develops and tests a simple UI
+
+**Expected:** Code, screenshot, and passing interaction tests delivered
+
+**Setup:** Use a simple form feature request with an independent interaction oracle and fixed viewport.
+
+**Procedure:** Have the agent implement the UI, launch it, submit valid and invalid input and collect a final screenshot.
+
+**Pass assertions:** The delivered code passes the protected interaction tests; screenshot shows the verified state and all evidence maps to the same revision.
+
+**Evidence:** Code diff browser trace screenshot and test results.
+
+### E2E-04 Provider fails halfway through execution
+
+**Profile and fixtures:** T2 T3  |  F-CODE F-PROVIDER
+
+**Action:** Provider fails halfway through execution
+
+**Expected:** Explicit recovery or reliable failure state
+
+**Setup:** Script an outage after one valid tool call; configure fallback and retry limits before execution.
+
+**Procedure:** Start the coding task, trigger the outage and observe either configured recovery or terminal failure.
+
+**Pass assertions:** Prior work is retained; retries are bounded, side effects are not duplicated, and incomplete work cannot be marked complete.
+
+**Evidence:** Fault timeline attempts final state and retained patch.
+
+Execute against dedicated fixtures through the real user workflow. Individual system passes do not prove that the integrated ADE works. Completion gate: 10/10 workflows and their required profiles pass.
+
+### E2E-05 User cancels task during a tool operation
+
+**Profile and fixtures:** T2 T3  |  F-WORKER
+
+**Action:** User cancels task during a tool operation
+
+**Expected:** No orphaned subprocesses or falsely completed task
+
+**Setup:** Start a long-running tool with a child process, output stream and temporary resource allocation.
+
+**Procedure:** Cancel through the UI while the tool is active; inspect processes and resources after the declared deadline.
+
+**Pass assertions:** Task and tool are cancelled or safely drained according to policy, no orphan remains, and completion is never reported.
+
+**Evidence:** Ui cancellation trace process inventory and cleanup result.
+
+### E2E-06 User closes desktop during remote execution
+
+**Profile and fixtures:** T2 T4  |  F-CODE F-WORKER
+
+**Action:** User closes desktop during remote execution
+
+**Expected:** Task persists and is accessible after reconnect
+
+**Setup:** Dispatch an authenticated persistent remote job and wait for its durable checkpoint.
+
+**Procedure:** Close the desktop, confirm service progress independently, reopen and reconnect to the task.
+
+**Pass assertions:** The job continues or completes on the execution service; the client restores state, trace and artifact links without duplicate submission.
+
+**Evidence:** Service events reconnect view and artifact checksums.
+
+### E2E-07 Plugin attempts forbidden operation
+
+**Profile and fixtures:** T2 T3  |  F-PLUGIN F-SECURITY
+
+**Action:** Plugin attempts forbidden operation
+
+**Expected:** Security layer denies it and trace records attempt
+
+**Setup:** Enable an adversarial plugin within the actual sandbox and configure a forbidden sentinel read.
+
+**Procedure:** Invoke its capability from a real agent task and inspect enforcement plus sanitized observability output.
+
+**Pass assertions:** The operation is denied, the attempt and reason appear in the trace, and the sentinel is absent from all artifacts.
+
+**Evidence:** Plugin trace sandbox denial and canary scan.
+
+Execute against dedicated fixtures through the real user workflow. Individual system passes do not prove that the integrated ADE works. Completion gate: 10/10 workflows and their required profiles pass.
+
+### E2E-08 Agent completes task exceeding budget
+
+**Profile and fixtures:** T2 T3  |  F-PROVIDER F-WORKER
+
+**Action:** Agent completes task exceeding budget
+
+**Expected:** New calls halted and budget status reported
+
+**Setup:** Use a small shared allowance, an in-flight call whose actual usage exceeds its estimate, and a subsequent call.
+
+**Procedure:** Let the in-flight call finish, reconcile actual usage, then attempt another billable dispatch and inspect the user-visible task state.
+
+**Pass assertions:** No new call is admitted after exhaustion; actual overrun and remaining allowance are reported, and no claim of a hard invoice cap is made.
+
+**Evidence:** Ledger in-flight usage denied dispatch and budget display.
+
+### E2E-09 User compares two models on identical task
+
+**Profile and fixtures:** T2 T4  |  F-CODE F-EVAL F-PROVIDER
+
+**Action:** User compares two models on identical task
+
+**Expected:** Both run in independently isolated environments
+
+**Setup:** Freeze one task, dataset hash, tool permissions and budgets; allocate fresh environments to model A and B.
+
+**Procedure:** Run both configurations, collect results and inspect workspace, memory and artifact separation.
+
+**Pass assertions:** Neither run sees the other candidate output; comparisons use the same oracle and expose model identity, quality, latency and cost.
+
+**Evidence:** Environment identities paired reports and isolation checks.
+
+### E2E-10 Agent finishes a multi-file refactor
+
+**Profile and fixtures:** T2  |  F-CODE F-PROVIDER
+
+**Action:** Agent finishes a multi-file refactor
+
+**Expected:** Dependency impact checked, required tests pass, changes reviewable
+
+**Setup:** Choose a shared symbol spanning all three packages with protected callers and impacted tests.
+
+**Procedure:** Request the refactor; inspect semantic impact, edits, mandatory checks and the reviewable final diff.
+
+**Pass assertions:** Known dependencies are covered, unrelated identities remain intact, all required tests pass on the final revision, and the full diff is available.
+
+**Evidence:** Impact graph final diff tested revision and gate report.
+
+### Budget interpretation for E2E 08
+
+The workflow title does not authorize uncontrolled overspend. Exercise the realistic case where an in-flight call settles above its estimate; verify that subsequent billable calls are halted and the actual budget condition is disclosed.
+
+## Complete coding agent master prompt
+
+Copy the prompt across these five pages together with the acceptance catalog in this document. References to specifications provided earlier refer to that catalog.
+
+Project context: APEX has a primarily Rust backend. Audit the Cargo workspace and existing async runtime. Implement backend verification in Rust using Cargo tests, rustfmt, Clippy and compatible coverage tooling; retain browser tests for the frontend where applicable. Follow the Rust layout and runner contract in this plan.
+
+# APEX ADE — Automated Verification and Acceptance Testing
+
+You are now responsible for implementing a comprehensive, reproducible automated testing infrastructure for the Agent Development Environment (ADE).
+
+## Primary objective
+
+Stop treating implemented code as evidence of a functioning feature.
+
+Your job is to verify the actual functionality of all 12 systems through automated unit, integration, end-to-end, failure-recovery, security, and performance tests.
+
+**The 12 systems are:**
+
+1. Model-agnostic AI engine
+2. Multi-agent orchestration
+3. Semantic codebase intelligence
+4. Persistent project memory
+5. Integrated verification engine
+6. Browser and application control
+7. Composable harness and plugin system
+8. Agent observability
+9. Cost and performance optimization
+10. Security and isolation
+11. Local and remote execution
+12. Evaluation and self-improvement
+
+## Phase 1 — Repository audit
+
+Before changing production code:
+
+1. Inspect the repository and identify its architecture, packages, runtimes, framework, and existing test infrastructure.
+2. Map every system to its actual implementation files, APIs, and user-facing features.
+3. Identify systems or capabilities that are missing, partially implemented, or impossible to verify.
+4. Identify existing tests and determine whether they contain meaningful assertions.
+5. Create a verification coverage matrix.
+
+Do not claim a system works just because a class, function, endpoint, or UI component exists.
+
+## Phase 2 — Create an automated testing platform
+
+Implement a testing infrastructure appropriate for the repository's technology stack.
+
+It must support:
+
+- Unit and integration tests
+- End-to-end application tests
+- Multi-process and concurrent agent tests
+- Deterministic mock model providers
+- Local fixture repositories
+- Browser automation
+- Fault injection
+- Sandbox and permission testing
+- Persistent execution reports
+- Coverage measurement
+- CI execution
+- Reproducible benchmarks
+
+Use the repository's existing tooling where appropriate rather than introducing unnecessary frameworks.
+
+## Phase 3 — Build acceptance tests
+
+Implement the complete AI-01 through AI-08, MA-01 through MA-08, CI-01 through CI-08, PM-01 through PM-08, VE-01 through VE-08, BA-01 through BA-08, PL-01 through PL-08, OB-01 through OB-08, CO-01 through CO-08, SE-01 through SE-08, LR-01 through LR-08, and EV-01 through EV-08 acceptance-test cases, plus E2E-01 through E2E-10.
+
+Use the acceptance-test specifications provided earlier in this conversation.
+
+For every test, document:
+
+- Test ID
+- Target functionality
+- Test type
+- Setup and prerequisites
+- Inputs and action
+- Expected output
+- Actual assertions
+- Mocked versus real components
+- Required evidence
+- Execution command
+- Result
+
+Tests must evaluate externally observable behavior, not just internal implementation details.
+
+For capabilities that do not exist, record `not_implemented`. Do not introduce placeholder functions or fake implementations just to make a test pass.
+
+## Phase 4 — Deterministic testing
+
+Use controllable model-provider simulators for CI tests.
+
+Simulators must support:
+
+- Valid tool responses
+- Malformed responses
+- HTTP 429 and 500 errors
+- Timeouts
+- Interrupted streams
+- Variable token usage
+- Artificial latency
+- Rate limits
+- Context-window rejection
+
+Mocks validate orchestration and error handling, not actual model intelligence.
+
+Implement separate opt-in live-provider smoke tests to confirm real API interoperability, clearly labeling their cost and credentials requirements.
+
+## Phase 5 — Security validation
+
+Test security boundaries with real isolated processes or containers where feasible.
+
+Never assume mocking a permission-denied response proves that the operating-system boundary is secure.
+
+Include adversarial tests for secret leakage, unauthorized file access, tool-permission bypass, malicious plugin execution, prompt injection, and cross-task data isolation.
+
+Run dangerous test scenarios exclusively in disposable test environments.
+
+## Phase 6 — CI and completion gates
+
+Configure automated test execution on every pull request.
+
+Minimum mandatory gates:
+
+1. Formatting and static analysis pass.
+2. Unit tests pass.
+3. Integration tests pass.
+4. Relevant E2E tests pass.
+5. Required security tests pass.
+6. No required test is silently skipped.
+7. Coverage reports are produced.
+8. Results and artifacts are saved.
+9. Failed mandatory checks prevent a green completion status.
+
+Use a separate scheduled or manually triggered suite for expensive live-provider, performance, and full remote-environment tests.
+
+## Phase 7 — Verification dashboard
+
+Build or generate a report displaying:
+
+- Each of the 12 systems
+- Implemented capabilities
+- Passing test count
+- Failed test count
+- Missing test count
+- Blocked or skipped tests
+- Latest execution time
+- Evidence links
+- Known defects
+- Remaining work
+
+Do not compute completeness using only passing tests. Missing functionality and unimplemented tests must remain visible.
+
+## Phase 8 — Execute, diagnose, and report
+
+Run all available tests.
+
+For every failure:
+
+1. Identify whether the failure is in the implementation, test setup, test specification, or environment.
+2. Preserve the logs and evidence.
+3. Fix legitimate implementation defects where within scope.
+4. Rerun the specific failed test.
+5. Rerun affected regression suites.
+6. Report any unresolved failures.
+
+Do not weaken assertions, modify ground-truth fixtures, or disable security controls to achieve a passing status.
+
+## Mandatory final deliverables
+
+Produce:
+
+- `TESTING_ARCHITECTURE.md`
+- `ACCEPTANCE_MATRIX.md`
+- `TEST_RESULTS.md`
+- `KNOWN_DEFECTS.md`
+- `TEST_COVERAGE.md`
+- An executable automated test suite
+- CI configuration
+- Test fixtures and utilities
+- Machine-readable execution results
+
+Finish by producing a table showing the verified status of each of the 12 systems.
+
+**Critical rule:** Never report a capability as verified unless an appropriate test has been executed and passed. Clearly differentiate implementation, mock-only verification, real integration verification, and unverified functionality.
+
+Do not begin implementing new product features until the initial repository audit and baseline testing report have been completed.
