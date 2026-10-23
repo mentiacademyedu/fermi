@@ -466,6 +466,38 @@ button:disabled { opacity: .45; cursor: default; }
 .tm-stat { font: 12px/1.5 var(--mono); white-space: pre; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel); }
 .tm-stat a { cursor: pointer; color: var(--accent); }
 
+/* code intelligence */
+.cx-wrap { display: flex; height: 100%; min-height: 0; }
+.cx-side { width: 330px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+.cx-side .top { padding: 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); }
+.cx-side .stats { font-size: 12px; color: var(--faint); line-height: 1.5; white-space: pre-line; }
+.cx-side .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.cx-results { flex: 1; overflow: auto; padding: 6px; }
+.cx-hit { display: block; width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
+.cx-hit:hover, .cx-hit.on { background: var(--panel-2); }
+.cx-hit .n { font: 600 13px var(--mono); }
+.cx-hit .w { font-size: 11.5px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-kind { font-size: 10.5px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); margin-right: 6px; font-weight: 400; font-family: var(--sans); }
+.cx-kind.test { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.cx-main { flex: 1; min-width: 0; overflow: auto; padding: 20px 26px 40px; }
+.cx-main h2 { font: 600 18px var(--mono); margin: 0 0 4px; word-break: break-all; }
+.cx-loc { font-size: 12.5px; color: var(--muted); }
+.cx-loc a, .cx-link { color: var(--accent); cursor: pointer; }
+.cx-doc { margin: 10px 0; font-size: 13.5px; line-height: 1.55; }
+.cx-sec { margin-top: 16px; }
+.cx-sec h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--faint); margin: 0 0 6px; }
+.cx-list { display: flex; flex-direction: column; gap: 2px; }
+.cx-row { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 3px 6px; border-radius: 6px; cursor: pointer; }
+.cx-row:hover { background: var(--panel-2); }
+.cx-row .n { font-family: var(--mono); }
+.cx-row .w { color: var(--faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.cx-chips span { font: 12px var(--mono); padding: 1px 7px; border-radius: 6px; background: var(--panel-2); color: var(--muted); }
+.cx-risk { display: inline-block; font-size: 12px; padding: 2px 10px; border-radius: 999px; color: #fff; margin-left: 8px; vertical-align: 2px; }
+.cx-risk.high { background: var(--bad); } .cx-risk.medium { background: var(--warn); } .cx-risk.low { background: var(--ok); }
+.cx-empty { color: var(--faint); padding: 40px 0; text-align: center; }
+.cx-table td { padding: 4px 10px 4px 0; font-size: 13px; vertical-align: top; }
+
 /* usage */
 #usage-range { grid-template-columns: repeat(3, auto); margin: 0 0 14px; }
 #usage-range button { padding: 4px 12px; white-space: nowrap; }
@@ -654,6 +686,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
     <button class="side-link" id="open-trending" style="flex:none"><span data-i="trend"></span>Trending repos</button>
     <button class="side-link" id="open-import" style="flex:none" title="Bring in conversations from Claude Code, Codex and the Gemini CLI"><span data-i="download"></span>Import sessions</button>
     <button class="side-link" id="open-skills" style="flex:none" title="Skills and subagents of your accounts: copy, import and export them"><span data-i="spark"></span>Skills &amp; agents</button>
+    <button class="side-link" id="open-code" style="flex:none" title="Symbols, callers, tests and change impact for the current workspace"><span data-i="graph"></span>Code map</button>
     <button class="side-link" id="open-teams" style="flex:none" title="A team of agents with roles, each in its own git worktree, merged when you approve"><span data-i="users"></span>Teams</button>
     <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder (opens a folder picker)" data-i="folderPlus"></button></div>
     <nav class="ws-list" id="ws-list"></nav>
@@ -771,6 +804,25 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
           <div class="sl-stage" id="sl-stage"></div>
           <div class="sl-notes"><div class="sl-notes-h">Speaker notes</div><textarea id="sl-notes"></textarea></div>
         </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-code" hidden>
+      <div class="cx-wrap">
+        <aside class="cx-side">
+          <div class="top">
+            <label class="chip bold" title="Repository"><span data-i="folder"></span><select id="cx-ws"></select></label>
+            <label class="search"><span data-i="search"></span><input id="cx-q" placeholder="Find a function, method or type" autocomplete="off" spellcheck="false"></label>
+            <div class="acts">
+              <button class="small" id="cx-impact" title="What your uncommitted changes could break, and the tests to run">Impact of my changes</button>
+              <button class="small ghost" id="cx-deps">Dependencies</button>
+              <button class="icon-btn" id="cx-refresh" title="Re-index" data-i="refresh"></button>
+            </div>
+            <div class="stats" id="cx-stats">Indexing…</div>
+          </div>
+          <div class="cx-results" id="cx-results"></div>
+        </aside>
+        <div class="cx-main" id="cx-main"></div>
       </div>
     </section>
 
@@ -1019,6 +1071,7 @@ const I = {
   trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
   slides: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/>',
+  graph: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8 7.5 10.5 16M16 7.5 13.5 16M8.5 6h7"/>',
   users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.8.3 5 2.6 5 5.8"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   play: '<path d="M8 5v14l11-7z"/>',
@@ -1213,7 +1266,7 @@ function renderTabs() {
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
-    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "teams" ? "users" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
+    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "teams" ? "users" : f.kind === "code" ? "graph" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
     mk(f.id, f.name, ic, true, f.dirty);
   }
   const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
@@ -1226,7 +1279,7 @@ function renderTabs() {
 function activate(id) {
   S.active = id;
   const tab = S.tabs.find((t) => t.id === id);
-  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills", isTeams = id === "teams";
+  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills", isTeams = id === "teams", isCode = id === "code";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
   $("#view-term").hidden = !isTerm;
@@ -1236,7 +1289,8 @@ function activate(id) {
   $("#view-slides").hidden = !isSlides;
   $("#view-skills").hidden = !isSkills;
   $("#view-teams").hidden = !isTeams;
-  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills || isTeams;
+  $("#view-code").hidden = !isCode;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills || isTeams || isCode;
   if (isTerm) showTerm(tab);
   else if (isTrend) loadTrending();
   else if (isPreview) showPreview();
@@ -1244,6 +1298,7 @@ function activate(id) {
   else if (isSlides) showSlides(tab);
   else if (isSkills) loadSkills();
   else if (isTeams) loadTeams();
+  else if (isCode) loadCode();
   else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
@@ -2835,6 +2890,167 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "End") gotoSlide(tab, tab.deck.count() - 1, true);
 });
 
+// ── code intelligence ───────────────────────────────────────────────────────
+S.cx = { root: null, stats: null, results: [], view: null, pick: null };
+const cxRoot = () => S.cx.pick || currentWs()?.path || workspaces()[0]?.path;
+function openCode(target) {
+  if (!S.tabs.some((t) => t.id === "code")) S.tabs.unshift({ id: "code", name: "Code map", kind: "code" });
+  activate("code");
+  if (target) cxShow(target);
+}
+async function cxApi(query, params = {}) { return api(`/api/code/${query}?${q({ root: cxRoot(), ...params })}`); }
+async function loadCode(refresh = false) {
+  const root = cxRoot();
+  fillSelect($("#cx-ws"), workspaces().map((w) => [w.path, w.name]));
+  if (root) $("#cx-ws").value = root;
+  if (!root) { $("#cx-stats").textContent = "Pick a workspace first."; return; }
+  if (S.cx.root !== root || refresh) {
+    S.cx.root = root; S.cx.stats = null; S.cx.results = []; if (!refresh) S.cx.view = null;
+    $("#cx-stats").textContent = "Indexing…";
+    try { S.cx.stats = await cxApi("stats"); } catch (e) { $("#cx-stats").textContent = e.message; return; }
+  }
+  renderCode();
+}
+function cxStatsText(st) {
+  const langs = Object.entries(st.languages || {}).map(([l, n]) => `${l} ${n}`).join(", ");
+  return `${baseName(st.root)}: ${st.files} files (${langs || "no supported languages"}) · ${st.symbols.toLocaleString()} symbols · ${st.calls.toLocaleString()} calls · ${st.imports} imports\nTests reach ${st.test_reach}% of ${st.functions} functions${st.lcov ? " · lcov coverage loaded" : ""}`;
+}
+function renderCode() {
+  if (S.active !== "code") return;
+  if (S.cx.stats) $("#cx-stats").textContent = cxStatsText(S.cx.stats);
+  const box = $("#cx-results"); box.replaceChildren();
+  for (const r of S.cx.results) box.append(cxHit(r));
+  if (!S.cx.results.length && $("#cx-q").value.trim()) box.append(el("div", "faint", "  No matches."));
+  const main = $("#cx-main"); main.replaceChildren();
+  const v = S.cx.view;
+  if (!v) { main.append(el("div", "cx-empty", "Search for a symbol, or see the impact of your uncommitted changes.")); return; }
+  if (v.loading) { main.append(el("div", "cx-empty", "Loading…")); return; }
+  if (v.kind === "symbol") main.append(cxSymbolView(v.data));
+  else if (v.kind === "impact") main.append(cxImpactView(v.data));
+  else if (v.kind === "deps") main.append(cxDepsView(v.data));
+  else if (v.kind === "file") main.append(cxFileView(v.data));
+}
+const cxName = (r) => (r.owner ? `${r.owner}::${r.name}` : r.name);
+const cxTarget = (r) => (r.kind === "file" ? null : `${r.file}:${r.line}`);
+function cxHit(r) {
+  const b = el("button", "cx-hit"), n = el("div", "n");
+  n.append(el("span", "cx-kind" + (r.test ? " test" : ""), r.test ? "test" : r.kind), cxName(r));
+  b.append(n, el("div", "w", `${r.file}:${r.line}  ${r.sig || ""}`));
+  b.onclick = () => cxShow(cxTarget(r));
+  return b;
+}
+function cxRow(r, extra) {
+  const row = el("div", "cx-row");
+  row.append(el("span", "cx-kind" + (r.test ? " test" : ""), r.test ? "test" : r.kind), el("span", "n", cxName(r)), el("span", "w", `${r.file}:${r.line}${extra ? "  · " + extra : ""}`));
+  row.onclick = () => (r.kind === "file" ? cxFile(r.file) : cxShow(cxTarget(r)));
+  return row;
+}
+function cxSection(title, nodes, empty) {
+  const sec = el("div", "cx-sec"); sec.append(el("h3", null, title));
+  const list = el("div", "cx-list");
+  if (nodes.length) list.append(...nodes); else list.append(el("div", "faint", empty || "None."));
+  sec.append(list); return sec;
+}
+function openAt(rel, line) {
+  const abs = (S.cx.stats?.root || cxRoot()).replace(/[\\/]+$/, "") + "/" + rel;
+  openFile(abs).then(() => setTimeout(() => {
+    const c = $("#code"); if (!c || $("#view-file").hidden) return;
+    const lh = parseFloat(getComputedStyle(c).lineHeight) || 19;
+    c.scrollTop = Math.max(0, (line - 4) * lh); $("#gutter").scrollTop = c.scrollTop;
+  }, 60));
+}
+async function cxShow(target) {
+  if (!target) return;
+  S.cx.view = { loading: true }; renderCode();
+  try { S.cx.view = { kind: "symbol", data: await cxApi("symbol", { target }) }; }
+  catch (e) { S.cx.view = null; toast(e.message, true); }
+  renderCode();
+}
+async function cxFile(path) {
+  S.cx.view = { loading: true }; renderCode();
+  try { S.cx.view = { kind: "file", data: await cxApi("file", { path }) }; } catch (e) { S.cx.view = null; toast(e.message, true); }
+  renderCode();
+}
+function cxSymbolView(d) {
+  const box = el("div");
+  if (!d.symbols.length) { box.append(el("div", "cx-empty", `Nothing called “${d.query}” in the index.`)); return box; }
+  if (d.matches > 1) box.append(el("div", "faint", `${d.matches} definitions match “${d.query}”.`));
+  for (const s of d.symbols) {
+    const r = s.symbol, part = el("div"); part.style.marginBottom = "30px";
+    const h = el("h2"); h.append(el("span", "cx-kind" + (r.test ? " test" : ""), r.test ? "test" : r.kind), cxName(r)); part.append(h);
+    const loc = el("div", "cx-loc"); const a = el("a", null, `${r.file}:${r.line}–${r.end}`); a.onclick = () => openAt(r.file, r.line);
+    const fa = el("a", null, "file outline"); fa.onclick = () => cxFile(r.file);
+    loc.append(a, "  ·  ", fa); part.append(loc);
+    if (s.doc) part.append(el("div", "cx-doc", s.doc));
+    part.append(cxSection(`Called by (${s.callers_total})`, s.callers.map((c) => cxRow(c.caller, `line ${c.line}`)), "Nothing in the repo calls it (an entry point, called dynamically, or unused)."));
+    part.append(cxSection(`Calls (${s.callees.length})`, s.callees.map((c) => cxRow(c))));
+    if (s.external_calls.length) { const sec = el("div", "cx-sec"); sec.append(el("h3", null, "Also calls (outside the repo or unresolved)")); const ch = el("div", "cx-chips"); for (const x of s.external_calls) ch.append(el("span", null, x)); sec.append(ch); part.append(sec); }
+    part.append(cxSection(`Tests reaching it (${s.tests.length})${s.coverage != null ? ` · line coverage ${s.coverage}%` : ""}`, s.tests.map((t) => cxRow(t)), "No test reaches it."));
+    if (s.file_importers.length) { const sec = el("div", "cx-sec"); sec.append(el("h3", null, `Files importing ${baseName(r.file)} (${s.file_importers.length})`)); const ch = el("div", "cx-chips"); for (const f of s.file_importers) { const x = el("span", "cx-link", f); x.onclick = () => cxFile(f); ch.append(x); } sec.append(ch); part.append(sec); }
+    const body = el("div", "cx-sec"); body.append(el("h3", null, "Code"), codeBlock(s.body, langOf(r.file))); part.append(body);
+    box.append(part);
+  }
+  return box;
+}
+function cxFileView(d) {
+  const box = el("div");
+  if (d.error) { box.append(el("div", "cx-empty", d.error)); return box; }
+  const h = el("h2", null, d.file); box.append(h);
+  const loc = el("div", "cx-loc"); const a = el("a", null, "open file"); a.onclick = () => openAt(d.file, 1); loc.append(`${d.lang}${d.test ? " · tests" : ""}  ·  `, a); box.append(loc);
+  box.append(cxSection(`Symbols (${d.symbols.length})`, d.symbols.filter((x) => x.kind !== "impl").map((x) => { const r = cxRow({ ...x, file: d.file }); if (x.parent != null) r.style.paddingLeft = "22px"; return r; })));
+  const files = (title, list) => { const sec = el("div", "cx-sec"); sec.append(el("h3", null, `${title} (${list?.length || 0})`)); const ch = el("div", "cx-chips"); for (const f of list || []) { const x = el("span", "cx-link", f); x.onclick = () => cxFile(f); ch.append(x); } if (!list?.length) ch.append(el("span", null, "none")); sec.append(ch); return sec; };
+  box.append(files("Imports", d.imports), files("Imported by", d.imported_by));
+  if (d.external?.length) { const sec = el("div", "cx-sec"); sec.append(el("h3", null, "External packages")); const ch = el("div", "cx-chips"); for (const e of d.external) ch.append(el("span", null, e)); sec.append(ch); box.append(sec); }
+  return box;
+}
+function cxImpactView(d) {
+  const box = el("div");
+  const h = el("h2", null, "Impact of your changes"); if (d.changed.length) h.append(el("span", "cx-risk " + d.risk, `${d.risk} risk`)); box.append(h);
+  box.append(el("div", "cx-loc", d.changed.length ? `${d.changed.length} changed symbols · ${d.impacted_total} callers affected · ${d.tests.length} tests to run` : "No indexed code has uncommitted changes."));
+  if (!d.changed.length) return box;
+  box.append(cxSection("Changed", d.changed.map((r) => cxRow(r))));
+  box.append(cxSection(`Could break (${d.impacted_total})`, d.impacted.map((i) => cxRow(i.symbol, `depth ${i.depth}, via ${i.via}`)), "Nothing calls the changed code."));
+  box.append(cxSection(`Tests to run (${d.tests.length})`, d.tests.map((t) => cxRow(t)), "No test reaches this code."));
+  if (d.untested_changes.length) box.append(cxSection(`Changed with no test reaching it (${d.untested_changes.length})`, d.untested_changes.map((r) => cxRow(r))));
+  const importers = d.files.filter((f) => f.depth > 0);
+  if (importers.length) { const sec = el("div", "cx-sec"); sec.append(el("h3", null, `Files importing what changed (${importers.length})`)); const ch = el("div", "cx-chips"); for (const f of importers) { const x = el("span", "cx-link", f.file); x.onclick = () => cxFile(f.file); ch.append(x); } sec.append(ch); box.append(sec); }
+  return box;
+}
+function cxDepsView(d) {
+  const box = el("div"); box.append(el("h2", null, "Dependencies"));
+  const t = el("table", "cx-table"), head = el("tr");
+  for (const c of ["Package", "Declared in", "Used in"]) head.append(el("td", "faint", c));
+  t.append(head);
+  for (const r of d.dependencies) { const tr = el("tr"); tr.append(el("td", "n", r.name), el("td", "faint", r.manifests.join(", ")), el("td", null, r.used_in ? `${r.used_in} file${r.used_in === 1 ? "" : "s"}` : "not imported")); tr.title = r.files.join("\n"); t.append(tr); }
+  box.append(t);
+  if (d.imported_but_not_declared.length) { const sec = el("div", "cx-sec"); sec.append(el("h3", null, "Imported but not declared in a manifest")); const ch = el("div", "cx-chips"); for (const x of d.imported_but_not_declared) ch.append(el("span", null, x)); sec.append(ch); box.append(sec); }
+  return box;
+}
+let cxTimer = 0;
+$("#cx-q").oninput = () => {
+  clearTimeout(cxTimer);
+  cxTimer = setTimeout(async () => {
+    const qv = $("#cx-q").value.trim();
+    if (!qv) { S.cx.results = []; renderCode(); return; }
+    try { S.cx.results = (await cxApi("search", { q: qv })).results; } catch (e) { toast(e.message, true); }
+    renderCode();
+  }, 150);
+};
+$("#cx-q").onkeydown = (e) => { if (e.key === "Enter" && S.cx.results[0]) cxShow(cxTarget(S.cx.results[0])); };
+$("#cx-impact").onclick = async () => {
+  S.cx.view = { loading: true }; renderCode();
+  try { S.cx.view = { kind: "impact", data: await cxApi("impact") }; } catch (e) { S.cx.view = null; toast(e.message, true); }
+  renderCode();
+};
+$("#cx-deps").onclick = async () => {
+  S.cx.view = { loading: true }; renderCode();
+  try { S.cx.view = { kind: "deps", data: await cxApi("deps") }; } catch (e) { S.cx.view = null; toast(e.message, true); }
+  renderCode();
+};
+$("#cx-refresh").onclick = () => loadCode(true);
+$("#cx-ws").onchange = () => { S.cx.pick = $("#cx-ws").value; $("#cx-q").value = ""; loadCode(); };
+$("#open-code").onclick = () => openCode();
+
 // ── team runs ───────────────────────────────────────────────────────────────
 const ROLES = [["architect", "Architect"], ["developer", "Developer"], ["tester", "Tester"], ["security", "Security reviewer"], ["debugger", "Debugger"], ["researcher", "Researcher"]];
 const ROLE_NAME = Object.fromEntries(ROLES);
@@ -4105,6 +4321,7 @@ async function refresh() {
     if (params.get("view") === "import" && S.active !== "import") openImport();
     if (params.get("view") === "skills" && S.active !== "skills") openSkills();
     if (params.get("view") === "teams" && S.active !== "teams") openTeams();
+    if (params.get("view") === "code" && S.active !== "code") openCode(params.get("symbol") || undefined);
     if (params.get("view") === "preview" && S.active !== "preview") openPreview(params.get("url") || undefined);
     if (params.get("term") && !S.tabs.some((t) => t.kind === "term")) newTerm();
     if (params.get("diff") && !S.tabs.length) { const p = params.get("diff"); openDiff({ path: p, rel: relTo(currentWs()?.path, p), status: "M" }); }

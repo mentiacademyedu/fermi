@@ -153,6 +153,36 @@ Agents make decks with fermi's `create_deck` tool: they describe the slides
 speaker notes; six color themes) and fermi writes a designed `.pptx` itself,
 so no script has to run and nothing needs approval.
 
+## Code intelligence
+
+fermi indexes each repository with tree-sitter (Rust, Python, JavaScript,
+TypeScript/TSX, Go) and keeps the relationships an agent needs before changing
+code:
+
+- **Symbols**: functions, methods (with their type), classes, interfaces,
+  constants, with signatures and doc comments.
+- **Call graph**: references resolved to definitions (same file first, then
+  imported files; method calls only to methods), so you see who calls a
+  function and what it calls.
+- **Imports and dependencies**: per-language resolution (Rust modules and
+  workspace crates, Python packages, JS/TS relative paths, Go module packages)
+  into a file graph, plus the external packages declared in `Cargo.toml`,
+  `package.json`, `go.mod`, `pyproject.toml` and `requirements.txt` and where
+  they're used.
+- **Tests**: which tests reach which code through calls (and line coverage
+  from an `lcov.info` report, if present).
+- **Change impact**: from a git diff (uncommitted, or since a commit or
+  branch), the changed symbols, every caller up the graph, the files importing
+  them, the tests to run, and changes no test reaches, with a risk level.
+
+Agents (Claude, through fermi's bridge) get `code_symbol`, `code_impact`,
+`code_search` and `code_file` tools and are told to use them; team agents get
+the base of their branch for `code_impact`. You get the *Code map* page and
+`fermi code stats|search|show|file|impact|deps`. The index is incremental
+(only changed files are parsed again), parallel, respects `.gitignore`, skips
+vendored code, and is cached in `~/.fermi/index`; fermi's own repository
+re-indexes in well under a second.
+
 ## Teams
 
 A team run puts several agents with roles on one goal in a git repository
@@ -239,6 +269,7 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   mcp.rs           `fermi mcp` stdio server attached to Claude sessions
   hub.rs           task registry + broadcast for long-lived front ends, model switching
   team.rs          team runs: plan, worktrees per agent, handoffs, integration, merge
+  code.rs          code intelligence: tree-sitter symbol index, call/import graphs, tests, change impact
   deck.rs          designed .pptx decks from a slide description (the create_deck tool)
   sessions.rs      finds and imports Claude Code / Codex / Gemini CLI sessions
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)

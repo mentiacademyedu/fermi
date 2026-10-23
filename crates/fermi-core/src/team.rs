@@ -504,6 +504,15 @@ fn task_brief(run: &TeamRun, t: &TeamTask, conflicts: &[String]) -> String {
     if !t.done_when.is_empty() {
         b += &format!("\nYour task is done when: {}", t.done_when);
     }
+    if t.role != Role::Researcher {
+        if let Some(start) = &t.start {
+            b += &format!(
+                "\nThe fermi code_impact tool with base {} shows what this branch's changes affect and which tests reach them; \
+                 code_symbol shows a function's callers and tests.",
+                &start[..start.len().min(12)]
+            );
+        }
+    }
     let deps: Vec<&TeamTask> = t.depends_on.iter().filter_map(|d| run.task(d)).collect();
     if !deps.is_empty() {
         b += "\n\nWork your branch already includes, with the agents' handoffs:";

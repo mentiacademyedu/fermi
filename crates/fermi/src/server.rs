@@ -48,6 +48,8 @@ struct Srv {
     trending: Mutex<HashMap<String, (u64, Value)>>,
     /// Imports being reviewed (unpacked under `~/.fermi/staging`), by place id.
     staged: Mutex<HashMap<String, Place>>,
+    /// Code indexes by repository folder, kept loaded.
+    code: Mutex<HashMap<PathBuf, Arc<Mutex<fermi_core::code::Index>>>>,
 }
 
 type S = State<Arc<Srv>>;
@@ -149,6 +151,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         added: Mutex::new(vec![]),
         trending: Mutex::new(HashMap::new()),
         staged: Mutex::new(HashMap::new()),
+        code: Mutex::new(HashMap::new()),
     });
     let saved: Vec<String> =
         std::fs::read(srv.workspaces_file()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
@@ -180,6 +183,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/fs/raw", get(fs_raw))
         .route("/api/fs/write", post(fs_write))
         .route("/api/fs/search", get(fs_search))
+        .route("/api/code/{query}", get(code_query))
         .route("/api/teams", get(teams_list).post(team_create))
         .route("/api/teams/{id}", get(team_get))
         .route("/api/teams/{id}/diff", get(team_diff))
@@ -752,6 +756,62 @@ async fn fs_write(State(s): S, Json(b): Json<WriteBody>) -> Response {
     match res {
         Ok(p) => Json(json!({ "path": p, "size": b.text.len() })).into_response(),
         Err(e) => fs_err(e),
+    }
+}
+
+// ── code intelligence ───────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct CodeQuery {
+    root: String,
+    #[serde(default)]
+    q: String,
+    #[serde(default)]
+    target: String,
+    #[serde(default)]
+    path: String,
+    #[serde(default)]
+    base: String,
+}
+
+/// Index queries for a workspace: stats, search, symbol, file, impact, deps.
+async fn code_query(State(s): S, Path(query): Path<String>, Query(q): Query<CodeQuery>) -> Response {
+    let dir = match files::check(&s.workspaces(), &q.root) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    let s2 = s.clone();
+    let res = tokio::task::spawn_blocking(move || -> Result<Value> {
+        use fermi_core::code::{canonical, repo_root, Index};
+        let root = canonical(&repo_root(&dir))?;
+        let slot = s2.code.lock().unwrap().get(&root).cloned();
+        let idx = match slot {
+            Some(i) => i,
+            None => {
+                let i = Arc::new(Mutex::new(Index::open(&root)?));
+                s2.code.lock().unwrap().insert(root.clone(), i.clone());
+                i
+            }
+        };
+        let mut idx = idx.lock().unwrap();
+        if idx.updated.elapsed() > Duration::from_secs(2) {
+            idx.update()?;
+        }
+        Ok(match query.as_str() {
+            "stats" => idx.stats(),
+            "search" => json!({ "results": idx.search(&q.q, 60) }),
+            "symbol" => idx.symbol(&q.target),
+            "file" => idx.file(&q.path),
+            "impact" => idx.impact(&idx.git_changes((!q.base.is_empty()).then_some(q.base.as_str()))?),
+            "deps" => idx.deps(),
+            other => bail!("unknown query {other}"),
+        })
+    })
+    .await;
+    match res {
+        Ok(Ok(v)) => Json(v).into_response(),
+        Ok(Err(e)) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+        Err(_) => err(StatusCode::INTERNAL_SERVER_ERROR, "the code index stopped unexpectedly"),
     }
 }
 

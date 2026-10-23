@@ -70,6 +70,9 @@ enum Cmd {
     /// Skills and subagents of your accounts: list, export to a .zip, import
     #[command(subcommand)]
     Skills(SkillsCmd),
+    /// Code intelligence for this repository: symbols, callers, tests, change impact
+    #[command(subcommand)]
+    Code(CodeCmd),
     /// Interactive terminal UI (default)
     Tui {
         #[arg(short, long)]
@@ -89,6 +92,25 @@ enum Cmd {
         #[arg(long)]
         profile: String,
     },
+}
+
+#[derive(Subcommand)]
+enum CodeCmd {
+    /// Index size, languages, call graph and how much code tests reach
+    Stats,
+    /// Find symbols by name
+    Search { query: String },
+    /// What a function does, who calls it, what it calls, which tests reach it (name, Type::name or path:line)
+    Show { target: String },
+    /// A file's outline, imports and importers
+    File { path: String },
+    /// What your uncommitted changes (or changes since --base) could break, and the tests to run
+    Impact {
+        #[arg(long)]
+        base: Option<String>,
+    },
+    /// External dependencies and where they're used
+    Deps,
 }
 
 #[derive(Subcommand)]
@@ -160,6 +182,7 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Show { id } => show(id)?,
         Cmd::Import { which, limit } => import(which, limit)?,
         Cmd::Skills(cmd) => skills_cmd(cmd)?,
+        Cmd::Code(cmd) => code_cmd(cmd)?,
         Cmd::Tui { profile } => {
             if !fermi_core::Config::path().exists() {
                 setup::init(false)?;
@@ -285,6 +308,26 @@ async fn run(t: Target) -> Result<ExitCode> {
 }
 
 /// `fermi history`: recent tasks from every front end on this PC.
+fn code_cmd(cmd: CodeCmd) -> Result<()> {
+    use fermi_core::code::{self, text, Index};
+    let root = code::repo_root(&std::env::current_dir()?);
+    let started = std::time::Instant::now();
+    let idx = Index::open(&root)?;
+    let pretty = |v: &serde_json::Value| serde_json::to_string_pretty(v).unwrap_or_default();
+    match cmd {
+        CodeCmd::Stats => {
+            println!("{}", pretty(&idx.stats()));
+            eprintln!("(indexed in {} ms)", started.elapsed().as_millis());
+        }
+        CodeCmd::Search { query } => println!("{}", text::search(&idx.search(&query, 40))),
+        CodeCmd::Show { target } => println!("{}", text::symbol(&idx.symbol(&target))),
+        CodeCmd::File { path } => println!("{}", text::file(&idx.file(&path))),
+        CodeCmd::Impact { base } => println!("{}", text::impact(&idx.impact(&idx.git_changes(base.as_deref())?))),
+        CodeCmd::Deps => println!("{}", pretty(&idx.deps())),
+    }
+    Ok(())
+}
+
 fn skills_cmd(cmd: SkillsCmd) -> Result<()> {
     use fermi::skills::{self, Kind};
     let engine = Engine::load()?;
