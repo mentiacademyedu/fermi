@@ -51,7 +51,7 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
         std::fs::write(&path, body)?;
     }
 
-    let mut tools = vec!["mcp__fermi__create_deck"];
+    let mut tools = vec!["mcp__fermi__create_deck", "mcp__fermi__handoff", "mcp__fermi__submit_plan"];
     let mut prompt = format!(
         "You are running inside the fermi harness, profile {}. For slides or a presentation, call the fermi create_deck tool: \
          it writes a designed PowerPoint (.pptx) directly, with no code to run, and the file opens in fermi's slides viewer \
@@ -75,6 +75,8 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
 
 fn tool_list(e: &Engine, profile: &Profile) -> Value {
     let (text, image) = delegates(e, profile);
+    // Team agents (their folder has fermi's marker) get the team tools.
+    let team = std::env::current_dir().ok().and_then(|d| crate::team::marker(&d));
     let mut tools = vec![json!({
         "name": "create_deck",
         "description": "Create a PowerPoint deck (.pptx) from slide content, with a designed layout per slide. \
@@ -82,6 +84,36 @@ fn tool_list(e: &Engine, profile: &Profile) -> Value {
             table for data, image for pictures, stat for a key number, section to separate parts. Put details in notes.",
         "inputSchema": crate::deck::schema(),
     })];
+    if let Some(m) = &team {
+        let list = json!({ "type": "array", "items": { "type": "string" } });
+        tools.push(json!({
+            "name": "handoff",
+            "description": "Finish your team task: record what you did for the agents who build on it and for the user. Call it once, at the end.",
+            "inputSchema": { "type": "object", "properties": {
+                "summary": { "type": "string", "description": "What you did, in a few sentences" },
+                "files_changed": list, "decisions": list, "risks": list, "next_steps": list,
+                "tests": { "type": "string", "description": "Commands you ran and their results" }
+            }, "required": ["summary"] }
+        }));
+        if !m["plan"].is_null() {
+            tools.push(json!({
+                "name": "submit_plan",
+                "description": "Submit the team's plan. Each task runs as its own agent in its own git worktree.",
+                "inputSchema": { "type": "object", "properties": {
+                    "summary": { "type": "string", "description": "The approach, in a few sentences" },
+                    "tasks": { "type": "array", "items": { "type": "object", "properties": {
+                        "id": { "type": "string", "description": "Short id like t1" },
+                        "role": { "type": "string", "enum": ["architect", "developer", "tester", "security", "debugger", "researcher"] },
+                        "title": { "type": "string" },
+                        "description": { "type": "string", "description": "What to do, with enough context to do it alone" },
+                        "depends_on": list,
+                        "files": { "type": "array", "items": { "type": "string" }, "description": "Paths it may change" },
+                        "done_when": { "type": "string", "description": "Acceptance criteria" }
+                    }, "required": ["id", "role", "title", "description"] } }
+                }, "required": ["summary", "tasks"] }
+            }));
+        }
+    }
     if !image.is_empty() {
         tools.push(json!({
             "name": "generate_image",
@@ -110,6 +142,18 @@ async fn call_tool(e: &Engine, profile: &Profile, name: &str, args: &Value) -> R
     let (text, image) = delegates(e, profile);
     let prompt = args["prompt"].as_str().unwrap_or_default().to_string();
     let cwd = std::env::current_dir()?;
+    if name == "handoff" || name == "submit_plan" {
+        let m = crate::team::marker(&cwd).ok_or_else(|| anyhow::anyhow!("this isn't a team task"))?;
+        let key = if name == "handoff" { "handoff" } else { "plan" };
+        let path = m[key].as_str().ok_or_else(|| anyhow::anyhow!("this task can't {name}"))?;
+        if name == "submit_plan" {
+            let (_, tasks) = crate::team::parse_plan(args)?; // say what's wrong while the architect can still fix it
+            std::fs::write(path, serde_json::to_vec_pretty(args)?)?;
+            return Ok(format!("Plan received: {} tasks. The user reviews it before the team starts. You can stop here.", tasks.len()));
+        }
+        std::fs::write(path, serde_json::to_vec_pretty(args)?)?;
+        return Ok("Handoff recorded. You're done.".into());
+    }
     if name == "create_deck" {
         let spec: crate::deck::DeckSpec = serde_json::from_value(args.clone()).map_err(|err| anyhow::anyhow!("bad deck description: {err}"))?;
         let mut out = cwd.join(args["path"].as_str().unwrap_or("deck.pptx"));

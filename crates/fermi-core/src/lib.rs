@@ -15,6 +15,7 @@ pub mod providers;
 pub mod router;
 pub mod sessions;
 pub mod state;
+pub mod team;
 pub mod util;
 
 pub use config::{Account, Auth, Config, Mode, Profile, Provider};

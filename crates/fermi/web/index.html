@@ -409,6 +409,63 @@ button:disabled { opacity: .45; cursor: default; }
 .sk-drop { outline: 2px dashed var(--accent); outline-offset: -8px; }
 .sk-hint { margin-top: 10px; font-size: 12.5px; }
 
+/* team runs */
+.tm-wrap { display: flex; height: 100%; min-height: 0; }
+.tm-runs { width: 260px; flex: none; border-right: 1px solid var(--line); overflow: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+.tm-runs .new-task { margin-bottom: 8px; }
+.tm-run { text-align: left; background: none; border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; }
+.tm-run:hover { background: var(--panel-2); }
+.tm-run.on { background: var(--panel-2); border-color: var(--line-2); }
+.tm-run .g { font-weight: 500; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 13px; }
+.tm-run .m { display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--faint); }
+.tm-main { flex: 1; min-width: 0; overflow: auto; padding: 22px 28px 40px; }
+.tm-main h2 { margin: 0 0 4px; font-size: 17px; line-height: 1.35; }
+.tm-st { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); white-space: nowrap; }
+.tm-st.planning, .tm-st.running, .tm-st.integrating, .tm-st.checking { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.tm-st.review, .tm-st.attention, .tm-st.waiting { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); }
+.tm-st.ready, .tm-st.merged, .tm-st.done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
+.tm-st.failed { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
+.tm-head { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; }
+.tm-head .info { flex: 1; min-width: 0; }
+.tm-head .sub { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
+.tm-head .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; max-width: 45%; }
+.tm-steps { display: flex; gap: 0; margin: 4px 0 16px; }
+.tm-steps span { flex: 1; text-align: center; font-size: 12px; padding: 6px 4px; border-bottom: 3px solid var(--line); color: var(--faint); }
+.tm-steps span.past { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); color: var(--muted); }
+.tm-steps span.now { border-color: var(--accent); color: var(--text); font-weight: 600; }
+.tm-err { padding: 10px 12px; border-radius: 10px; margin-bottom: 14px; border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); background: color-mix(in srgb, var(--warn) 7%, var(--panel)); font-size: 13px; }
+.tm-board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; align-items: flex-start; }
+.tm-col { display: flex; flex-direction: column; gap: 10px; min-width: 250px; max-width: 320px; flex: 1; }
+.tm-col > .h { font-size: 11.5px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; }
+.tm-card { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.tm-card .top { display: flex; gap: 6px; align-items: center; }
+.tm-card .t { font-weight: 600; font-size: 13.5px; }
+.tm-card .d { font-size: 12.5px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.tm-card .b { font: 11px var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-card .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+.tm-role { font-size: 11px; padding: 1px 8px; border-radius: 999px; color: #fff; white-space: nowrap; }
+.tm-role.architect { background: #7c3aed; } .tm-role.developer { background: #2563eb; } .tm-role.tester { background: #059669; }
+.tm-role.security { background: #dc2626; } .tm-role.debugger { background: #d97706; } .tm-role.researcher { background: #0891b2; }
+.tm-form { max-width: 760px; display: flex; flex-direction: column; gap: 14px; }
+.tm-form textarea { min-height: 96px; }
+.tm-form .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.tm-form label.f { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--muted); }
+.tm-form select, .tm-form textarea, .tm-plan input, .tm-plan textarea, .tm-plan select { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--panel); color: var(--text); font: inherit; }
+.tm-roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 14px; }
+.tm-roles label { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.tm-roles select { flex: 1; min-width: 0; }
+.tm-plan { display: flex; flex-direction: column; gap: 10px; }
+.tm-plan .pt { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; grid-template-columns: 70px 150px 1fr auto; gap: 8px; align-items: center; background: var(--panel); }
+.tm-plan .pt textarea { grid-column: 1 / 5; min-height: 54px; }
+.tm-plan .pt .wide { grid-column: 1 / 5; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.tm-plan .pt .wide input { min-width: 0; }
+.tm-sec { margin-top: 18px; }
+.tm-sec h3 { font-size: 13px; margin: 0 0 8px; }
+.tm-log { font: 12px/1.6 var(--mono); color: var(--muted); max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel); }
+.tm-risks li { font-size: 13px; margin-bottom: 4px; }
+.tm-stat { font: 12px/1.5 var(--mono); white-space: pre; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--panel); }
+.tm-stat a { cursor: pointer; color: var(--accent); }
+
 /* usage */
 #usage-range { grid-template-columns: repeat(3, auto); margin: 0 0 14px; }
 #usage-range button { padding: 4px 12px; white-space: nowrap; }
@@ -597,6 +654,7 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
     <button class="side-link" id="open-trending" style="flex:none"><span data-i="trend"></span>Trending repos</button>
     <button class="side-link" id="open-import" style="flex:none" title="Bring in conversations from Claude Code, Codex and the Gemini CLI"><span data-i="download"></span>Import sessions</button>
     <button class="side-link" id="open-skills" style="flex:none" title="Skills and subagents of your accounts: copy, import and export them"><span data-i="spark"></span>Skills &amp; agents</button>
+    <button class="side-link" id="open-teams" style="flex:none" title="A team of agents with roles, each in its own git worktree, merged when you approve"><span data-i="users"></span>Teams</button>
     <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder (opens a folder picker)" data-i="folderPlus"></button></div>
     <nav class="ws-list" id="ws-list"></nav>
     <div class="side-foot">
@@ -713,6 +771,13 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
           <div class="sl-stage" id="sl-stage"></div>
           <div class="sl-notes"><div class="sl-notes-h">Speaker notes</div><textarea id="sl-notes"></textarea></div>
         </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-teams" hidden>
+      <div class="tm-wrap">
+        <aside class="tm-runs" id="tm-runs"></aside>
+        <div class="tm-main" id="tm-main"></div>
       </div>
     </section>
 
@@ -954,6 +1019,7 @@ const I = {
   trend: '<path d="m3 17 6-6 4 4 8-8"/><path d="M14 7h7v7"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/>',
   slides: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M12 16v4M8 20h8"/>',
+  users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2c2.8.3 5 2.6 5 5.8"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   play: '<path d="M8 5v14l11-7z"/>',
   arrowDown: '<path d="M12 5v14M6 13l6 6 6-6"/>',
@@ -1056,6 +1122,7 @@ function taskGroups() {
   for (const w of workspaces()) groups.set(norm(w.path), { ws: w, tasks: [] });
   const term = $("#search").value.trim().toLowerCase();
   for (const t of [...S.tasks.values()].sort((a, b) => b.id - a.id)) {
+    if (t.team) continue;
     if (term && !t.prompt.toLowerCase().includes(term)) continue;
     const k = norm(t.cwd);
     if (!groups.has(k)) groups.set(k, { ws: { path: t.cwd, name: baseName(t.cwd) + (norm(t.cwd) === norm(S.state?.home) ? " (home)" : ""), virtual: true }, tasks: [] });
@@ -1146,7 +1213,7 @@ function renderTabs() {
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
-    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
+    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "teams" ? "users" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
     mk(f.id, f.name, ic, true, f.dirty);
   }
   const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
@@ -1159,7 +1226,7 @@ function renderTabs() {
 function activate(id) {
   S.active = id;
   const tab = S.tabs.find((t) => t.id === id);
-  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills";
+  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills", isTeams = id === "teams";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
   $("#view-term").hidden = !isTerm;
@@ -1168,13 +1235,15 @@ function activate(id) {
   $("#view-import").hidden = !isImport;
   $("#view-slides").hidden = !isSlides;
   $("#view-skills").hidden = !isSkills;
-  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills;
+  $("#view-teams").hidden = !isTeams;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills || isTeams;
   if (isTerm) showTerm(tab);
   else if (isTrend) loadTrending();
   else if (isPreview) showPreview();
   else if (isImport) loadImport();
   else if (isSlides) showSlides(tab);
   else if (isSkills) loadSkills();
+  else if (isTeams) loadTeams();
   else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
@@ -1779,7 +1848,7 @@ function showFile(tab) {
   $("#file-diff").hidden = tab.kind !== "diff";
   $("#file-msg").hidden = ["text", "image", "diff"].includes(tab.kind);
   $("#file-save").hidden = tab.kind !== "text";
-  $("#file-open").hidden = tab.kind !== "diff" || tab.status === "D";
+  $("#file-open").hidden = tab.kind !== "diff" || tab.status === "D" || !!tab.team;
   $("#file-preview").hidden = tab.kind !== "text" || !/\.html?$/i.test(tab.name);
   $("#file-slides").hidden = tab.kind !== "text" || !/\.md$/i.test(tab.name) || !hasSlideBreaks(tab.text);
   $("#file-info").textContent = tab.size != null ? fmtSize(tab.size) : "";
@@ -2766,6 +2835,230 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "End") gotoSlide(tab, tab.deck.count() - 1, true);
 });
 
+// ── team runs ───────────────────────────────────────────────────────────────
+const ROLES = [["architect", "Architect"], ["developer", "Developer"], ["tester", "Tester"], ["security", "Security reviewer"], ["debugger", "Debugger"], ["researcher", "Researcher"]];
+const ROLE_NAME = Object.fromEntries(ROLES);
+const TEAM_STEPS = [["planning", "Plan"], ["review", "Review plan"], ["running", "Build"], ["integrating", "Merge branches"], ["checking", "Check"], ["ready", "Approve"]];
+S.tm = { runs: new Map(), sel: pref.get("tmSel", null), edit: null, loaded: false };
+function openTeams() {
+  if (!S.tabs.some((t) => t.id === "teams")) S.tabs.unshift({ id: "teams", name: "Teams", kind: "teams" });
+  activate("teams");
+}
+async function loadTeams() {
+  if (!S.tm.loaded) {
+    try { const r = await api("/api/teams"); for (const run of r.runs) S.tm.runs.set(run.id, run); S.tm.loaded = true; }
+    catch (e) { toast(e.message, true); }
+  }
+  if (S.tm.sel == null || (S.tm.sel !== "new" && !S.tm.runs.has(S.tm.sel))) S.tm.sel = S.tm.runs.size ? [...S.tm.runs.keys()].sort((a, b) => b - a)[0] : "new";
+  renderTeams();
+}
+const roleChip = (r) => el("span", "tm-role " + r, ROLE_NAME[r] || r);
+const stChip = (st, label) => el("span", "tm-st " + st, label || st.replace(/_/g, " "));
+const TASK_LABEL = { pending: "waiting to start", running: "working", waiting: "needs your approval", done: "done", failed: "failed", skipped: "skipped", interrupted: "interrupted" };
+function renderTeams() {
+  if (S.active !== "teams") return;
+  const side = $("#tm-runs"); side.replaceChildren();
+  const nb = el("button", "new-task"); nb.innerHTML = svg("plusCircle"); nb.append("New team run");
+  nb.onclick = () => { S.tm.sel = "new"; renderTeams(); };
+  side.append(nb);
+  const runs = [...S.tm.runs.values()].sort((a, b) => b.id - a.id);
+  if (!runs.length) side.append(el("div", "faint", "No team runs yet."));
+  for (const r of runs) {
+    const b = el("button", "tm-run" + (r.id === S.tm.sel ? " on" : ""));
+    const done = r.tasks.filter((t) => t.stage === "plan" && ["done", "skipped"].includes(t.state)).length, all = r.tasks.filter((t) => t.stage === "plan").length;
+    const m = el("div", "m"); m.append(stChip(r.status));
+    if (all) m.append(el("span", null, `${done}/${all} tasks`));
+    m.append(el("span", null, fmtDur(Math.max(0, nowS() - Math.floor(r.created))) + " ago"));
+    b.append(el("div", "g", r.goal), m);
+    b.onclick = () => { S.tm.sel = r.id; S.tm.edit = null; pref.set("tmSel", r.id); renderTeams(); };
+    side.append(b);
+  }
+  const main = $("#tm-main"); main.replaceChildren();
+  if (S.tm.sel === "new") { main.append(teamForm()); return; }
+  const run = S.tm.runs.get(S.tm.sel);
+  if (run) main.append(teamRunView(run));
+}
+function teamForm() {
+  const f = el("div", "tm-form");
+  f.append(el("h2", null, "New team run"), el("div", "faint", "An architect plans the work; each task runs as its own agent in its own git worktree and branch; branches are merged, tested and reviewed on an integration branch, and nothing reaches your branch until you approve the merge."));
+  const goal = el("textarea"); goal.placeholder = "The goal, e.g. “Add CSV export to the reports page, with tests”";
+  const gl = el("label", "f"); gl.append("Goal", goal);
+  const repo = el("select");
+  for (const w of workspaces()) repo.append(opt(w.path, w.name));
+  if (currentWs()) repo.value = currentWs().path;
+  const rl = el("label", "f"); rl.append("Repository (a git folder; the agents start from its last commit)", repo);
+  const roles = el("div", "tm-roles"), saved = pref.get("tmModels", {}), pickers = {};
+  for (const [r, name] of ROLES) {
+    const l = el("label"); const sel = el("select");
+    sel.replaceChildren(opt("", "Auto model"), ...modelOptions().slice(1)); sel.value = saved[r] || "";
+    pickers[r] = sel; l.append(roleChip(r), sel); roles.append(l);
+  }
+  const rolesBox = el("label", "f"); rolesBox.append("Models per role", roles);
+  const row = el("div", "row");
+  const par = el("select"); for (const n of [1, 2, 3, 4, 5, 6]) par.append(opt(String(n), `${n} at a time`)); par.value = String(pref.get("tmPar", 3));
+  const pl = el("label", "f"); pl.append("Agents in parallel", par);
+  const perm = el("select"); perm.append(opt("", "Ask me before they run commands"), opt("bypassPermissions", "Let them run commands in their worktrees"));
+  perm.value = pref.get("tmPerm", "");
+  const ml = el("label", "f"); ml.append("Commands", perm);
+  const prof = el("select"); prof.append(opt("", "Folder's profile"), ...S.state.profiles.map((p) => opt(p.name, p.name)));
+  const prl = el("label", "f"); prl.append("Profile", prof);
+  row.append(pl, ml, prl);
+  const checks = el("div", "row");
+  const ct = el("input"); ct.type = "checkbox"; ct.checked = pref.get("tmTests", true);
+  const cs = el("input"); cs.type = "checkbox"; cs.checked = pref.get("tmSec", true);
+  const l1 = el("label"); l1.append(ct, " Final test pass on the merged result");
+  const l2 = el("label"); l2.append(cs, " Final security review");
+  checks.append(l1, l2);
+  const go = el("button", "primary", "Plan it");
+  go.onclick = async () => {
+    if (!goal.value.trim()) { toast("Describe the goal first", true); return; }
+    const models = Object.fromEntries(Object.entries(pickers).map(([r, s]) => [r, s.value]).filter(([, v]) => v));
+    pref.set("tmModels", models); pref.set("tmPar", +par.value); pref.set("tmPerm", perm.value); pref.set("tmTests", ct.checked); pref.set("tmSec", cs.checked);
+    go.disabled = true;
+    try {
+      const r = await api("/api/teams", { goal: goal.value, repo: repo.value, profile: prof.value, models, permission: perm.value, parallel: +par.value, checks: { tests: ct.checked, security: cs.checked } });
+      const full = await api(`/api/teams/${r.id}`); S.tm.runs.set(r.id, full); S.tm.sel = r.id; pref.set("tmSel", r.id); renderTeams();
+    } catch (e) { toast(e.message, true); go.disabled = false; }
+  };
+  f.append(gl, rl, rolesBox, row, checks, el("div", null, go));
+  return f;
+}
+async function teamAct(run, action, body = {}) {
+  try { const r = await api(`/api/teams/${run.id}/${action}`, body); return r; }
+  catch (e) { toast(e.message, true); return null; }
+}
+function teamRunView(run) {
+  const box = el("div");
+  const head = el("div", "tm-head"), info = el("div", "info");
+  info.append(el("h2", null, run.goal));
+  const sub = el("div", "sub"); sub.append(stChip(run.status), el("span", null, `  ${baseName(run.repo)} · from ${run.base_branch || "detached HEAD"} @ ${run.base.slice(0, 8)} · ${run.parallel} at a time`));
+  info.append(sub);
+  const acts = el("div", "acts"), live = ["planning", "running", "integrating", "checking"].includes(run.status);
+  const btn = (label, cls, fn) => { const b = el("button", "small " + cls, label); b.onclick = fn; acts.append(b); return b; };
+  if (run.planner) btn("Architect’s conversation", "ghost", () => selectTask(run.planner));
+  if (live) btn("Stop", "ghost", () => teamAct(run, "cancel"));
+  if (["attention", "cancelled"].includes(run.status)) btn("Resume", "primary", () => teamAct(run, "resume"));
+  if (run.status === "ready") btn("Changes", "", () => teamDiff(run, null));
+  if (run.status === "ready") btn(`Merge into ${run.base_branch || "the base"}`, "primary", async () => {
+    if (!confirm(`Merge the team's work into ${run.base_branch || "the base commit"} in ${run.repo}?`)) return;
+    const r = await teamAct(run, "merge"); if (r) toast(`Merged into ${r.branch}`);
+  });
+  if (!["merged", "discarded"].includes(run.status)) btn("Discard", "ghost danger", () => { if (confirm("Stop this run and delete its worktrees and branches?")) teamAct(run, "discard"); });
+  head.append(info, acts); box.append(head);
+  // Where it is.
+  const steps = el("div", "tm-steps"), idx = TEAM_STEPS.findIndex(([k]) => k === run.status);
+  const at = idx >= 0 ? idx : run.status === "merged" ? TEAM_STEPS.length : -1;
+  TEAM_STEPS.forEach(([k, label], i) => steps.append(el("span", i < at ? "past" : i === at ? "now" : "", label)));
+  box.append(steps);
+  if (run.error) box.append(el("div", "tm-err", run.error));
+  if (run.status === "review") { box.append(planEditor(run)); return box; }
+  if (run.plan_summary) box.append(el("div", "faint", run.plan_summary));
+  // The tasks, by dependency level, then the integration steps.
+  const plan = run.tasks.filter((t) => t.stage === "plan"), level = {};
+  const depth = (t, seen = new Set()) => level[t.key] ??= seen.has(t.key) ? 0 : 1 + Math.max(-1, ...t.depends_on.map((d) => plan.find((x) => x.key === d)).filter(Boolean).map((d) => depth(d, new Set([...seen, t.key]))));
+  plan.forEach((t) => depth(t));
+  const cols = new Map();
+  for (const t of plan) { const k = level[t.key] || 0; if (!cols.has(k)) cols.set(k, []); cols.get(k).push(t); }
+  const board = el("div", "tm-board"); board.style.marginTop = "14px";
+  [...cols.keys()].sort((a, b) => a - b).forEach((k) => {
+    const col = el("div", "tm-col"); col.append(el("div", "h", k === 0 ? "First" : `Then (${k + 1})`));
+    for (const t of cols.get(k)) col.append(taskCard(run, t));
+    board.append(col);
+  });
+  const integ = run.tasks.filter((t) => t.stage !== "plan");
+  if (integ.length || run.integration) {
+    const col = el("div", "tm-col"); col.append(el("div", "h", "Integration"));
+    if (run.integration) col.append(el("div", "b faint", `${run.integration.branch} · merged ${run.integration.merged.length}`));
+    for (const t of integ) col.append(taskCard(run, t));
+    board.append(col);
+  }
+  box.append(board);
+  if (run.status === "ready" || run.status === "merged") {
+    const risks = run.tasks.flatMap((t) => (t.handoff?.risks || []).map((r) => [t, r]));
+    const sec = el("div", "tm-sec"); sec.append(el("h3", null, risks.length ? `Risks the agents raised (${risks.length})` : "No risks raised"));
+    const ul = el("ul", "tm-risks"); for (const [t, r] of risks) { const li = el("li"); li.append(roleChip(t.role.toString()), " ", r); ul.append(li); }
+    sec.append(ul); box.append(sec);
+  }
+  const lg = el("div", "tm-sec"); lg.append(el("h3", null, "Log"));
+  const logBox = el("div", "tm-log");
+  for (const [ts, line] of run.log.slice(-80)) logBox.append(el("div", null, `${new Date(ts * 1000).toLocaleTimeString()}  ${line}`));
+  lg.append(logBox); box.append(lg);
+  setTimeout(() => (logBox.scrollTop = logBox.scrollHeight), 0);
+  return box;
+}
+function taskCard(run, t) {
+  const c = el("div", "tm-card"), top = el("div", "top");
+  top.append(roleChip(t.role), stChip(t.state === "done" ? "done" : t.state, TASK_LABEL[t.state] || t.state));
+  if (t.state === "running") top.append(el("span", "st spin", "◐"));
+  c.append(top, el("div", "t", t.title));
+  const h = t.handoff;
+  if (h?.summary) c.append(el("div", "d", h.summary)); else if (t.description) c.append(el("div", "d", t.description));
+  if (t.note) c.append(el("div", "d", "⚠ " + t.note));
+  if (t.branch) { const b = el("div", "b", t.branch + (t.changed?.length ? ` · ${t.changed.length} file${t.changed.length === 1 ? "" : "s"}` : "")); b.title = t.branch; c.append(b); }
+  const acts = el("div", "acts");
+  if (t.task_id) { const b = el("button", "small" + (t.state === "waiting" ? " primary" : " ghost"), t.state === "waiting" ? "Approve in conversation" : "Conversation"); b.onclick = () => selectTask(t.task_id); acts.append(b); }
+  if (t.start && t.branch && t.stage === "plan") { const b = el("button", "small ghost", "Diff"); b.onclick = () => teamDiff(run, t); acts.append(b); }
+  if (["failed", "interrupted"].includes(t.state)) {
+    const r = el("button", "small", "Retry"); r.onclick = () => teamAct(run, "retry", { key: t.key }); acts.append(r);
+    if (t.stage === "plan") { const k = el("button", "small ghost", "Skip"); k.onclick = () => teamAct(run, "skip", { key: t.key }); acts.append(k); }
+  }
+  if (acts.children.length) c.append(acts);
+  return c;
+}
+// The plan, editable before the team starts.
+function planEditor(run) {
+  const wrap = el("div", "tm-plan");
+  const draft = S.tm.edit?.id === run.id ? S.tm.edit : (S.tm.edit = { id: run.id, summary: run.plan_summary, tasks: run.tasks.map((t) => ({ ...t })) });
+  const sum = el("textarea"); sum.value = draft.summary; sum.oninput = () => (draft.summary = sum.value);
+  const sl = el("label", "f"); sl.append(el("span", "faint", "The architect’s approach"), sum); wrap.append(sl);
+  const list = (v) => v.split(",").map((x) => x.trim()).filter(Boolean);
+  draft.tasks.forEach((t, i) => {
+    const row = el("div", "pt");
+    const key = el("input"); key.value = t.key; key.oninput = () => (t.key = key.value.trim());
+    const role = el("select"); for (const [r, n] of ROLES) role.append(opt(r, n)); role.value = t.role; role.onchange = () => (t.role = role.value);
+    const title = el("input"); title.value = t.title; title.oninput = () => (t.title = title.value);
+    const rm = el("button", "small ghost", "Remove"); rm.onclick = () => { draft.tasks.splice(i, 1); renderTeams(); };
+    const desc = el("textarea"); desc.value = t.description; desc.oninput = () => (t.description = desc.value); desc.placeholder = "What to do";
+    const wide = el("div", "wide");
+    const deps = el("input"); deps.value = t.depends_on.join(", "); deps.placeholder = "After (task ids)"; deps.oninput = () => (t.depends_on = list(deps.value));
+    const files = el("input"); files.value = (t.files || []).join(", "); files.placeholder = "Files it may change"; files.oninput = () => (t.files = list(files.value));
+    const done = el("input"); done.value = t.done_when || ""; done.placeholder = "Done when…"; done.oninput = () => (t.done_when = done.value);
+    wide.append(deps, files, done);
+    row.append(key, role, title, rm, desc, wide);
+    wrap.append(row);
+  });
+  const add = el("button", "small ghost", "+ Add task");
+  add.onclick = () => { draft.tasks.push({ key: `t${draft.tasks.length + 1}`, role: "developer", title: "", description: "", depends_on: [], files: [], done_when: "" }); renderTeams(); };
+  const go = el("button", "primary", "Approve and start");
+  go.onclick = async () => {
+    go.disabled = true;
+    const plan = { summary: draft.summary, tasks: draft.tasks.map((t) => ({ id: t.key, role: t.role, title: t.title, description: t.description, depends_on: t.depends_on, files: t.files, done_when: t.done_when })) };
+    const r = await teamAct(run, "approve", { plan });
+    if (r) S.tm.edit = null; else go.disabled = false;
+  };
+  const acts = el("div", "row"); acts.append(add, go, el("span", "faint", `${draft.tasks.length} tasks · each in its own worktree`));
+  wrap.append(acts);
+  return wrap;
+}
+// A branch's (or the whole run's) changes: the stat, then a file's diff in a tab.
+async function teamDiff(run, t) {
+  try {
+    const r = await api(`/api/teams/${run.id}/diff?${q({ key: t?.key || "" })}`);
+    const id = `teamdiff:${run.id}:${t?.key || "all"}`;
+    let tab = S.tabs.find((x) => x.id === id);
+    if (!tab) { tab = { id, kind: "diff", team: true, name: t ? `${t.key} changes` : "Team changes", path: t?.branch || run.integration?.branch, status: "M" }; S.tabs.push(tab); }
+    // Whole patch for the branch (stat first, then each file).
+    const files = r.diff.split("\n").map((l) => /^\s*(\S.*?)\s+\|/.exec(l)?.[1]).filter(Boolean);
+    const parts = [r.diff];
+    for (const f of files.slice(0, 40)) {
+      try { const d = await api(`/api/teams/${run.id}/diff?${q({ key: t?.key || "", file: f })}`); parts.push(d.diff); } catch {}
+    }
+    tab.diff = parts.join("\n");
+    activate(id);
+  } catch (e) { toast(e.message, true); }
+}
+$("#open-teams").onclick = openTeams;
+
 // ── skills & agents ─────────────────────────────────────────────────────────
 S.sk = { data: null, kind: pref.get("skKind", ""), picked: new Set(), open: null, review: null, busy: false };
 function openSkills() {
@@ -3730,6 +4023,7 @@ function renderStatus() {
 const RENDER = {
   side: renderSide, tabs: renderTabs, composer: renderComposer, status: renderStatus, settings: renderSettings,
   files: () => { renderTree(); loadChanges(); },
+  teams: () => renderTeams(),
 };
 
 // ── panels ──────────────────────────────────────────────────────────────────
@@ -3781,6 +4075,7 @@ function onMessage(m) {
       break;
     }
     case "task_deleted": S.tasks.delete(m.id); S.logs.delete(m.id); if (S.sel === m.id) newTask(false); schedule("side", "status"); break;
+    case "team": S.tm.runs.set(m.run.id, m.run); if (S.active === "teams") schedule("teams"); break;
     case "accounts": if (S.state) { S.state.accounts = m.accounts; schedule("status"); if (S.active === "settings") schedule("settings"); renderSplash(); } break;
     case "login_ok": toast(`✓ ${m.id} is logged in${m.email ? " as " + m.email : ""}`); break;
     case "config": case "resync": refresh(); break;
@@ -3809,6 +4104,7 @@ async function refresh() {
     if (params.get("view") === "trending" && S.active !== "trending") openTrending();
     if (params.get("view") === "import" && S.active !== "import") openImport();
     if (params.get("view") === "skills" && S.active !== "skills") openSkills();
+    if (params.get("view") === "teams" && S.active !== "teams") openTeams();
     if (params.get("view") === "preview" && S.active !== "preview") openPreview(params.get("url") || undefined);
     if (params.get("term") && !S.tabs.some((t) => t.kind === "term")) newTerm();
     if (params.get("diff") && !S.tabs.length) { const p = params.get("diff"); openDiff({ path: p, rel: relTo(currentWs()?.path, p), status: "M" }); }

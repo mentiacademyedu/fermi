@@ -60,6 +60,9 @@ pub struct TaskRec {
     pub ran_on: Option<RanOn>,
     #[serde(default)]
     pub session: Option<String>,
+    /// The team run this agent belongs to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team: Option<crate::engine::TeamRef>,
     /// Tool rules the user allowed for this conversation (see `Task::allowed`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed: Vec<String>,
@@ -105,6 +108,7 @@ impl TaskRec {
             session: None,
             past_sessions: vec![],
             allowed: task.allowed.clone(),
+            team: task.team.clone(),
             updated: now(),
             via: Some(via.to_string()),
             origin: None,
@@ -119,7 +123,7 @@ impl TaskRec {
             "account": self.account, "effort": self.effort, "permission": self.permission, "cwd": self.cwd, "status": self.status,
             "route": self.route, "started": self.started, "ended": self.ended, "via": self.via,
             "resumable": self.session.is_some() && self.ran_on.is_some(),
-            "ran_model": self.ran_on.as_ref().map(|r| &r.model), "imported": self.origin.is_some(),
+            "ran_model": self.ran_on.as_ref().map(|r| &r.model), "imported": self.origin.is_some(), "team": self.team,
             "turns": self.events.iter().filter(|e| matches!(e, Event::User { .. })).count(),
         })
     }
@@ -397,6 +401,7 @@ fn provider_of(model: &str) -> &str {
 /// The task that continues `t` with `prompt`.
 pub fn continuation(engine: &Engine, t: &TaskRec, prompt: &str, opts: &FollowUp) -> Task {
     let mut task = Task::new(prompt, t.cwd.clone());
+    task.team = t.team.clone();
     task.permission = opts.permission.clone().or_else(|| t.permission.clone());
     task.allowed = t.allowed.clone();
     for r in &opts.allow {
@@ -596,10 +601,10 @@ impl Hub {
         self.tasks.lock().unwrap().iter().find(|t| t.id == id).cloned()
     }
 
-    /// Folders tasks have run in, most recent first.
+    /// Folders tasks have run in, most recent first (team agents' worktrees aren't workspaces).
     pub fn cwds(&self) -> Vec<PathBuf> {
         let mut out: Vec<PathBuf> = vec![];
-        for t in self.tasks.lock().unwrap().iter().rev() {
+        for t in self.tasks.lock().unwrap().iter().rev().filter(|t| t.team.is_none()) {
             if !out.contains(&t.cwd) {
                 out.push(t.cwd.clone());
             }

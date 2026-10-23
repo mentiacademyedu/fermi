@@ -36,6 +36,7 @@ const CSP: &str = "default-src 'none'; script-src 'self' 'unsafe-inline'; style-
 
 struct Srv {
     hub: Arc<Hub>,
+    teams: Arc<fermi_core::team::Teams>,
     token: String,
     port: u16,
     cwd: PathBuf,
@@ -136,8 +137,10 @@ pub async fn run(engine: Arc<Engine>, port: u16, open: bool) -> Result<()> {
 pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> Result<Server> {
     let listener = bind(port).await?;
     let port = listener.local_addr()?.port();
+    let hub = Hub::new(engine, via);
     let srv = Arc::new(Srv {
-        hub: Hub::new(engine, via),
+        teams: fermi_core::team::Teams::new(hub.clone()),
+        hub,
         token: new_token()?,
         port,
         cwd,
@@ -177,6 +180,10 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/fs/raw", get(fs_raw))
         .route("/api/fs/write", post(fs_write))
         .route("/api/fs/search", get(fs_search))
+        .route("/api/teams", get(teams_list).post(team_create))
+        .route("/api/teams/{id}", get(team_get))
+        .route("/api/teams/{id}/diff", get(team_diff))
+        .route("/api/teams/{id}/{action}", post(team_action))
         .route("/api/skills", get(skills_list))
         .route("/api/skills/copy", post(skills_copy))
         .route("/api/skills/remove", post(skills_remove))
@@ -745,6 +752,77 @@ async fn fs_write(State(s): S, Json(b): Json<WriteBody>) -> Response {
     match res {
         Ok(p) => Json(json!({ "path": p, "size": b.text.len() })).into_response(),
         Err(e) => fs_err(e),
+    }
+}
+
+// ── team runs ───────────────────────────────────────────────────────────────
+
+/// Runs a blocking team operation (they call git) off the async threads.
+async fn team_op<T: Send + 'static>(f: impl FnOnce() -> Result<T> + Send + 'static) -> Result<T> {
+    tokio::task::spawn_blocking(f).await.map_err(|_| anyhow::anyhow!("the operation stopped unexpectedly"))?
+}
+
+async fn teams_list(State(s): S) -> Json<Value> {
+    Json(json!({ "runs": s.teams.list() }))
+}
+
+async fn team_get(State(s): S, Path(id): Path<u64>) -> Response {
+    match s.teams.get(id) {
+        Some(r) => Json(json!(r)).into_response(),
+        None => err(StatusCode::NOT_FOUND, "no such team run"),
+    }
+}
+
+async fn team_create(State(s): S, Json(b): Json<fermi_core::team::NewRun>) -> Response {
+    let teams = s.teams.clone();
+    match team_op(move || teams.create(b)).await {
+        Ok(id) => Json(json!({ "id": id })).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+#[derive(Deserialize, Default)]
+struct TeamActionBody {
+    #[serde(default)]
+    key: Option<String>,
+    #[serde(default)]
+    plan: Option<Value>,
+}
+
+async fn team_action(State(s): S, Path((id, action)): Path<(u64, String)>, body: Option<Json<TeamActionBody>>) -> Response {
+    let b = body.map(|j| j.0).unwrap_or_default();
+    let teams = s.teams.clone();
+    let res = team_op(move || -> Result<Value> {
+        let key = || b.key.clone().ok_or_else(|| anyhow::anyhow!("which task?"));
+        match action.as_str() {
+            "approve" => teams.approve(id, b.plan).map(|_| json!({ "ok": true })),
+            "cancel" => teams.cancel(id).map(|_| json!({ "ok": true })),
+            "resume" => teams.resume(id).map(|_| json!({ "ok": true })),
+            "retry" => teams.retry(id, &key()?).map(|_| json!({ "ok": true })),
+            "skip" => teams.skip(id, &key()?).map(|_| json!({ "ok": true })),
+            "merge" => teams.merge(id).map(|branch| json!({ "branch": branch })),
+            "discard" => teams.discard(id).map(|_| json!({ "ok": true })),
+            other => bail!("unknown action {other}"),
+        }
+    })
+    .await;
+    match res {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct TeamDiffQuery {
+    key: Option<String>,
+    file: Option<String>,
+}
+
+async fn team_diff(State(s): S, Path(id): Path<u64>, Query(q): Query<TeamDiffQuery>) -> Response {
+    let teams = s.teams.clone();
+    match team_op(move || teams.diff(id, q.key.as_deref().filter(|k| !k.is_empty()), q.file.as_deref())).await {
+        Ok(text) => Json(json!({ "diff": text })).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
     }
 }
 

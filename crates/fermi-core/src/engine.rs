@@ -38,6 +38,16 @@ pub struct Task {
     /// Extra tool rules the user allowed for this conversation (Claude
     /// `--allowedTools` syntax, e.g. `Bash(node:*)`).
     pub allowed: Vec<String>,
+    /// Set when the task is one agent of a team run.
+    pub team: Option<TeamRef>,
+}
+
+/// Which team run and plan task an agent's conversation belongs to.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct TeamRef {
+    pub run: u64,
+    pub key: String,
+    pub role: String,
 }
 
 /// Permission modes a task may ask for.
@@ -57,6 +67,7 @@ impl Task {
             permission: None,
             context: None,
             allowed: vec![],
+            team: None,
         }
     }
 

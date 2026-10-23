@@ -153,6 +153,32 @@ Agents make decks with fermi's `create_deck` tool: they describe the slides
 speaker notes; six color themes) and fermi writes a designed `.pptx` itself,
 so no script has to run and nothing needs approval.
 
+## Teams
+
+A team run puts several agents with roles on one goal in a git repository
+(the dashboard's *Teams* page):
+
+1. **Plan.** The architect (read-only) studies the repo and submits a plan:
+   tasks with a role (architect, developer, tester, security reviewer,
+   debugger, researcher), dependencies, the files each may change and when it's
+   done. You review and edit it, then start.
+2. **Build.** Every task runs as its own agent conversation in its own git
+   worktree and branch (`fermi/team-…/<task>`), started from the base commit
+   plus the branches it depends on, up to N at a time. Each pick its model per
+   role. Agents finish with a structured handoff (summary, files, decisions,
+   risks, next steps, tests) that the tasks depending on them receive.
+3. **Merge branches.** Finished branches are merged in dependency order into an
+   integration branch; a conflict goes to a debugger agent in that worktree.
+4. **Check.** Optionally a final test pass and a security review run on the
+   merged result.
+5. **Approve.** You see each branch's diff, the combined changes and every risk
+   the agents raised, then merge into your branch (it must be checked out and
+   clean) or discard. Your branch isn't touched before that.
+
+Agents that hit an approval show it on their card; with *Let them run commands*
+they don't ask. Worktrees live in `~/.fermi/teams/<run>/wt` and are removed on
+merge or discard. A run stopped by closing fermi can be resumed.
+
 ## Skills & agents
 
 Every fermi account keeps its own config folder, so skills you installed in
@@ -212,6 +238,8 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   providers/       claude_cli, codex_cli, gemini_cli, api (Anthropic/OpenAI), image
   mcp.rs           `fermi mcp` stdio server attached to Claude sessions
   hub.rs           task registry + broadcast for long-lived front ends, model switching
+  team.rs          team runs: plan, worktrees per agent, handoffs, integration, merge
+  deck.rs          designed .pptx decks from a slide description (the create_deck tool)
   sessions.rs      finds and imports Claude Code / Codex / Gemini CLI sessions
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
