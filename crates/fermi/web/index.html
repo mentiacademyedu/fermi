@@ -19,6 +19,7 @@
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --r: 12px;
   --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06);
+  --menu-shadow: 0 1px 3px rgba(0,0,0,.06), 0 12px 32px rgba(0,0,0,.12);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -29,6 +30,7 @@
     --code-bg: #1a1c21;
     --tk-kw: #c678dd; --tk-str: #98c379; --tk-com: #6b717d; --tk-num: #d19a66; --tk-fn: #61afef; --tk-type: #e5c07b;
     --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+    --menu-shadow: 0 1px 3px rgba(0,0,0,.35), 0 14px 36px rgba(0,0,0,.45);
   }
 }
 * { box-sizing: border-box; }
@@ -641,6 +643,30 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
 #toast { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%) translateY(20px); opacity: 0; transition: .2s; background: var(--panel); border: 1px solid var(--line-2); padding: 10px 16px; border-radius: 12px; max-width: min(640px, 92vw); z-index: 60; box-shadow: var(--shadow); pointer-events: none; }
 #toast.show { opacity: 1; transform: translateX(-50%); }
 #toast.bad { border-color: var(--bad); }
+
+/* Dropdowns: the closed control in forms, and the menu every <select> opens (see Menu). */
+dialog select, label.f select, .tm-form select, .tm-plan select, .tr-controls select {
+  appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%238a8a95' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; background-size: 12px;
+  transition: border-color .12s, background-color .12s;
+}
+dialog select:hover, label.f select:hover, .tm-form select:hover, .tm-plan select:hover, .tr-controls select:hover { border-color: var(--faint); }
+select[aria-expanded=true] { border-color: var(--accent); }
+.chip:has(select[aria-expanded=true]) { background: var(--hover); color: var(--text); }
+.menu { position: fixed; inset: auto; margin: 0; z-index: 1000; min-width: 180px; max-width: min(380px, calc(100vw - 16px)); overflow-y: auto; overscroll-behavior: contain;
+  padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--text); box-shadow: var(--menu-shadow);
+  font: 14px/1.35 var(--sans); opacity: 0; transform: translateY(var(--menu-shift, -4px)) scale(.985); transition: opacity .12s ease, transform .12s ease; }
+.menu.open { opacity: 1; transform: none; }
+.menu-group { padding: 8px 10px 4px; font-size: 12px; font-weight: 600; color: var(--faint); }
+.menu-sep { height: 1px; margin: 6px 6px; background: var(--line); }
+.menu-item { display: flex; align-items: center; gap: 14px; padding: 8px 10px; border-radius: 9px; cursor: pointer; white-space: nowrap; }
+.menu-item.active { background: var(--hover); }
+.menu-item .mi-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.menu-item .mi-hint { color: var(--faint); font-size: 12.5px; }
+.menu-item .mi-check { display: grid; width: 16px; height: 16px; flex: none; color: var(--accent); visibility: hidden; }
+.menu-item[aria-selected=true] .mi-check { visibility: visible; }
+.menu-item[aria-disabled=true] { opacity: .45; cursor: default; }
 
 @media (max-width: 900px) {
   .app, .app.no-files { grid-template-columns: 0 minmax(0, 1fr) 0; }
@@ -1604,8 +1630,154 @@ function appendEvent(id, ev) {
   if (stick) sc.scrollTop = sc.scrollHeight;
 }
 
+// ── dropdown menus ──────────────────────────────────────────────────────────
+// Every <select> keeps its value, form field and change handlers; only the list
+// it opens is ours, so it looks like the rest of the app instead of the OS widget.
+// Option text after the last " · " (or data-hint) shows as a muted hint.
+const Menu = (() => {
+  const CHECK = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  const canPop = typeof HTMLElement.prototype.showPopover === "function";
+  let cur = null; // { sel, box, items, active }
+  let typed = "", typedAt = 0;
+
+  function close(refocus) {
+    if (!cur) return;
+    const { sel, box } = cur;
+    cur = null;
+    sel.removeAttribute("aria-expanded");
+    box.remove();
+    if (refocus && sel.isConnected) sel.focus();
+  }
+  function setActive(i) {
+    cur.items[cur.active]?.classList.remove("active");
+    cur.active = i;
+    const it = cur.items[i];
+    if (it) { it.classList.add("active"); it.scrollIntoView({ block: "nearest" }); }
+  }
+  // Next enabled item in direction d, wrapping around.
+  function move(d) {
+    const n = cur.items.length;
+    let i = cur.active < 0 ? (d > 0 ? -1 : n) : cur.active;
+    for (let k = 0; k < n; k++) {
+      i = (i + d + n) % n;
+      if (!cur.items[i]._o.disabled) return setActive(i);
+    }
+  }
+  function choose(o) {
+    const sel = cur.sel;
+    close(true);
+    if (o.disabled || !sel.isConnected || sel.value === o.value) return;
+    sel.value = o.value;
+    sel.dispatchEvent(new Event("input", { bubbles: true }));
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function item(o) {
+    const it = el("div", "menu-item");
+    it._o = o;
+    it.setAttribute("role", "option");
+    it.setAttribute("aria-selected", String(o.selected));
+    if (o.disabled) it.setAttribute("aria-disabled", "true");
+    if (o.title) it.title = o.title;
+    const text = o.label || o.textContent, cut = text.lastIndexOf(" · ");
+    const split = !o.dataset.hint && cut > 0;
+    it.append(el("span", "mi-label", split ? text.slice(0, cut) : text));
+    const hint = o.dataset.hint || (split ? text.slice(cut + 3) : "");
+    if (hint) it.append(el("span", "mi-hint", hint));
+    const ck = el("span", "mi-check");
+    ck.innerHTML = CHECK;
+    it.append(ck);
+    return it;
+  }
+  function place(sel, box) {
+    const r = (sel.closest(".chip") || sel).getBoundingClientRect();
+    const pad = 8, gap = 6;
+    box.style.minWidth = Math.max(180, r.width) + "px";
+    const below = innerHeight - r.bottom - gap - pad, above = r.top - gap - pad;
+    const up = box.scrollHeight > below && above > below;
+    box.style.maxHeight = Math.min(up ? above : below, 440) + "px";
+    box.style.left = Math.max(pad, Math.min(r.left, innerWidth - box.offsetWidth - pad)) + "px";
+    box.style.top = (up ? r.top - gap - box.offsetHeight : r.bottom + gap) + "px";
+    box.style.setProperty("--menu-shift", up ? "4px" : "-4px");
+  }
+  function open(sel) {
+    close();
+    if (sel.disabled || !sel.options.length) return;
+    const box = el("div", "menu");
+    box.setAttribute("role", "listbox");
+    const items = [];
+    let prevGroup = null; // separators go between a group and whatever is next to it
+    for (const node of sel.children) {
+      const group = node.tagName === "OPTGROUP";
+      const opts = (group ? [...node.children] : [node]).filter((o) => o.tagName === "OPTION" && !o.hidden);
+      if (!opts.length) continue;
+      if (prevGroup !== null && (group || prevGroup)) box.append(el("div", "menu-sep"));
+      if (group && node.label) box.append(el("div", "menu-group", node.label));
+      for (const o of opts) { const it = item(o); items.push(it); box.append(it); }
+      prevGroup = group;
+    }
+    cur = { sel, box, items, active: -1 };
+    box.addEventListener("mousedown", (e) => e.preventDefault()); // focus stays on the select
+    box.addEventListener("pointermove", (e) => {
+      const it = e.target.closest(".menu-item");
+      if (it && !it._o.disabled && cur && items.indexOf(it) !== cur.active) setActive(items.indexOf(it));
+    });
+    box.addEventListener("click", (e) => { const it = e.target.closest(".menu-item"); if (it && !it._o.disabled) choose(it._o); });
+    // Inside a modal dialog the rest of the page is inert, so the menu lives in the dialog.
+    (sel.closest("dialog[open]") || document.body).append(box);
+    if (canPop) { box.popover = "manual"; box.showPopover(); }
+    place(sel, box);
+    sel.setAttribute("aria-expanded", "true");
+    const at = items.findIndex((it) => it._o.selected);
+    at >= 0 ? setActive(at) : move(1);
+    requestAnimationFrame(() => box.classList.add("open"));
+  }
+  function typeAhead(ch) {
+    const t = Date.now();
+    typed = (t - typedAt > 700 ? "" : typed) + ch.toLowerCase();
+    typedAt = t;
+    // A new letter searches past the current item; a longer prefix may stay on it.
+    const n = cur.items.length, start = Math.max(0, cur.active + (typed.length > 1 ? 0 : 1));
+    for (let k = 0; k < n; k++) {
+      const i = (start + k) % n, it = cur.items[i];
+      if (!it._o.disabled && it.textContent.toLowerCase().startsWith(typed)) return setActive(i);
+    }
+  }
+
+  document.addEventListener("mousedown", (e) => {
+    if (cur && cur.box.contains(e.target)) return;
+    const sel = e.target.closest?.("select") || e.target.closest?.("label.chip")?.querySelector("select");
+    const reopen = cur && cur.sel === sel;
+    close();
+    if (!sel || e.button !== 0 || sel.multiple || sel.size > 1) return;
+    e.preventDefault(); // no OS list
+    if (reopen) return; // a second click on the same control closes it
+    sel.focus();
+    open(sel);
+  }, true);
+  document.addEventListener("keydown", (e) => {
+    if (!cur) {
+      const sel = e.target;
+      if (sel instanceof HTMLSelectElement && !sel.multiple && sel.size <= 1 && !e.ctrlKey && !e.metaKey
+        && ["Enter", " ", "ArrowDown", "ArrowUp"].includes(e.key)) { e.preventDefault(); open(sel); }
+      return;
+    }
+    const k = e.key;
+    if (k === "Escape") { e.preventDefault(); e.stopPropagation(); close(true); }
+    else if (k === "ArrowDown" || k === "ArrowUp") { e.preventDefault(); move(k === "ArrowDown" ? 1 : -1); }
+    else if (k === "Home" || k === "End") { e.preventDefault(); cur.active = -1; move(k === "Home" ? 1 : -1); }
+    else if (k === "Enter" || (k === " " && Date.now() - typedAt > 700)) { e.preventDefault(); const it = cur.items[cur.active]; it ? choose(it._o) : close(true); }
+    else if (k === "Tab") close();
+    else if (k.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); typeAhead(k); }
+  }, true);
+  addEventListener("resize", () => close());
+  addEventListener("blur", () => close());
+  document.addEventListener("scroll", (e) => { if (cur && !cur.box.contains(e.target)) close(); }, true);
+  return { open, close };
+})();
+
 // ── composer ────────────────────────────────────────────────────────────────
 function opt(v, label) { const o = el("option", null, label); o.value = v; return o; }
+const effortName = (e) => (e === "xhigh" ? "Extra high" : e.charAt(0).toUpperCase() + e.slice(1));
 function fillSelect(sel, items) {
   const prev = sel.value;
   sel.replaceChildren(...items.map((x) => (x instanceof HTMLElement ? x : opt(x[0], x[1]))));
@@ -1657,11 +1829,11 @@ function renderComposer() {
   if (mode === "reply") {
     const cur = t.ran_model || t.model;
     fillSelect($("#f-model"), [opt("", `Keep ${cur ? modelLabel(cur) : "the model"}`), ...modelOptions().slice(1)]);
-    fillSelect($("#f-effort"), [["", `Keep effort${t.effort ? " (" + t.effort + ")" : ""}`], ["auto", "Auto effort"], ...st.efforts.map((e) => [e, e])]);
+    fillSelect($("#f-effort"), [["", `Keep effort${t.effort ? " (" + effortName(t.effort) + ")" : ""}`], ["auto", "Auto effort"], ...st.efforts.map((e) => [e, effortName(e)])]);
     if (fresh) $("#f-model").value = $("#f-effort").value = "";
   } else {
     fillSelect($("#f-model"), modelOptions());
-    fillSelect($("#f-effort"), [["", "Auto effort"], ...st.efforts.map((e) => [e, e])]);
+    fillSelect($("#f-effort"), [["", "Auto effort"], ...st.efforts.map((e) => [e, effortName(e)])]);
     if (fresh && S.newPick) { $("#f-model").value = S.newPick.model; $("#f-effort").value = S.newPick.effort; }
   }
   document.querySelectorAll(".new-only").forEach((n) => (n.hidden = mode !== "new"));
@@ -3627,7 +3799,7 @@ function openAnalyze(r) {
   $("#an-err").textContent = "";
   f.prompt.value = analyzePrompt(r); f.save.checked = false;
   f.model.replaceChildren(...modelOptions()); f.model.value = "";
-  f.effort.replaceChildren(opt("", "Auto effort"), ...S.state.efforts.map((e) => opt(e, e)));
+  f.effort.replaceChildren(opt("", "Auto effort"), ...S.state.efforts.map((e) => opt(e, effortName(e))));
   f.perm.replaceChildren(...["plan", "acceptEdits", "bypassPermissions", "default"].map((p) => opt(p, PERM_LONG[p])));
   f.perm.value = "plan";
   $("#dlg-analyze").showModal(); f.prompt.focus();
@@ -4131,7 +4303,7 @@ function openProfile(p) {
   profForm.name.value = p ? p.name : "";
   profForm.paths.value = p ? p.paths.join("\n") : (currentWs()?.path || "");
   profForm.mode.value = p ? p.mode : "auto";
-  profForm.effort.replaceChildren(opt("", "Model default"), ...S.state.efforts.map((e) => opt(e, e)));
+  profForm.effort.replaceChildren(opt("", "Model default"), ...S.state.efforts.map((e) => opt(e, effortName(e))));
   profForm.effort.value = p?.effort || "";
   profForm.permission_mode.replaceChildren(...["acceptEdits", "bypassPermissions", "plan"].map((v) => opt(v, PERM_LONG[v])), opt("", PERM_LONG.default));
   profForm.permission_mode.value = p ? (p.permission_mode || "") : "acceptEdits";
