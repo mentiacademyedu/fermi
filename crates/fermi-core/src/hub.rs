@@ -1087,6 +1087,25 @@ mod tests {
     }
 
     #[test]
+    fn late_save_keeps_a_resumed_attempt() {
+        let home = tmp_dir("late");
+        let engine = Engine::new(Default::default(), home.clone(), 0);
+        let rec = Recorder::start(&engine, &mut Task::new("x", &home), "tui");
+        let id = rec.id();
+        // Another window resumes the task and finishes the second attempt…
+        let dir = history_dir(&home);
+        let mut newer = read_task(&dir, id).unwrap();
+        newer.reopen(2, "continue", now_ms());
+        newer.apply(&Event::Done { ok: true, summary: "done".into() });
+        write_rec(&dir, &mut newer);
+        // …then this window closes, cancelling and saving its stale copy.
+        drop(rec);
+        let disk = read_task(&dir, id).unwrap();
+        assert_eq!((disk.attempt, disk.status), (2, TaskStatus::Done), "the resumed attempt survives");
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
     fn dropped_recorder_marks_cancelled() {
         let home = tmp_dir("drop");
         let id = {
