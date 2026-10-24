@@ -122,6 +122,8 @@ pub struct Engine {
     pub depth: u32,
     /// Budget reservations (see `billing`).
     pub ledger: crate::billing::Ledger,
+    /// The egress proxy for sandboxed agents, started on first use.
+    egress: tokio::sync::OnceCell<Option<u16>>,
 }
 
 impl Engine {
@@ -133,7 +135,27 @@ impl Engine {
     }
 
     pub fn new(cfg: Config, home: PathBuf, depth: u32) -> Engine {
-        Engine { catalog: cfg.catalog(), store: Store::open(&home), ledger: crate::billing::Ledger::open(&home), cfg, home, depth }
+        Engine {
+            catalog: cfg.catalog(),
+            store: Store::open(&home),
+            ledger: crate::billing::Ledger::open(&home),
+            egress: tokio::sync::OnceCell::new(),
+            cfg,
+            home,
+            depth,
+        }
+    }
+
+    /// The egress proxy's port for sandboxed agents (None if it couldn't start).
+    pub async fn egress_port(&self) -> Option<u16> {
+        *self
+            .egress
+            .get_or_init(|| async {
+                let mut allow: Vec<String> = crate::sandbox::PROVIDER_HOSTS.iter().map(|s| s.to_string()).collect();
+                allow.extend(self.cfg.security.net_allow.iter().cloned());
+                crate::sandbox::Proxy::start(allow, self.home.join("egress.jsonl")).await.ok().map(|p| p.port)
+            })
+            .await
     }
 
     pub fn plan(&self, task: &Task) -> Result<Plan> {

@@ -18,3 +18,7 @@ serde_json.workspace = true
 tokio.workspace = true
 sha2 = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
+
+[[bin]]
+name = "fermi-bridge"
+path = "src/bin/fermi-bridge.rs"

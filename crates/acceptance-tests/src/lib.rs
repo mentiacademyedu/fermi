@@ -161,6 +161,29 @@ impl Case {
 
     /// Writes result.json and the artifact manifest. Panics (failing the
     /// test) unless at least one assertion was made and all of them held.
+    /// Ends the case as `blocked`: this platform can't exercise what it checks
+    /// (no OS sandbox, say). It never counts as passed.
+    pub fn block(mut self, reason: &str) {
+        self.checks.push(("blocked".into(), false, reason.into()));
+        let mut manifest = vec![];
+        for a in &self.artifacts {
+            let bytes = std::fs::read(self.dir.join(a)).unwrap_or_default();
+            manifest.push(json!({ "path": a, "bytes": bytes.len(), "sha256": sha256(&bytes) }));
+        }
+        std::fs::write(self.dir.join("manifest.json"), serde_json::to_string_pretty(&json!({ "files": manifest })).unwrap()).unwrap();
+        let result = json!({
+            "schemaVersion": 1, "testId": self.id, "runId": self.run_id, "attemptId": self.attempt,
+            "executionState": "not_run", "status": "blocked", "tier": self.tier, "os": std::env::consts::OS,
+            "startedAt": self.started, "finishedAt": utc_now(), "reason": reason,
+            "realComponents": self.real, "mockedComponents": self.mocked,
+            "assertions": self.checks.iter().map(|(n, ok, d)| json!({ "name": n, "passed": ok, "detail": d })).collect::<Vec<_>>(),
+            "artifacts": self.artifacts,
+        });
+        std::fs::write(self.dir.join("result.json"), serde_json::to_string_pretty(&result).unwrap()).unwrap();
+        self.artifacts.clear();
+        self.checks.clear();
+    }
+
     pub fn finish(mut self) {
         let failed: Vec<&(String, bool, String)> = self.checks.iter().filter(|c| !c.1).collect();
         let status = if self.checks.is_empty() || !failed.is_empty() { "failed" } else { "passed" };
@@ -311,8 +334,17 @@ pub struct Fermi {
 
 /// The fake CLI Cargo builds next to the test binaries (target/<profile>/).
 pub fn fake_cli() -> PathBuf {
+    sibling("fake-cli")
+}
+
+/// fermi's MCP bridge as a program of its own (the real `mcp::serve`).
+pub fn fermi_bridge() -> PathBuf {
+    sibling("fermi-bridge")
+}
+
+fn sibling(bin: &str) -> PathBuf {
     let exe = std::env::current_exe().expect("test binary path");
-    let name = format!("fake-cli{}", std::env::consts::EXE_SUFFIX);
+    let name = format!("{bin}{}", std::env::consts::EXE_SUFFIX);
     exe.ancestors()
         .skip(1)
         .take(3)
@@ -333,7 +365,10 @@ impl Fermi {
         let home = case.work.join(name);
         std::fs::create_dir_all(&home)?;
         let bin = fake_cli().display().to_string().replace('\\', "/");
-        let mut cfg = format!("default_profile = \"p\"\n\n[bins]\nclaude = \"{bin}\"\ncodex = \"{bin}\"\ngemini = \"{bin}\"\n\n");
+        let bridge = fermi_bridge().display().to_string().replace('\\', "/");
+        let mut cfg = format!(
+            "default_profile = \"p\"\n\n[bins]\nclaude = \"{bin}\"\ncodex = \"{bin}\"\ngemini = \"{bin}\"\nfermi = \"{bridge}\"\n\n"
+        );
         for a in accounts {
             let dir = home.join("accounts").join(a.id);
             std::fs::create_dir_all(&dir)?;

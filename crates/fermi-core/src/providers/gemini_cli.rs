@@ -55,7 +55,8 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         envs.push(("GEMINI_API_KEY".into(), super::api::api_key(ctx.account)?));
     }
 
-    let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, &ctx.task.input(), ctx.tx).await?;
+    let jail = ctx.jail(&bin).await?;
+    let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, &ctx.task.input(), ctx.tx, jail.as_ref()).await?;
     // Assistant text arrives as deltas; collect them into one block per turn.
     let (mut text, mut pending, mut usage) = (String::new(), String::new(), Usage::default());
     let (mut error, mut done) = (None::<String>, false);

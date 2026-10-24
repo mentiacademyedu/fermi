@@ -192,6 +192,7 @@ fn acceptance(o: Opts) -> Result<bool, String> {
             let file = Path::new(s(c, "testFile")).file_stem().and_then(|f| f.to_str()).unwrap_or("").to_string();
             let name = s(c, "testName").to_string();
             let mut all_ok = true;
+            let mut blocked = false;
             for a in 1..=reps {
                 let attempt = format!("a{a}");
                 let dir = reports.join(&id).join(&attempt);
@@ -207,6 +208,14 @@ fn acceptance(o: Opts) -> Result<bool, String> {
                 let stdout = String::from_utf8_lossy(&out.stdout).to_string();
                 let _ = std::fs::write(dir.join("stdout.log"), &stdout);
                 let _ = std::fs::write(dir.join("stderr.log"), &out.stderr);
+                // A test that can't run here (the platform lacks what it checks) says so.
+                let result: Option<Value> = std::fs::read(dir.join("result.json")).ok().and_then(|b| serde_json::from_slice(&b).ok());
+                if let Some(r) = result.filter(|r| r["status"] == "blocked" && r["testId"] == id.as_str() && out.status.success()) {
+                    blocked = true;
+                    attempts.push(json!({ "attempt": attempt, "status": "blocked", "reason": r["reason"] }));
+                    eprintln!("  {id} {attempt}: blocked ({})", r["reason"].as_str().unwrap_or(""));
+                    continue;
+                }
                 let ran_one = stdout.contains("test result: ok. 1 passed") || stdout.contains("1 failed");
                 let verdict = if !ran_one {
                     Err("the filter ran no test".to_string())
@@ -218,7 +227,13 @@ fn acceptance(o: Opts) -> Result<bool, String> {
                 attempts.push(json!({ "attempt": attempt, "status": if ok { "passed" } else { "failed" }, "exitCode": out.status.code(), "reason": verdict.err() }));
                 eprintln!("  {id} {attempt}: {}", if ok { "passed" } else { "FAILED" });
             }
-            status = if all_ok { "passed".into() } else { "failed".into() };
+            status = if !all_ok {
+                "failed".into()
+            } else if blocked {
+                "blocked".into()
+            } else {
+                "passed".into()
+            };
         }
         eprintln!("{id}: {status}");
         summary.push(json!({ "id": id, "system": s(c, "system"), "status": status, "attempts": attempts, "durationMs": started.elapsed().as_millis() as u64 }));
@@ -258,10 +273,18 @@ fn report(run_id: &str) -> Result<(), String> {
         sum["profile"].as_str().unwrap_or("?"),
         sum["os"].as_str().unwrap_or("?")
     );
-    md += "| System | Cases | Passed | Failed | Not implemented | Not run |\n| --- | --- | --- | --- | --- | --- |\n";
+    md += "| System | Cases | Passed | Failed | Blocked | Not implemented | Not run |\n| --- | --- | --- | --- | --- | --- | --- |\n";
     for (sys, m) in &by_sys {
         let g = |k: &str| m.get(k).copied().unwrap_or(0);
-        md += &format!("| {sys} | {} | {} | {} | {} | {} |\n", g("total"), g("passed"), g("failed"), g("not_implemented"), g("not_run"));
+        md += &format!(
+            "| {sys} | {} | {} | {} | {} | {} | {} |\n",
+            g("total"),
+            g("passed"),
+            g("failed"),
+            g("blocked"),
+            g("not_implemented"),
+            g("not_run")
+        );
     }
     md += "\n| ID | Case | Result | Capability (audit) |\n| --- | --- | --- | --- |\n";
     md += &rows.join("\n");

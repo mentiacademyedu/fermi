@@ -16,7 +16,13 @@
 //! `crash` (exit with code 101 after partial output), `exit` (exit code),
 //! `done_touch` (a file written with the time when the step finishes),
 //! `read` (an absolute path the agent reads: its content joins the reply,
-//! unless a `--disallowedTools "Read(//…)"` rule denies it, as Claude Code does).
+//! unless a `--disallowedTools "Read(//…)"` rule denies it, as Claude Code does),
+//! `ops` (actions with real effects, in order: each `{tool, input, do}`; with a
+//! `tool`, the Claude flavor first decides like Claude Code: deny rules, allow
+//! rules, the permission mode, then the `--permission-prompt-tool` over MCP,
+//! starting the server from `--mcp-config`; without one, the action just runs,
+//! like a program the agent started. `do`: `read`, `rm`, `write`+`content`,
+//! `env`, `read_parent_env`, `connect`+`send`, `http`).
 
 use serde_json::{json, Value};
 use std::io::{Read, Write};
@@ -176,6 +182,8 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
             text += &std::fs::read_to_string(path).unwrap_or_default();
         }
     }
+    let (op_text, op_denials) = run_ops(step, flavor);
+    text += &op_text;
     let tools: Vec<Value> = step["tools"].as_array().cloned().unwrap_or_default();
     let usage = &step["usage"];
     let (input, output) = (usage["input"].as_u64().unwrap_or(10), usage["output"].as_u64().unwrap_or(5));
@@ -228,6 +236,7 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
             if let Some(p) = &read_denied {
                 denials.push(json!({ "tool_name": "Read", "tool_use_id": "toolu_read", "tool_input": { "file_path": p } }));
             }
+            denials.extend(op_denials);
             let mut result = json!({ "type": "result", "subtype": "success", "is_error": false, "result": text, "session_id": session,
                 "usage": { "input_tokens": input, "cache_read_input_tokens": cached, "output_tokens": output }, "permission_denials": denials });
             if let Some(c) = cost {
@@ -283,4 +292,244 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
         let _ = std::fs::write(home.join(d), now_ms().to_string());
     }
     std::process::exit(step["exit"].as_i64().unwrap_or(0) as i32);
+}
+
+// ── actions with real effects (`ops`) ──────────────────────────────────────
+
+fn flag_value<'a>(args: &'a [String], flag: &str) -> Option<&'a str> {
+    args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).map(String::as_str)
+}
+
+/// The values after a variadic flag, up to the next flag (comma lists split).
+fn flag_list(args: &[String], flag: &str) -> Vec<String> {
+    let Some(i) = args.iter().position(|a| a == flag) else { return vec![] };
+    args[i + 1..].iter().take_while(|a| !a.starts_with("--")).flat_map(|a| a.split(',').map(str::to_string)).collect()
+}
+
+/// Claude's rule pattern match for shell commands (`rm *`): `*` matches anything.
+fn pattern_matches(pattern: &str, text: &str) -> bool {
+    let parts: Vec<&str> = pattern.split('*').collect();
+    if parts.len() == 1 {
+        return text == pattern;
+    }
+    let mut rest = text;
+    for (i, p) in parts.iter().enumerate() {
+        if i == 0 {
+            match rest.strip_prefix(p) {
+                Some(r) => rest = r,
+                None => return false,
+            }
+        } else if i == parts.len() - 1 {
+            return rest.ends_with(p);
+        } else {
+            match rest.find(p) {
+                Some(k) => rest = &rest[k + p.len()..],
+                None => return false,
+            }
+        }
+    }
+    true
+}
+
+/// How Claude Code decides before asking anyone: Some(allowed), or None to ask.
+fn claude_decides(tool: &str, input: &Value, allowed: &[String], disallowed: &[String], mode: &str) -> Option<bool> {
+    let target = match tool {
+        "Bash" => input["command"].as_str().unwrap_or("").to_string(),
+        _ => input["file_path"].as_str().unwrap_or("").to_string(),
+    };
+    let rule_hits = |rule: &str| -> bool {
+        let Some(inner) = rule.strip_prefix(&format!("{tool}(")).and_then(|r| r.strip_suffix(')')) else { return rule == tool };
+        if tool == "Read" {
+            inner.strip_prefix("//").is_some_and(|p| rule_matches(&format!("/{p}"), &target))
+        } else {
+            pattern_matches(inner, &target)
+        }
+    };
+    if disallowed.iter().any(|r| rule_hits(r)) {
+        return Some(false);
+    }
+    if allowed.iter().any(|r| rule_hits(r)) || mode == "bypassPermissions" {
+        return Some(true);
+    }
+    match tool {
+        "Read" | "Glob" | "Grep" => Some(true),
+        "Edit" | "Write" if mode == "acceptEdits" => Some(true),
+        _ => None,
+    }
+}
+
+/// fermi's bridge, started from the MCP config the way Claude Code starts it.
+struct Bridge {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+    out: std::io::BufReader<std::process::ChildStdout>,
+    id: u64,
+}
+
+impl Bridge {
+    fn start(config: &str) -> Option<Bridge> {
+        let cfg: Value = serde_json::from_slice(&std::fs::read(config).ok()?).ok()?;
+        let server = &cfg["mcpServers"]["fermi"];
+        let args: Vec<String> = server["args"].as_array()?.iter().filter_map(|a| a.as_str().map(String::from)).collect();
+        let mut child = std::process::Command::new(server["command"].as_str()?)
+            .args(args)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .ok()?;
+        let stdin = child.stdin.take()?;
+        let out = std::io::BufReader::new(child.stdout.take()?);
+        let mut b = Bridge { child, stdin, out, id: 0 };
+        b.call(
+            "initialize",
+            json!({ "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "fake-claude", "version": "1" } }),
+        )?;
+        let _ = writeln!(b.stdin, "{}", json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }));
+        Some(b)
+    }
+
+    fn call(&mut self, method: &str, params: Value) -> Option<Value> {
+        use std::io::BufRead;
+        self.id += 1;
+        writeln!(self.stdin, "{}", json!({ "jsonrpc": "2.0", "id": self.id, "method": method, "params": params })).ok()?;
+        self.stdin.flush().ok()?;
+        let mut line = String::new();
+        loop {
+            line.clear();
+            if self.out.read_line(&mut line).ok()? == 0 {
+                return None;
+            }
+            if let Ok(v) = serde_json::from_str::<Value>(&line) {
+                if v["id"] == self.id {
+                    return Some(v["result"].clone());
+                }
+            }
+        }
+    }
+
+    /// The permission prompt: true when fermi allows the call.
+    fn ask(&mut self, tool: &str, input: &Value) -> bool {
+        let r = self.call("tools/call", json!({ "name": "permission", "arguments": { "tool_name": tool, "input": input } }));
+        let text = r.as_ref().and_then(|r| r["content"][0]["text"].as_str()).unwrap_or("");
+        serde_json::from_str::<Value>(text).ok().is_some_and(|d| d["behavior"] == "allow")
+    }
+}
+
+impl Drop for Bridge {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+    }
+}
+
+fn run_ops(step: &Value, flavor: Flavor) -> (String, Vec<Value>) {
+    let args: Vec<String> = std::env::args().collect();
+    let mode = flag_value(&args, "--permission-mode").unwrap_or("default").to_string();
+    let (allowed, disallowed) = (flag_list(&args, "--allowedTools"), flag_list(&args, "--disallowedTools"));
+    let prompt_tool = flag_value(&args, "--permission-prompt-tool").is_some();
+    let mcp = flag_value(&args, "--mcp-config").map(str::to_string);
+    let mut bridge: Option<Bridge> = None;
+    let (mut out, mut denials) = (String::new(), vec![]);
+    for (i, op) in step["ops"].as_array().into_iter().flatten().enumerate() {
+        if let (Some(tool), Flavor::Claude) = (op["tool"].as_str(), flavor) {
+            let input = op["input"].clone();
+            let ok = match claude_decides(tool, &input, &allowed, &disallowed, &mode) {
+                Some(d) => d,
+                None if prompt_tool => {
+                    if bridge.is_none() {
+                        bridge = mcp.as_deref().and_then(Bridge::start);
+                    }
+                    bridge.as_mut().is_some_and(|b| b.ask(tool, &input))
+                }
+                None => false,
+            };
+            if !ok {
+                denials.push(json!({ "tool_name": tool, "tool_use_id": format!("toolu_op{i}"), "tool_input": input }));
+                out += &format!("[{tool} denied]\n");
+                continue;
+            }
+        }
+        out += &perform(&op["do"]);
+    }
+    (out, denials)
+}
+
+/// Does one action for real and reports what happened.
+fn perform(d: &Value) -> String {
+    if let Some(p) = d["read"].as_str() {
+        return match std::fs::read_to_string(p) {
+            Ok(s) => format!("read {p}: {s}\n"),
+            Err(e) => format!("read {p} failed: {e}\n"),
+        };
+    }
+    if let Some(p) = d["rm"].as_str() {
+        return match std::fs::remove_file(p) {
+            Ok(()) => format!("removed {p}\n"),
+            Err(e) => format!("rm {p} failed: {e}\n"),
+        };
+    }
+    if let Some(p) = d["write"].as_str() {
+        return match std::fs::write(p, d["content"].as_str().unwrap_or("")) {
+            Ok(()) => format!("wrote {p}\n"),
+            Err(e) => format!("write {p} failed: {e}\n"),
+        };
+    }
+    if d["env"] == true {
+        let mut vars: Vec<String> = std::env::vars().map(|(k, v)| format!("{k}={v}")).collect();
+        vars.sort();
+        return format!("env:\n{}\n", vars.join("\n"));
+    }
+    if d["read_parent_env"] == true {
+        return parent_env();
+    }
+    if let Some(addr) = d["connect"].as_str() {
+        let target: Option<std::net::SocketAddr> = addr.parse().ok();
+        return match target.map(|t| std::net::TcpStream::connect_timeout(&t, Duration::from_secs(3))) {
+            Some(Ok(mut s)) => {
+                let _ = s.write_all(d["send"].as_str().unwrap_or("").as_bytes());
+                format!("connected {addr}\n")
+            }
+            Some(Err(e)) => format!("connect {addr} failed: {e}\n"),
+            None => format!("connect {addr} failed: bad address\n"),
+        };
+    }
+    if let Some(url) = d["http"].as_str() {
+        return http_get(url);
+    }
+    String::new()
+}
+
+#[cfg(unix)]
+fn parent_env() -> String {
+    let p = format!("/proc/{}/environ", std::os::unix::process::parent_id());
+    match std::fs::read(&p) {
+        Ok(b) => format!("parent env: {}\n", String::from_utf8_lossy(&b).replace('\0', "\n")),
+        Err(e) => format!("read {p} failed: {e}\n"),
+    }
+}
+
+#[cfg(not(unix))]
+fn parent_env() -> String {
+    "parent env: no procfs here\n".into()
+}
+
+/// A GET through the proxy in `HTTP_PROXY` when there is one, else direct.
+fn http_get(url: &str) -> String {
+    use std::io::BufRead;
+    let authority = url.trim_start_matches("http://").split('/').next().unwrap_or("").to_string();
+    let via = std::env::var("HTTP_PROXY").ok().map(|p| p.trim_start_matches("http://").trim_end_matches('/').to_string());
+    let connect_to = via.clone().unwrap_or_else(|| authority.clone());
+    let addr: Option<std::net::SocketAddr> = connect_to.parse().ok();
+    let Some(Ok(mut s)) = addr.map(|a| std::net::TcpStream::connect_timeout(&a, Duration::from_secs(3))) else {
+        return format!("http {url} failed: can't connect to {connect_to}\n");
+    };
+    let path = if via.is_some() {
+        url.to_string()
+    } else {
+        format!("/{}", url.trim_start_matches("http://").split_once('/').map(|x| x.1).unwrap_or(""))
+    };
+    let _ = write!(s, "GET {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n");
+    let mut first = String::new();
+    let _ = std::io::BufReader::new(s).read_line(&mut first);
+    format!("http {url}: {}\n", first.trim())
 }

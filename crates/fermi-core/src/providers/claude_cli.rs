@@ -28,27 +28,52 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
             emit(ctx.tx, Event::Session { id });
         }
     }
-    if let Some(pm) = ctx.permission() {
-        args.extend(["--permission-mode".into(), pm.to_string()]);
+    let sec = &e.cfg.security;
+    let requested = ctx.permission().unwrap_or("default").to_string();
+    let mut mode = ctx.permission().map(str::to_string);
+    // Claude never asks in bypass mode, so commands needing approval couldn't be held.
+    if mode.as_deref() == Some("bypassPermissions") && !sec.confirm_commands.is_empty() {
+        emit(
+            ctx.tx,
+            Event::Log {
+                line: "commands that need your approval are configured, so this runs in acceptEdits mode; fermi allows everything else"
+                    .into(),
+            },
+        );
+        mode = Some("acceptEdits".into());
+    }
+    if let Some(pm) = &mode {
+        args.extend(["--permission-mode".into(), pm.clone()]);
     }
     let mut allowed: Vec<String> = ctx.task.allowed.clone();
     if let Some(b) = mcp::bridge_for(e, ctx.profile)? {
         args.extend(["--mcp-config".into(), b.config_path, "--append-system-prompt".into(), b.system_prompt]);
         allowed.insert(0, b.allowed_tools);
+        // Every permission question goes to fermi's policy (see `policy::decide`).
+        if crate::policy::active(sec) {
+            args.extend(["--permission-prompt-tool".into(), "mcp__fermi__permission".into()]);
+        }
     }
     if !allowed.is_empty() {
         // One flag, one rule per argument: rules may contain spaces or commas.
         args.push("--allowedTools".into());
         args.extend(allowed);
     }
-    let denied = crate::policy::claude_read_rules(&e.cfg.security.deny_read);
+    let mut denied = crate::policy::claude_read_rules(&sec.deny_read);
+    denied.extend(sec.deny_commands.iter().map(|c| format!("Bash({c})")));
     if !denied.is_empty() {
         args.push("--disallowedTools".into());
         args.extend(denied);
     }
     args.extend(ctx.profile.claude_args.iter().cloned());
 
-    let mut envs = vec![("FERMI_DEPTH".to_string(), (e.depth + 1).to_string())];
+    // The bridge works in the same fermi home as this engine.
+    let mut envs = vec![
+        ("FERMI_DEPTH".to_string(), (e.depth + 1).to_string()),
+        ("FERMI_HOME".to_string(), e.home.display().to_string()),
+        // What the user chose, for the permission hook (the run may use acceptEdits).
+        ("FERMI_PERMISSION_MODE".to_string(), requested),
+    ];
     // Calls the agent delegates through fermi's bridge are attributed to this task.
     if let Some(id) = ctx.task.id {
         envs.push(("FERMI_TASK_ID".into(), id.to_string()));
@@ -58,7 +83,8 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         envs.push(("CLAUDE_CONFIG_DIR".into(), home.display().to_string()));
     }
 
-    let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, &ctx.task.input(), ctx.tx).await?;
+    let jail = ctx.jail(&bin).await?;
+    let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, &ctx.task.input(), ctx.tx, jail.as_ref()).await?;
     let (mut text, mut usage) = (String::new(), Usage::default());
     let (mut blocked, mut resets, mut error, mut got_result) = (false, None, None::<String>, false);
 

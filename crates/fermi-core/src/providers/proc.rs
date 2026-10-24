@@ -17,8 +17,20 @@ pub struct Proc {
 }
 
 impl Proc {
-    pub async fn spawn(bin: &Path, args: &[String], envs: &[(String, String)], cwd: &Path, stdin_text: &str, tx: &Tx) -> Result<Proc> {
+    pub async fn spawn(
+        bin: &Path,
+        args: &[String],
+        envs: &[(String, String)],
+        cwd: &Path,
+        stdin_text: &str,
+        tx: &Tx,
+        jail: Option<&crate::sandbox::Jail>,
+    ) -> Result<Proc> {
         let mut cmd = Command::new(bin);
+        // The sandbox first: it clears the environment, then fermi's variables go in.
+        if let Some(j) = jail {
+            crate::sandbox::apply(&mut cmd, j)?;
+        }
         cmd.args(args)
             .envs(envs.iter().map(|(k, v)| (k, v)))
             .current_dir(cwd)

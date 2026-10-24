@@ -25,6 +25,15 @@ pub struct RunCtx<'a> {
 }
 
 impl RunCtx<'_> {
+    /// The sandbox for this run's CLI, when `[security] sandbox` is on.
+    pub async fn jail(&self, bin: &std::path::Path) -> Result<Option<crate::sandbox::Jail>> {
+        let e = self.engine;
+        if !e.cfg.security.sandbox {
+            return Ok(None);
+        }
+        let port = e.egress_port().await;
+        crate::sandbox::jail(&e.cfg, &e.home, &self.task.cwd, self.account.home_dir().as_deref(), bin, port).map(Some)
+    }
     /// Task effort, else the profile's default.
     pub fn effort(&self) -> Option<&str> {
         self.task.effort.as_deref().or(self.profile.effort.as_deref())

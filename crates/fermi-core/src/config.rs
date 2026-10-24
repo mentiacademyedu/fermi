@@ -178,6 +178,9 @@ pub struct Bins {
     pub claude: Option<String>,
     pub codex: Option<String>,
     pub gemini: Option<String>,
+    /// The program Claude starts as fermi's MCP bridge (default: this fermi).
+    #[serde(default)]
+    pub fermi: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -211,6 +214,26 @@ pub struct SecurityCfg {
     /// Globs agents must not read: absolute, `~/…` or `**/…`.
     #[serde(default)]
     pub deny_read: Vec<String>,
+    /// Shell commands agents may never run (Claude patterns, e.g. `git push *`).
+    #[serde(default)]
+    pub deny_commands: Vec<String>,
+    /// Shell commands that wait for your approval (e.g. `rm *`), once per exact command.
+    #[serde(default)]
+    pub confirm_commands: Vec<String>,
+    /// Run agent CLIs in a sandbox (see `sandbox`).
+    #[serde(default)]
+    pub sandbox: bool,
+    /// Environment variables a sandboxed agent gets besides the system ones.
+    #[serde(default)]
+    pub env_allow: Vec<String>,
+    /// Hosts a sandboxed agent may reach (`host`, `host:port`, `*.domain`), besides the providers'.
+    #[serde(default)]
+    pub net_allow: Vec<String>,
+    /// More folders a sandboxed agent may read, or read and write.
+    #[serde(default)]
+    pub read_only: Vec<String>,
+    #[serde(default)]
+    pub read_write: Vec<String>,
 }
 
 /// Project memory (see `memory`).
