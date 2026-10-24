@@ -397,6 +397,58 @@ the attempt it belongs to and, for tools, the model call that asked for it.
 redact = ["ACME-[0-9a-f]{16}"]   # regular expressions
 ```
 
+## Plugins
+
+Extend fermi without changing it. A plugin is a folder with a `plugin.toml`
+and a program that speaks [MCP](https://modelcontextprotocol.io) over stdio:
+
+```toml
+name = "acme-tools"
+version = "1.2.0"
+api = 1                                  # the plugin API it was written for
+command = ["acme-mcp", "--stdio"]        # looked up in the plugin's folder, then PATH
+net = ["api.acme.example"]               # hosts it may reach (default: none)
+env = ["ACME_TOKEN"]                     # variables it gets (default: none)
+
+[[capabilities]]
+kind = "tool"                            # offered to agents
+name = "search_tickets"
+
+[[capabilities]]
+kind = "command"                         # run by you
+name = "deploy-status"
+tool = "status"                          # the MCP tool behind it (default: name)
+
+[[capabilities]]
+kind = "adapter"                         # a model adapter for an account
+name = "proxy"
+```
+
+- `fermi plugin install <folder>` checks the manifest and enables the plugin;
+  only the capabilities it declares are registered. `fermi plugin list`,
+  `enable`, `disable`, `remove`, and `fermi plugin run <command> '{"arg": 1}'`.
+  The dashboard's **Plugins** page does the same.
+- **MCP servers**: `fermi plugin add-mcp github -- npx -y @modelcontextprotocol/server-github`
+  installs a server as a plugin offering its tools to agents. Current servers
+  (`server/discover`) and older ones (`initialize`) both work; arguments are
+  checked against each tool's schema before a call.
+- **Isolation**: every call runs the plugin in its own sandboxed process, with
+  only the variables in `env` (none of fermi's secrets), network only to `net`
+  through fermi's proxy, and on Linux file access only to the task's folder, the
+  plugin's own folder and a temp folder. Path arguments outside that, or under
+  `[security] deny_read`, are refused before the plugin sees them. A crash or a
+  hang (`timeout_secs`, default 60) fails that call only. Turn the sandbox off
+  with `[plugins] sandbox = false`.
+- **Name collisions**: `[plugins] collisions = "namespace"` (default) keeps
+  both as `<plugin>.<name>` and refuses the bare name as ambiguous;
+  `"reject"` registers neither. The outcome never depends on install order.
+- **Model adapters**: `adapter = "<plugin>.<name>"` on an account sends its
+  calls to the plugin. It receives `{prompt, model, effort, resume, cwd}` and
+  answers `{text, session, usage, calls, tools, error}`; fermi turns that into
+  the same events, usage records and failover as its own adapters.
+- A plugin needing a plugin API this fermi doesn't support is refused at
+  install, saying which versions are needed and supported.
+
 ## Skills & agents
 
 Every fermi account keeps its own config folder, so skills you installed in
@@ -462,6 +514,7 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   sessions.rs      finds and imports Claude Code / Codex / Gemini CLI sessions
   trace.rs         operation traces, tapes of CLI responses, replay
   redact.rs        removes secrets before anything about a task is saved
+  plugins.rs       plugin manifests, registry, sandboxed MCP client, model adapters
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
   slides.rs        .pptx parts in and out (the dashboard renders and edits the XML)
