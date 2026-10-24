@@ -1,0 +1,8 @@
+name = "future"
+version = "3.0.0"
+api = 2
+command = ["{FAKE_PLUGIN}", "--label", "future", "--tools", "echo", "--marker", "{MARKER}"]
+
+[[capabilities]]
+kind = "tool"
+name = "echo"

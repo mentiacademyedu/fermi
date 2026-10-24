@@ -155,11 +155,7 @@ pub fn jail(
     }
     read_write.extend(account_home.map(Path::to_path_buf));
     read_write.extend(cfg.security.read_write.iter().map(|p| crate::util::expand(p)));
-    let mut read_only: Vec<PathBuf> =
-        ["/usr", "/lib", "/lib64", "/lib32", "/bin", "/sbin", "/etc", "/opt", "/nix", "/snap", "/dev", "/sys/devices/system/cpu"]
-            .iter()
-            .map(PathBuf::from)
-            .collect();
+    let mut read_only = system_dirs();
     // The CLI and the folder it's installed in (node packages live next to it).
     if let Ok(real) = std::fs::canonicalize(bin) {
         read_only.extend(real.parent().map(Path::to_path_buf));
@@ -171,6 +167,14 @@ pub fn jail(
     let mut env_allow = cfg.security.env_allow.clone();
     env_allow.extend(cfg.accounts.iter().filter_map(|a| a.api_key_env.clone()));
     Ok(Jail { read_write, read_only, env_allow, proxy, tmp })
+}
+
+/// System folders every sandboxed program may read (and run programs from).
+pub fn system_dirs() -> Vec<PathBuf> {
+    ["/usr", "/lib", "/lib64", "/lib32", "/bin", "/sbin", "/etc", "/opt", "/nix", "/snap", "/dev", "/sys/devices/system/cpu"]
+        .iter()
+        .map(PathBuf::from)
+        .collect()
 }
 
 /// Applies the jail to a command about to be spawned.
@@ -265,9 +269,17 @@ pub fn host_allowed(allow: &[String], host: &str, port: u16) -> bool {
     })
 }
 
-/// An HTTP proxy (CONNECT and plain requests) that only reaches allowed hosts.
+/// An HTTP proxy (CONNECT and plain requests) that only reaches allowed
+/// hosts. It stops accepting connections when dropped.
 pub struct Proxy {
     pub port: u16,
+    accept: tokio::task::AbortHandle,
+}
+
+impl Drop for Proxy {
+    fn drop(&mut self) {
+        self.accept.abort();
+    }
 }
 
 impl Proxy {
@@ -276,15 +288,16 @@ impl Proxy {
         let listener = TcpListener::bind("127.0.0.1:0").await?;
         let port = listener.local_addr()?.port();
         let allow = Arc::new(allow);
-        tokio::spawn(async move {
+        let accept = tokio::spawn(async move {
             while let Ok((conn, _)) = listener.accept().await {
                 let (allow, log) = (allow.clone(), log.clone());
                 tokio::spawn(async move {
                     let _ = serve(conn, &allow, &log).await;
                 });
             }
-        });
-        Ok(Proxy { port })
+        })
+        .abort_handle();
+        Ok(Proxy { port, accept })
     }
 }
 

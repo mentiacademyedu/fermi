@@ -81,6 +81,13 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
          failures (file, line, failing tests); fix what it reports.",
         profile.name
     );
+    let plugin_tools: Vec<String> = crate::plugins::registry(e)
+        .entries
+        .iter()
+        .filter(|p| p.kind == crate::plugins::Kind::Tool)
+        .map(|p| format!("mcp__fermi__{}", plugin_tool_name(&p.id)))
+        .collect();
+    tools.extend(plugin_tools.iter().map(String::as_str));
     // Delegation would start other accounts' CLIs, which a sandbox doesn't allow.
     let (text, image) = if e.cfg.security.sandbox { (vec![], vec![]) } else { (text, image) };
     if !image.is_empty() {
@@ -212,7 +219,19 @@ fn tool_list(e: &Engine, profile: &Profile) -> Value {
             }, "required": ["prompt"] }
         }));
     }
+    for p in crate::plugins::registry(e).entries.into_iter().filter(|p| p.kind == crate::plugins::Kind::Tool) {
+        tools.push(json!({
+            "name": plugin_tool_name(&p.id),
+            "description": format!("{} (plugin {} {})", p.description, p.plugin, p.version),
+            "inputSchema": p.schema,
+        }));
+    }
     Value::Array(tools)
+}
+
+/// How a plugin tool `<plugin>.<name>` is named on the bridge.
+fn plugin_tool_name(id: &str) -> String {
+    format!("plugin__{}", id.replacen('.', "__", 1))
 }
 
 /// Runs one bridge tool as if called from `cwd` (the agent's folder).
@@ -225,6 +244,14 @@ pub async fn call_tool(e: &Engine, profile: &Profile, cwd: &std::path::Path, nam
     }
     if name == "permission" {
         return permission(e, &cwd, args);
+    }
+    if let Some(id) = name.strip_prefix("plugin__") {
+        // Through the same checks as any plugin call: schema, scope, deny_read.
+        let out = crate::plugins::call(e, crate::plugins::Kind::Tool, &id.replacen("__", ".", 1), args, &cwd).await?;
+        if !out.ok {
+            anyhow::bail!("{}", out.text);
+        }
+        return Ok(out.text);
     }
     if let Some(op) = name.strip_prefix("memory_") {
         use crate::memory::{Caller, Memory, NewRecord, Provenance};

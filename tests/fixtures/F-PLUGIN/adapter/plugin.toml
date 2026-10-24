@@ -1,0 +1,10 @@
+name = "adapter"
+version = "1.0.0"
+api = 1
+description = "A model adapter that plays scripted replies"
+command = ["{FAKE_PLUGIN}", "--label", "adapter", "--tools", "complete", "--script", "{SCRIPT}", "--log", "{LOG}"]
+
+[[capabilities]]
+kind = "adapter"
+name = "scripted"
+tool = "complete"

@@ -477,6 +477,11 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* code intelligence */
 .cx-wrap { display: flex; height: 100%; min-height: 0; }
+.pg-cap { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 10px 0; display: grid; gap: 6px; }
+.pg-run { display: flex; gap: 8px; align-items: flex-start; }
+.pg-run textarea { flex: 1; min-width: 0; font: 12.5px var(--mono); }
+.pg-out { margin: 0; padding: 8px 10px; background: var(--panel-2); border-radius: 8px; white-space: pre-wrap; word-break: break-word; font-size: 12.5px; max-height: 240px; overflow: auto; }
+#pg-main label.f { margin: 8px 0; }
 .mm-badges { display: inline-flex; gap: 0; margin-right: 2px; }
 .cx-hit .mm-t { font: 500 13px/1.4 var(--sans); white-space: normal; }
 .cx-kind.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); }
@@ -786,6 +791,7 @@ select[aria-expanded=true] { border-color: var(--accent); }
     <button class="side-link" id="open-skills" style="flex:none" title="Skills and subagents of your accounts: copy, import and export them"><span data-i="spark"></span>Skills &amp; agents</button>
     <button class="side-link" id="open-code" style="flex:none" title="Symbols, callers, tests and change impact for the current workspace"><span data-i="graph"></span>Code map</button>
     <button class="side-link" id="open-memory" style="flex:none" title="Decisions and notes kept for each project across conversations"><span data-i="bookmark"></span>Memory</button>
+    <button class="side-link" id="open-plugins" style="flex:none" title="Plugins and MCP servers: tools for agents, commands for you, model adapters"><span data-i="puzzle"></span>Plugins</button>
     <button class="side-link" id="open-teams" style="flex:none" title="A team of agents with roles, each in its own git worktree, merged when you approve"><span data-i="users"></span>Teams</button>
     <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder (opens a folder picker)" data-i="folderPlus"></button></div>
     <nav class="ws-list" id="ws-list"></nav>
@@ -943,6 +949,23 @@ select[aria-expanded=true] { border-color: var(--accent); }
           <div class="cx-results" id="mm-list"></div>
         </aside>
         <div class="cx-main" id="mm-main"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-plugins" hidden>
+      <div class="cx-wrap">
+        <aside class="cx-side">
+          <div class="top">
+            <label class="search"><span data-i="folder"></span><input id="pg-path" placeholder="Plugin folder (with a plugin.toml)" autocomplete="off" spellcheck="false"></label>
+            <div class="acts">
+              <button class="small primary" id="pg-install">Install</button>
+              <button class="small ghost" id="pg-mcp" title="Run an MCP server as a plugin: its tools become available to agents">Add MCP server</button>
+            </div>
+            <div class="stats" id="pg-stats"></div>
+          </div>
+          <div class="cx-results" id="pg-list"></div>
+        </aside>
+        <div class="cx-main" id="pg-main"></div>
       </div>
     </section>
 
@@ -1184,6 +1207,7 @@ const I = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/>',
   bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+  puzzle: '<path d="M10 4a2 2 0 1 1 4 0v2h4v4h-2a2 2 0 1 0 0 4h2v4h-4v-2a2 2 0 1 0-4 0v2H6v-4h2a2 2 0 1 0 0-4H6V6h4z"/>',
   shieldCheck: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/>',
@@ -1396,7 +1420,7 @@ function renderTabs() {
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
-    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "teams" ? "users" : f.kind === "code" ? "graph" : f.kind === "memory" ? "bookmark" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
+    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "teams" ? "users" : f.kind === "code" ? "graph" : f.kind === "memory" ? "bookmark" : f.kind === "plugins" ? "puzzle" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
     mk(f.id, f.name, ic, true, f.dirty);
   }
   const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
@@ -1409,7 +1433,7 @@ function renderTabs() {
 function activate(id) {
   S.active = id;
   const tab = S.tabs.find((t) => t.id === id);
-  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills", isTeams = id === "teams", isCode = id === "code", isMemory = id === "memory";
+  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills", isTeams = id === "teams", isCode = id === "code", isMemory = id === "memory", isPlugins = id === "plugins";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
   $("#view-term").hidden = !isTerm;
@@ -1421,7 +1445,8 @@ function activate(id) {
   $("#view-teams").hidden = !isTeams;
   $("#view-code").hidden = !isCode;
   $("#view-memory").hidden = !isMemory;
-  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills || isTeams || isCode || isMemory;
+  $("#view-plugins").hidden = !isPlugins;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills || isTeams || isCode || isMemory || isPlugins;
   if (isTerm) showTerm(tab);
   else if (isTrend) loadTrending();
   else if (isPreview) showPreview();
@@ -1431,6 +1456,7 @@ function activate(id) {
   else if (isTeams) loadTeams();
   else if (isCode) loadCode();
   else if (isMemory) loadMemory();
+  else if (isPlugins) loadPlugins();
   else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
@@ -3312,6 +3338,113 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "Home") gotoSlide(tab, 0, true);
   else if (e.key === "End") gotoSlide(tab, tab.deck.count() - 1, true);
 });
+
+// ── plugins ─────────────────────────────────────────────────────────────────
+S.pg = { data: null, sel: null };
+function openPlugins() {
+  if (!S.tabs.some((t) => t.id === "plugins")) S.tabs.unshift({ id: "plugins", name: "Plugins", kind: "plugins" });
+  activate("plugins");
+}
+async function loadPlugins() {
+  try { S.pg.data = await api("/api/plugins"); } catch (e) { $("#pg-stats").textContent = e.message; return; }
+  const all = Object.entries(S.pg.data.installed || {}), reg = S.pg.data.registry || { entries: [], collisions: [] };
+  const on = all.filter(([, p]) => p.enabled).length;
+  $("#pg-stats").textContent = all.length
+    ? `${all.length} plugin${all.length === 1 ? "" : "s"}, ${on} enabled · ${reg.entries.length} capabilit${reg.entries.length === 1 ? "y" : "ies"}${reg.collisions.length ? ` · ${reg.collisions.length} name collision${reg.collisions.length === 1 ? "" : "s"}` : ""}`
+    : "No plugins yet.";
+  const list = $("#pg-list"); list.replaceChildren();
+  for (const c of reg.collisions) list.append(el("div", "tm-err", `${c.kind} “${c.name}”: ${c.outcome}`));
+  for (const [name, p] of all) {
+    const b = el("button", "cx-hit" + (S.pg.sel === name ? " on" : ""));
+    const n = el("div", "n mm-t");
+    const badges = el("span", "mm-badges");
+    badges.append(el("span", "cx-kind" + (p.error ? " warn" : p.enabled ? " test" : ""), p.error ? "failed" : p.enabled ? "enabled" : "disabled"));
+    n.append(badges, el("span", null, name));
+    const caps = reg.entries.filter((e) => e.plugin === name).map((e) => e.name);
+    b.append(n, el("div", "w", `${p.version}${caps.length ? " · " + caps.join(", ") : ""}`));
+    b.onclick = () => pgShow(name);
+    list.append(b);
+  }
+  if (S.pg.sel && S.pg.data.installed[S.pg.sel]) pgShow(S.pg.sel); else pgIntro();
+}
+function pgIntro() {
+  S.pg.sel = null;
+  const m = $("#pg-main"); m.replaceChildren();
+  m.append(el("h2", null, "Plugins"), el("p", "cx-doc",
+    "A plugin is a folder with a plugin.toml and a program that speaks MCP. It can give agents tools, give you commands, or replace a model adapter for an account. Only the capabilities its manifest declares are registered. Each call runs the plugin in its own sandboxed process, without your environment's secrets, so a crash or a hang only fails that call. Any MCP server can be added as a plugin."));
+}
+async function pgAct(name, action) {
+  try { await api(`/api/plugins/${encodeURIComponent(name)}/${action}`, {}); if (action === "remove") S.pg.sel = null; loadPlugins(); } catch (e) { toast(e.message, true); loadPlugins(); }
+}
+function pgShow(name) {
+  S.pg.sel = name;
+  const p = S.pg.data.installed[name], reg = S.pg.data.registry;
+  const m = $("#pg-main"); m.replaceChildren();
+  m.append(el("h2", null, name), el("div", "faint", `version ${p.version} · ${p.error ? "failed to enable" : p.enabled ? "enabled" : "disabled"}`));
+  if (p.error) m.append(el("div", "tm-err", p.error));
+  const acts = el("div", "acts"); acts.style.cssText = "display:flex;gap:6px;margin:12px 0";
+  const btn = (label, cls, fn) => { const b = el("button", "small " + cls, label); b.onclick = fn; acts.append(b); };
+  if (p.enabled) btn("Disable", "ghost", () => pgAct(name, "disable")); else btn("Enable", "primary", () => pgAct(name, "enable"));
+  const rm = el("button", "small ghost", "Remove"); rm.onclick = confirmClick(rm, "Click again to remove", () => pgAct(name, "remove")); acts.append(rm);
+  m.append(acts);
+  const caps = reg.entries.filter((e) => e.plugin === name);
+  if (!caps.length && p.enabled) m.append(el("p", "faint", "No capabilities registered (see the collisions on the left)."));
+  for (const e of caps) {
+    const box = el("div", "pg-cap");
+    const head = el("div", "mm-t"); head.append(el("span", "cx-kind", e.kind), el("b", null, e.id));
+    box.append(head, el("div", "faint", e.description || ""));
+    if (e.kind === "command" || e.kind === "tool") {
+      const args = el("textarea", "paths"); args.rows = 2; args.spellcheck = false;
+      const props = Object.keys(e.schema?.properties || {});
+      args.value = JSON.stringify(Object.fromEntries(props.map((k) => [k, ""])));
+      const run = el("button", "small", "Run"), out = el("pre", "pg-out"); out.hidden = true;
+      run.onclick = async () => {
+        let a; try { a = JSON.parse(args.value || "{}"); } catch { return toast("Arguments must be JSON", true); }
+        run.disabled = true;
+        try {
+          const r = await api("/api/plugins/run", { capability: e.id, arguments: a, cwd: currentWs()?.path });
+          out.textContent = `${r.ok ? "✓" : "✗"} ${r.text}\n\n${r.plugin} ${r.version} · ${r.ms} ms`;
+        } catch (x) { out.textContent = `✗ ${x.message}`; }
+        out.hidden = false; run.disabled = false;
+      };
+      const row = el("div", "pg-run"); row.append(args, run);
+      box.append(row, out);
+    }
+    m.append(box);
+  }
+}
+function splitCommand(s) {
+  const out = []; let cur = "", quote = null, has = false;
+  for (const ch of s) {
+    if (quote) { if (ch === quote) quote = null; else cur += ch; }
+    else if (ch === '"' || ch === "'") { quote = ch; has = true; }
+    else if (/\s/.test(ch)) { if (cur || has) out.push(cur); cur = ""; has = false; }
+    else cur += ch;
+  }
+  if (cur || has) out.push(cur);
+  return out;
+}
+$("#open-plugins").onclick = () => openPlugins();
+$("#pg-install").onclick = async () => {
+  const path = $("#pg-path").value.trim();
+  if (!path) return toast("Type the plugin's folder first", true);
+  try { const r = await api("/api/plugins/install", { path }); toast(`Installed: ${r.registered.map((e) => e.id).join(", ") || "no capabilities"}`); $("#pg-path").value = ""; loadPlugins(); }
+  catch (e) { toast(e.message, true); loadPlugins(); }
+};
+$("#pg-mcp").onclick = () => {
+  S.pg.sel = null;
+  const m = $("#pg-main"); m.replaceChildren();
+  const name = el("input"), cmd = el("input"); name.placeholder = "name, e.g. github"; cmd.placeholder = 'command, e.g. npx -y @modelcontextprotocol/server-github';
+  const f1 = el("label", "f", "Name"), f2 = el("label", "f", "Command"); f1.append(name); f2.append(cmd);
+  const go = el("button", "small primary", "Add");
+  go.onclick = async () => {
+    go.disabled = true;
+    try { const r = await api("/api/plugins/add-mcp", { name: name.value.trim(), command: splitCommand(cmd.value.trim()) }); toast(`Added ${r.registered.length} tool${r.registered.length === 1 ? "" : "s"}`); S.pg.sel = name.value.trim(); loadPlugins(); }
+    catch (e) { toast(e.message, true); go.disabled = false; }
+  };
+  m.append(el("h2", null, "Add an MCP server"), el("p", "cx-doc", "fermi starts the server, lists its tools and installs it as a plugin offering them to agents. It runs sandboxed: give it the environment variables or hosts it needs by editing its plugin.toml (env, net)."), f1, f2, go);
+  name.focus();
+};
 
 // ── project memory ──────────────────────────────────────────────────────────
 S.mm = { pick: null, records: [], hits: null, sel: null };

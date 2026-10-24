@@ -1,0 +1,17 @@
+name = "faulty"
+version = "0.9.0"
+api = 1
+command = ["{FAKE_PLUGIN}", "--label", "faulty", "--tools", "boom,hang,fail"]
+timeout_secs = 3
+
+[[capabilities]]
+kind = "tool"
+name = "boom"
+
+[[capabilities]]
+kind = "tool"
+name = "hang"
+
+[[capabilities]]
+kind = "tool"
+name = "fail"

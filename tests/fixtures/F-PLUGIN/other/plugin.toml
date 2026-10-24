@@ -1,0 +1,10 @@
+name = "other"
+version = "0.3.1"
+api = 1
+command = ["{FAKE_PLUGIN}", "--label", "other", "--tools", "add"]
+
+[[capabilities]]
+kind = "command"
+name = "sum"
+tool = "add"
+description = "Adds two numbers"

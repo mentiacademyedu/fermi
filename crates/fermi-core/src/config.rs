@@ -65,6 +65,10 @@ pub struct Account {
     /// Override the API base URL (proxies, compatible endpoints).
     #[serde(default)]
     pub base_url: Option<String>,
+    /// A plugin's model adapter to run this account's calls instead of the
+    /// built-in one: `<plugin>.<adapter>` (see `plugins`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adapter: Option<String>,
 }
 
 impl Account {
@@ -79,6 +83,9 @@ impl Account {
 
     /// Best-effort check that a login/key exists. None = can't tell (e.g. macOS keychain).
     pub fn credentials_present(&self) -> Option<bool> {
+        if self.adapter.is_some() {
+            return None; // the plugin handles its own credentials
+        }
         if self.auth == Auth::Api {
             let var = self.api_key_env.as_deref()?;
             return Some(std::env::var(var).map(|v| !v.is_empty()).unwrap_or(false));
@@ -208,6 +215,27 @@ pub struct Config {
     pub memory: MemoryCfg,
     #[serde(default)]
     pub trace: TraceCfg,
+    #[serde(default)]
+    pub plugins: PluginsCfg,
+}
+
+/// Plugins (see `plugins`).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct PluginsCfg {
+    /// Two plugins claiming one name: "namespace" (both, as `<plugin>.<name>`) or "reject" (neither).
+    #[serde(default)]
+    pub collisions: Collisions,
+    /// Run plugins sandboxed (default on): see `sandbox`.
+    #[serde(default)]
+    pub sandbox: Option<bool>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Collisions {
+    #[default]
+    Namespace,
+    Reject,
 }
 
 /// What task traces keep (see `trace` and `redact`).

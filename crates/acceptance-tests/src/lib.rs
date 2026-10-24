@@ -164,6 +164,10 @@ impl Case {
     /// Ends the case as `blocked`: this platform can't exercise what it checks
     /// (no OS sandbox, say). It never counts as passed.
     pub fn block(mut self, reason: &str) {
+        // A check that already failed makes the case failed, not blocked.
+        if self.checks.iter().any(|c| !c.1) {
+            return self.finish();
+        }
         self.checks.push(("blocked".into(), false, reason.into()));
         let mut manifest = vec![];
         for a in &self.artifacts {
@@ -312,13 +316,21 @@ pub struct Account {
     pub steps: Vec<Value>,
     /// In the test profile (false: configured but not allowed for its tasks).
     pub in_profile: bool,
+    /// A plugin adapter (`<plugin>.<adapter>`) instead of the CLI.
+    pub adapter: Option<&'static str>,
 }
 
 pub fn account(id: &'static str, provider: &'static str, steps: Vec<Value>) -> Account {
-    Account { id, provider, steps, in_profile: true }
+    Account { id, provider, steps, in_profile: true, adapter: None }
 }
 
 impl Account {
+    /// Runs through a plugin's model adapter.
+    pub fn adapter(mut self, spec: &'static str) -> Self {
+        self.adapter = Some(spec);
+        self
+    }
+
     /// Configured, but not one of the profile's accounts.
     pub fn outside(mut self) -> Self {
         self.in_profile = false;
@@ -335,6 +347,26 @@ pub struct Fermi {
 /// The fake CLI Cargo builds next to the test binaries (target/<profile>/).
 pub fn fake_cli() -> PathBuf {
     sibling("fake-cli")
+}
+
+/// The test plugin (an MCP server, `src/bin/fake-plugin.rs`).
+pub fn fake_plugin() -> PathBuf {
+    sibling("fake-plugin")
+}
+
+/// Copies plugin `name` of the F-PLUGIN fixture to `dest`, filling in
+/// `{FAKE_PLUGIN}` and each `{KEY}` of `vars` (paths, written with `/`).
+pub fn plugin_fixture(name: &str, dest: &Path, vars: &[(&str, &Path)]) -> Result<PathBuf> {
+    let src = repo_root().join("tests").join("fixtures").join("F-PLUGIN").join(name);
+    copy_dir(&src, dest)?;
+    let toml = dest.join("plugin.toml");
+    let fwd = |p: &Path| p.display().to_string().replace('\\', "/");
+    let mut text = std::fs::read_to_string(&toml)?.replace("{FAKE_PLUGIN}", &fwd(&fake_plugin()));
+    for (k, v) in vars {
+        text = text.replace(&format!("{{{k}}}"), &fwd(v));
+    }
+    std::fs::write(&toml, text)?;
+    Ok(dest.to_path_buf())
 }
 
 /// fermi's MCP bridge as a program of its own (the real `mcp::serve`).
@@ -383,10 +415,11 @@ impl Fermi {
                 }
             }
             cfg += &format!(
-                "[[accounts]]\nid = \"{}\"\nprovider = \"{}\"\nauth = \"cli\"\nhome = \"{}\"\n\n",
+                "[[accounts]]\nid = \"{}\"\nprovider = \"{}\"\nauth = \"cli\"\nhome = \"{}\"\n{}\n",
                 a.id,
                 a.provider,
-                dir.display().to_string().replace('\\', "/")
+                dir.display().to_string().replace('\\', "/"),
+                a.adapter.map(|s| format!("adapter = \"{s}\"\n")).unwrap_or_default()
             );
         }
         let ids: Vec<String> = accounts.iter().filter(|a| a.in_profile).map(|a| format!("\"{}\"", a.id)).collect();

@@ -1,0 +1,16 @@
+name = "adversarial"
+version = "0.1.0"
+api = 1
+command = ["{FAKE_PLUGIN}", "--label", "adversarial", "--tools", "read_file,read_sentinel,env", "--sentinel", "{SENTINEL}", "--log", "{LOG}"]
+
+[[capabilities]]
+kind = "tool"
+name = "read_file"
+
+[[capabilities]]
+kind = "tool"
+name = "read_sentinel"
+
+[[capabilities]]
+kind = "tool"
+name = "env"
