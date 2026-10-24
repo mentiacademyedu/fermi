@@ -1,8 +1,8 @@
-# Acceptance report: 2026-10-24-d44f68e
+# Acceptance report: 2026-10-24-e72c2c7
 
-Revision `d44f68e6e5c01f60c76e6d57a7620bd22df9687a` · profile deterministic · windows
+Revision `e72c2c737ea6d08fc964b0231ebd24ec00b46199` · profile deterministic · windows
 
-**Overall acceptance: 37 / 106 passed.** Cases that did not run, or have no test, stay in the denominator.
+**Overall acceptance: 45 / 106 passed.** Cases that did not run, or have no test, stay in the denominator.
 
 | System | Cases | Passed | Failed | Not implemented | Not run |
 | --- | --- | --- | --- | --- | --- |
@@ -16,7 +16,7 @@ Revision `d44f68e6e5c01f60c76e6d57a7620bd22df9687a` · profile deterministic · 
 | local-and-remote-execution | 8 | 1 | 0 | 7 | 0 |
 | model-agnostic-ai-engine | 8 | 5 | 0 | 3 | 0 |
 | multi-agent-orchestration | 8 | 7 | 0 | 1 | 0 |
-| persistent-project-memory | 8 | 0 | 0 | 8 | 0 |
+| persistent-project-memory | 8 | 8 | 0 | 0 | 0 |
 | security-and-isolation | 8 | 0 | 0 | 8 | 0 |
 | semantic-codebase-intelligence | 8 | 6 | 0 | 2 | 0 |
 
@@ -46,14 +46,14 @@ Revision `d44f68e6e5c01f60c76e6d57a7620bd22df9687a` · profile deterministic · 
 | CI-06 | Invalid syntax handling | not_implemented | missing |
 | CI-07 | Dependency impact | passed | implemented |
 | CI-08 | Symbol identity | passed | implemented |
-| PM-01 | Durable decisions | not_implemented | missing |
-| PM-02 | Fresh-session retrieval | not_implemented | missing |
-| PM-03 | Decision versioning | not_implemented | missing |
-| PM-04 | Stale source detection | not_implemented | missing |
-| PM-05 | Semantic retrieval | not_implemented | missing |
-| PM-06 | Contradiction handling | not_implemented | missing |
-| PM-07 | Untrusted memory content | not_implemented | missing |
-| PM-08 | Project memory isolation | not_implemented | missing |
+| PM-01 | Durable decisions | passed | implemented |
+| PM-02 | Fresh-session retrieval | passed | implemented |
+| PM-03 | Decision versioning | passed | implemented |
+| PM-04 | Stale source detection | passed | implemented |
+| PM-05 | Semantic retrieval | passed | implemented |
+| PM-06 | Contradiction handling | passed | implemented |
+| PM-07 | Untrusted memory content | passed | implemented |
+| PM-08 | Project memory isolation | passed | implemented |
 | VE-01 | Compiler diagnostics | passed | implemented |
 | VE-02 | Failing test feedback | passed | implemented |
 | VE-03 | Repair and rerun | passed | implemented |
@@ -94,7 +94,7 @@ Revision `d44f68e6e5c01f60c76e6d57a7620bd22df9687a` · profile deterministic · 
 | CO-06 | Versioned price updates | passed | implemented |
 | CO-07 | Large context warnings | passed | implemented |
 | CO-08 | Usage attribution | passed | implemented |
-| SE-01 | Forbidden file read | not_implemented | missing |
+| SE-01 | Forbidden file read | not_implemented | partial |
 | SE-02 | Secret isolation | not_implemented | missing |
 | SE-03 | Destructive action gating | not_implemented | partial |
 | SE-04 | Network restrictions | not_implemented | missing |

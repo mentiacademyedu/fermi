@@ -20,8 +20,8 @@ cases:
     auditNote: "Five adapters (Claude/Codex/Gemini CLIs, Anthropic and OpenAI APIs) normalize into one Event stream and RunResult. The acceptance test covers the three CLI adapters through the fake CLI; the two API adapters need an HTTP mock (not built yet), so the case stays partial."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_01_adapter_normalization
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: AI-02
     title: "Common task interface"
     system: model-agnostic-ai-engine
@@ -38,8 +38,8 @@ cases:
     auditNote: "Every provider runs through Task and Engine::run with the same lifecycle and Event schema. Unverified against a fixture oracle."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_02_common_task_interface
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: AI-03
     title: "Model switching with state"
     system: model-agnostic-ai-engine
@@ -56,8 +56,8 @@ cases:
     auditNote: "Model switch per reply; same provider resumes the session, other providers get the transcript; Routed events attribute each turn."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_03_model_switching_with_state
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: AI-04
     title: "Rate limit handling"
     system: model-agnostic-ai-engine
@@ -92,8 +92,8 @@ cases:
     auditNote: "Provider outages (HTTP 5xx from the APIs; 5xx, overloaded or unavailable from the CLIs) fail over to the profile's next account, then the next candidate model, recorded as Failover events; pinning the account and model disables it. Fixed 2026-10-23: CLI outages failed without fallback (D-004)."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_05_provider_outage_handling
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: AI-06
     title: "Capability validation"
     system: model-agnostic-ai-engine
@@ -128,8 +128,8 @@ cases:
     auditNote: "Profiles with a budget reserve each call's estimate atomically in a shared ledger before dispatch; a call that doesn't fit is refused with the numbers behind it; actual costs settle later and overruns stay visible. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/cost.rs
     testName: ai_07_budget_exhaustion
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: AI-08
     title: "Local endpoint support"
     system: model-agnostic-ai-engine
@@ -165,8 +165,8 @@ cases:
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_01_concurrent_workers
     repetitions: 20
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: MA-02
     title: "Dependency ordering"
     system: multi-agent-orchestration
@@ -183,8 +183,8 @@ cases:
     auditNote: "Dependencies gate starts; failed or interrupted tasks block dependents (run goes to attention); cancel stops the run."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_02_dependency_ordering
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: MA-03
     title: "Independent edits"
     system: multi-agent-orchestration
@@ -201,8 +201,8 @@ cases:
     auditNote: "Separate worktrees and branches merged with --no-ff into an integration branch; manually verified on a fixture (2 runs)."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_03_independent_edits
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: MA-04
     title: "Conflicting edits"
     system: multi-agent-orchestration
@@ -219,8 +219,8 @@ cases:
     auditNote: "Conflicts are detected (unmerged paths) and logged with both branches kept, but resolution is delegated automatically to a debugger agent rather than escalated to the user. Manually verified once."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_04_conflicting_edits
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: MA-05
     title: "Scoped delegation"
     system: multi-agent-orchestration
@@ -255,8 +255,8 @@ cases:
     auditNote: "A killed agent process marks only its task failed; concurrent tasks finish with their results. In team runs a failed task blocks its dependents (MA-02)."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_06_worker_crash_isolation
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: MA-07
     title: "Parent cancellation"
     system: multi-agent-orchestration
@@ -273,8 +273,8 @@ cases:
     auditNote: "Cancel stops running agents and every process they started (process tree), and queued tasks never start. Fixed 2026-10-23: processes started by the CLI were orphaned (D-005)."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_07_parent_cancellation
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: MA-08
     title: "Verified integration"
     system: multi-agent-orchestration
@@ -291,8 +291,8 @@ cases:
     auditNote: "The integrated branch must pass the project's mandatory checks before merging; a failing run gets bounded debugger fixes and re-checks, and merge refuses anything but the exact commit that passed. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_08_verified_integration
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CI-01
     title: "Repository indexing"
     system: semantic-codebase-intelligence
@@ -309,8 +309,8 @@ cases:
     auditNote: "Indexes Rust, Python, JS, TS/TSX, Go with .gitignore; lists unsupported files and the indexed git revision (added 2026-10-23, D-006)."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_01_repository_indexing
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CI-02
     title: "Exact symbol lookup"
     system: semantic-codebase-intelligence
@@ -327,8 +327,8 @@ cases:
     auditNote: "Exact and prefix lookup with file and line span."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_02_exact_symbol_lookup
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CI-03
     title: "Caller discovery"
     system: semantic-codebase-intelligence
@@ -345,8 +345,8 @@ cases:
     auditNote: "Static callers resolved same-file, then imported files; results declare the analysis scope (dynamic dispatch is not covered; added 2026-10-23, D-006)."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_03_caller_discovery
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CI-04
     title: "Scope-safe rename"
     system: semantic-codebase-intelligence
@@ -381,8 +381,8 @@ cases:
     auditNote: "Incremental re-parse by mtime and size on every query; no completion event."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_05_incremental_refresh
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CI-06
     title: "Invalid syntax handling"
     system: semantic-codebase-intelligence
@@ -417,8 +417,8 @@ cases:
     auditNote: "Transitive callers and importers with visited sets (cycles terminate), tests to run, and a declared scope of what isn't covered."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_07_dependency_impact
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CI-08
     title: "Symbol identity"
     system: semantic-codebase-intelligence
@@ -435,8 +435,8 @@ cases:
     auditNote: "Duplicate names resolve per importing file; lookup by Type::name, module path (util::text::helper, added 2026-10-23) or path:line."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_08_symbol_identity
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: PM-01
     title: "Durable decisions"
     system: persistent-project-memory
@@ -453,8 +453,8 @@ cases:
     auditNote: "Records live in a per-project append-only log with stable ids, authors and sources; they survive restarts and a write cut short by a crash. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/memory.rs
     testName: pm_01_durable_decisions
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: PM-02
     title: "Fresh-session retrieval"
     system: persistent-project-memory
@@ -471,8 +471,8 @@ cases:
     auditNote: "New tasks get the most relevant records for agents, with author and sources; private records never reach agents. Agents also get memory_search/get/record tools. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/memory.rs
     testName: pm_02_fresh_session_retrieval
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: PM-03
     title: "Decision versioning"
     system: persistent-project-memory
@@ -489,8 +489,8 @@ cases:
     auditNote: "Revisions add versions under the same id with the reason; current retrieval uses the latest and history keeps every version. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/memory.rs
     testName: pm_03_decision_versioning
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: PM-04
     title: "Stale source detection"
     system: persistent-project-memory
@@ -507,8 +507,8 @@ cases:
     auditNote: "Sources keep the git revision and a content hash; a deleted or changed source marks the record stale wherever it's shown, including agent context. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/memory.rs
     testName: pm_04_stale_source_detection
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: PM-05
     title: "Semantic retrieval"
     system: persistent-project-memory
@@ -525,8 +525,8 @@ cases:
     auditNote: "Deterministic retrieval (fermi-lexical-v1): stemming, a pinned synonym table and BM25. It finds paraphrases that share vocabulary or listed synonyms; it is not an embedding model. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/memory.rs
     testName: pm_05_semantic_retrieval
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: PM-06
     title: "Contradiction handling"
     system: persistent-project-memory
@@ -543,8 +543,8 @@ cases:
     auditNote: "Topic summaries list every current record with its author and source and flag a possible conflict; nothing is merged. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/memory.rs
     testName: pm_06_contradiction_handling
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: PM-07
     title: "Untrusted memory content"
     system: persistent-project-memory
@@ -561,8 +561,8 @@ cases:
     auditNote: "Comments become provenance=source records framed as untrusted data in agent context; deny_read paths go to Claude as --disallowedTools Read rules. Enforcement inside the CLI is Claude's and was emulated in the test. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/memory.rs
     testName: pm_07_untrusted_memory_content
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: PM-08
     title: "Project memory isolation"
     system: persistent-project-memory
@@ -579,8 +579,8 @@ cases:
     auditNote: "One store per project; the API only opens the dashboard's workspaces; a record of another project and a missing id get the same answer. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/memory.rs
     testName: pm_08_project_memory_isolation
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: VE-01
     title: "Compiler diagnostics"
     system: integrated-verification-engine
@@ -597,8 +597,8 @@ cases:
     auditNote: "fermi runs the project's checks (.fermi/checks.toml or detected from manifests) and parses diagnostics from cargo JSON and common text formats (rustc, gcc, go, tsc, eslint, ruff, Python) with file, line and column. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_01_compiler_diagnostics
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: VE-02
     title: "Failing test feedback"
     system: integrated-verification-engine
@@ -615,8 +615,8 @@ cases:
     auditNote: "Agents call the run_checks tool and get each failing test with its output and the exit code; verified tasks record a Verify event. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_02_failing_test_feedback
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: VE-03
     title: "Repair and rerun"
     system: integrated-verification-engine
@@ -633,8 +633,8 @@ cases:
     auditNote: "Verified tasks: after the agent, fermi runs the checks and sends failures back to the same session; protected files (protect globs) must stay unchanged. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_03_repair_and_rerun
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: VE-04
     title: "Lint enforcement"
     system: integrated-verification-engine
@@ -651,8 +651,8 @@ cases:
     auditNote: "Lint checks run like any other; clippy and text-format rule ids and locations are reported and a mandatory lint failure fails the task. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_04_lint_enforcement
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: VE-05
     title: "Dependency advisory detection"
     system: integrated-verification-engine
@@ -669,8 +669,8 @@ cases:
     auditNote: "Built-in scanner matches Cargo.lock, package-lock.json and requirements.txt against OSV records; records scanner version and dataset SHA-256; nothing is installed or run. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_05_dependency_advisory_detection
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: VE-06
     title: "Structured edit integrity"
     system: integrated-verification-engine
@@ -687,8 +687,8 @@ cases:
     auditNote: "Replaces one definition by its syntax-tree byte range, refuses ambiguous targets and edits that don't parse or drop the definition. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_06_structured_edit_integrity
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: VE-07
     title: "Bounded repair attempts"
     system: integrated-verification-engine
@@ -705,8 +705,8 @@ cases:
     auditNote: "Repair turns are bounded by max_repairs (task option, else the project's, else 3); the final failure is explicit. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_07_bounded_repair_attempts
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: VE-08
     title: "Completion enforcement"
     system: integrated-verification-engine
@@ -723,8 +723,8 @@ cases:
     auditNote: "A verified task ends done only if every mandatory check passed; a team run is mergeable only with passing checks on exactly the commit being merged (service and API). Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_08_completion_enforcement
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: BA-01
     title: "Local site launch"
     system: browser-and-application-control
@@ -1101,8 +1101,8 @@ cases:
     auditNote: "Every task's events persist in ~/.fermi/history/<id>.json and survive restarts."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_05_trace_persistence
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: OB-06
     title: "Resume correlation"
     system: agent-observability
@@ -1173,8 +1173,8 @@ cases:
     auditNote: "Versioned price tables in config; exact picodollar arithmetic rounded half up to USD 0.000001 per call. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/cost.rs
     testName: co_01_token_cost_arithmetic
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CO-02
     title: "Cached token discounts"
     system: cost-and-performance
@@ -1191,8 +1191,8 @@ cases:
     auditNote: "Cached and cache-write input tokens are tracked separately; the cache rate applies only where the model's price declares one. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/cost.rs
     testName: co_02_cached_token_discounts
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CO-03
     title: "Economy routing"
     system: cost-and-performance
@@ -1209,8 +1209,8 @@ cases:
     auditNote: "routing = \"economy\": the cheapest eligible model by estimate (capability required), declared tie-breakers, recorded decision. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/cost.rs
     testName: co_03_economy_routing
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CO-04
     title: "Quality routing"
     system: cost-and-performance
@@ -1227,8 +1227,8 @@ cases:
     auditNote: "routing = \"quality\": the highest declared quality rank among models with the capability that fit the budget; recorded decision. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/cost.rs
     testName: co_04_quality_routing
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CO-05
     title: "Shared budget reservations"
     system: cost-and-performance
@@ -1245,8 +1245,8 @@ cases:
     auditNote: "Reservations are atomic across threads and fermi processes (lock file); refusals leave no charge; settlement reconciles actual cost. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/cost.rs
     testName: co_05_shared_budget_reservations
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CO-06
     title: "Versioned price updates"
     system: cost-and-performance
@@ -1263,8 +1263,8 @@ cases:
     auditNote: "Each call records the price version in effect and its calculation; new versions apply from their effective time without rewriting history. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/cost.rs
     testName: co_06_versioned_price_updates
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CO-07
     title: "Large context warnings"
     system: cost-and-performance
@@ -1281,8 +1281,8 @@ cases:
     auditNote: "Documented estimator (4 bytes per token); warnings from a configurable share of the context window; over-window requests aren't sent. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/cost.rs
     testName: co_07_large_context_warnings
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CO-08
     title: "Usage attribution"
     system: cost-and-performance
@@ -1299,8 +1299,8 @@ cases:
     auditNote: "Usage records carry task, delegating task, team run, agent and attempt; reports group by any of them and reconcile, showing failed attempts and unallocated calls. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/cost.rs
     testName: co_08_usage_attribution
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: SE-01
     title: "Forbidden file read"
     system: security-and-isolation
@@ -1461,8 +1461,8 @@ cases:
     auditNote: "Tasks run locally and record changed files and artifacts."
     testFile: crates/acceptance-tests/tests/execution.rs
     testName: lr_01_local_execution
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: LR-02
     title: "Container equivalence"
     system: local-and-remote-execution
@@ -1875,8 +1875,8 @@ cases:
     auditNote: "After an in-flight call settles over its estimate, new calls are refused; the overrun and remaining allowance show in the task and the dashboard. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/cost.rs
     testName: e2e_08_task_exceeding_budget
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: E2E-09
     title: "User compares two models on identical task"
     system: end-to-end

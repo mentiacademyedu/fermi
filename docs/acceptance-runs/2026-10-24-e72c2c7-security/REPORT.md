@@ -1,8 +1,8 @@
-# Acceptance report: 2026-10-24-d44f68e-security
+# Acceptance report: 2026-10-24-e72c2c7-security
 
-Revision `d44f68e6e5c01f60c76e6d57a7620bd22df9687a` (dirty tree) · profile security · windows
+Revision `e72c2c737ea6d08fc964b0231ebd24ec00b46199` · profile security · windows
 
-**Overall acceptance: 3 / 106 passed.** Cases that did not run, or have no test, stay in the denominator.
+**Overall acceptance: 5 / 106 passed.** Cases that did not run, or have no test, stay in the denominator.
 
 | System | Cases | Passed | Failed | Not implemented | Not run |
 | --- | --- | --- | --- | --- | --- |
@@ -16,7 +16,7 @@ Revision `d44f68e6e5c01f60c76e6d57a7620bd22df9687a` (dirty tree) · profile secu
 | local-and-remote-execution | 8 | 0 | 0 | 7 | 1 |
 | model-agnostic-ai-engine | 8 | 0 | 0 | 3 | 5 |
 | multi-agent-orchestration | 8 | 2 | 0 | 1 | 5 |
-| persistent-project-memory | 8 | 0 | 0 | 8 | 0 |
+| persistent-project-memory | 8 | 2 | 0 | 0 | 6 |
 | security-and-isolation | 8 | 0 | 0 | 8 | 0 |
 | semantic-codebase-intelligence | 8 | 0 | 0 | 2 | 6 |
 
@@ -46,14 +46,14 @@ Revision `d44f68e6e5c01f60c76e6d57a7620bd22df9687a` (dirty tree) · profile secu
 | CI-06 | Invalid syntax handling | not_implemented | missing |
 | CI-07 | Dependency impact | not_run | implemented |
 | CI-08 | Symbol identity | not_run | implemented |
-| PM-01 | Durable decisions | not_implemented | missing |
-| PM-02 | Fresh-session retrieval | not_implemented | missing |
-| PM-03 | Decision versioning | not_implemented | missing |
-| PM-04 | Stale source detection | not_implemented | missing |
-| PM-05 | Semantic retrieval | not_implemented | missing |
-| PM-06 | Contradiction handling | not_implemented | missing |
-| PM-07 | Untrusted memory content | not_implemented | missing |
-| PM-08 | Project memory isolation | not_implemented | missing |
+| PM-01 | Durable decisions | not_run | implemented |
+| PM-02 | Fresh-session retrieval | not_run | implemented |
+| PM-03 | Decision versioning | not_run | implemented |
+| PM-04 | Stale source detection | not_run | implemented |
+| PM-05 | Semantic retrieval | not_run | implemented |
+| PM-06 | Contradiction handling | not_run | implemented |
+| PM-07 | Untrusted memory content | passed | implemented |
+| PM-08 | Project memory isolation | passed | implemented |
 | VE-01 | Compiler diagnostics | not_run | implemented |
 | VE-02 | Failing test feedback | not_run | implemented |
 | VE-03 | Repair and rerun | not_run | implemented |
@@ -94,7 +94,7 @@ Revision `d44f68e6e5c01f60c76e6d57a7620bd22df9687a` (dirty tree) · profile secu
 | CO-06 | Versioned price updates | not_run | implemented |
 | CO-07 | Large context warnings | not_run | implemented |
 | CO-08 | Usage attribution | not_run | implemented |
-| SE-01 | Forbidden file read | not_implemented | missing |
+| SE-01 | Forbidden file read | not_implemented | partial |
 | SE-02 | Secret isolation | not_implemented | missing |
 | SE-03 | Destructive action gating | not_implemented | partial |
 | SE-04 | Network restrictions | not_implemented | missing |

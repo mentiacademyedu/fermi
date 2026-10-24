@@ -9,7 +9,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 884,
+      "durationMs": 1084,
       "id": "MA-06",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -23,7 +23,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2855,
+      "durationMs": 2765,
       "id": "MA-07",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -37,15 +37,43 @@
           "status": "passed"
         }
       ],
-      "durationMs": 702,
+      "durationMs": 1865,
+      "id": "PM-07",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1076,
+      "id": "PM-08",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 679,
       "id": "E2E-08",
       "status": "passed",
       "system": "end-to-end"
     }
   ],
-  "commitSha": "d44f68e6e5c01f60c76e6d57a7620bd22df9687a",
-  "dirtyTree": true,
+  "commitSha": "e72c2c737ea6d08fc964b0231ebd24ec00b46199",
+  "dirtyTree": false,
   "os": "windows",
   "profile": "security",
-  "runId": "2026-10-24-d44f68e-security"
+  "runId": "2026-10-24-e72c2c7-security"
 }
