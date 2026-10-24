@@ -9,7 +9,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2498,
+      "durationMs": 2909,
       "id": "AI-01",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -23,7 +23,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 5252,
+      "durationMs": 5575,
       "id": "AI-02",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -37,7 +37,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1143,
+      "durationMs": 1599,
       "id": "AI-03",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -51,7 +51,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 933,
+      "durationMs": 1574,
       "id": "AI-05",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -179,7 +179,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 18545,
+      "durationMs": 21613,
       "id": "MA-01",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -193,7 +193,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 7036,
+      "durationMs": 11960,
       "id": "MA-02",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -207,7 +207,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3516,
+      "durationMs": 7472,
       "id": "MA-03",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -221,7 +221,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 4605,
+      "durationMs": 3901,
       "id": "MA-04",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -235,7 +235,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1160,
+      "durationMs": 1075,
       "id": "MA-06",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -249,7 +249,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3783,
+      "durationMs": 3624,
       "id": "MA-07",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -263,7 +263,21 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2185,
+      "durationMs": 9746,
+      "id": "MA-08",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2435,
       "id": "CI-01",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -277,7 +291,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1506,
+      "durationMs": 1417,
       "id": "CI-02",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -291,7 +305,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1274,
+      "durationMs": 1585,
       "id": "CI-03",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -305,7 +319,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1562,
+      "durationMs": 1708,
       "id": "CI-05",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -319,7 +333,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1574,
+      "durationMs": 1624,
       "id": "CI-07",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -333,7 +347,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1383,
+      "durationMs": 1642,
       "id": "CI-08",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -347,7 +361,119 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2050,
+      "durationMs": 3330,
+      "id": "VE-01",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 4618,
+      "id": "VE-02",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 10223,
+      "id": "VE-03",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2148,
+      "id": "VE-04",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1477,
+      "id": "VE-05",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1728,
+      "id": "VE-06",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 6073,
+      "id": "VE-07",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 9026,
+      "id": "VE-08",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2500,
       "id": "OB-05",
       "status": "passed",
       "system": "agent-observability"
@@ -361,15 +487,15 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3553,
+      "durationMs": 4374,
       "id": "LR-01",
       "status": "passed",
       "system": "local-and-remote-execution"
     }
   ],
-  "commitSha": "faa705c5b757d19b5e0c0ccc4d0919e621d0a6ba",
+  "commitSha": "19f85c1604899ddd2336e5b6baeb23ec78b88455",
   "dirtyTree": false,
   "os": "windows",
   "profile": "deterministic",
-  "runId": "2026-10-23-faa705c"
+  "runId": "2026-10-23-19f85c1"
 }

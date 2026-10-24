@@ -9,7 +9,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1215,
+      "durationMs": 1333,
       "id": "MA-06",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -23,15 +23,15 @@
           "status": "passed"
         }
       ],
-      "durationMs": 4593,
+      "durationMs": 3219,
       "id": "MA-07",
       "status": "passed",
       "system": "multi-agent-orchestration"
     }
   ],
-  "commitSha": "faa705c5b757d19b5e0c0ccc4d0919e621d0a6ba",
-  "dirtyTree": false,
+  "commitSha": "19f85c1604899ddd2336e5b6baeb23ec78b88455",
+  "dirtyTree": true,
   "os": "windows",
   "profile": "security",
-  "runId": "2026-10-23-faa705c-security"
+  "runId": "2026-10-23-19f85c1-security"
 }

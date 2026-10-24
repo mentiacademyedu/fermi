@@ -1,51 +1,51 @@
-# Acceptance report: 2026-10-23-faa705c
+# Acceptance report: 2026-10-23-19f85c1-security
 
-Revision `faa705c5b757d19b5e0c0ccc4d0919e621d0a6ba` · profile deterministic · windows
+Revision `19f85c1604899ddd2336e5b6baeb23ec78b88455` (dirty tree) · profile security · windows
 
-**Overall acceptance: 18 / 106 passed.** Cases that did not run, or have no test, stay in the denominator.
+**Overall acceptance: 2 / 106 passed.** Cases that did not run, or have no test, stay in the denominator.
 
 | System | Cases | Passed | Failed | Not implemented | Not run |
 | --- | --- | --- | --- | --- | --- |
-| agent-observability | 8 | 1 | 0 | 7 | 0 |
+| agent-observability | 8 | 0 | 0 | 7 | 1 |
 | browser-and-application-control | 8 | 0 | 0 | 8 | 0 |
 | composable-harness-and-plugins | 8 | 0 | 0 | 8 | 0 |
 | cost-and-performance | 8 | 0 | 0 | 8 | 0 |
 | end-to-end | 10 | 0 | 0 | 10 | 0 |
 | evaluation-and-self-improvement | 8 | 0 | 0 | 8 | 0 |
-| integrated-verification-engine | 8 | 0 | 0 | 8 | 0 |
-| local-and-remote-execution | 8 | 1 | 0 | 7 | 0 |
-| model-agnostic-ai-engine | 8 | 4 | 0 | 4 | 0 |
-| multi-agent-orchestration | 8 | 6 | 0 | 2 | 0 |
+| integrated-verification-engine | 8 | 0 | 0 | 0 | 8 |
+| local-and-remote-execution | 8 | 0 | 0 | 7 | 1 |
+| model-agnostic-ai-engine | 8 | 0 | 0 | 4 | 4 |
+| multi-agent-orchestration | 8 | 2 | 0 | 1 | 5 |
 | persistent-project-memory | 8 | 0 | 0 | 8 | 0 |
 | security-and-isolation | 8 | 0 | 0 | 8 | 0 |
-| semantic-codebase-intelligence | 8 | 6 | 0 | 2 | 0 |
+| semantic-codebase-intelligence | 8 | 0 | 0 | 2 | 6 |
 
 | ID | Case | Result | Capability (audit) |
 | --- | --- | --- | --- |
-| AI-01 | Adapter normalization | passed | partial |
-| AI-02 | Common task interface | passed | implemented |
-| AI-03 | Model switching with state | passed | implemented |
+| AI-01 | Adapter normalization | not_run | partial |
+| AI-02 | Common task interface | not_run | implemented |
+| AI-03 | Model switching with state | not_run | implemented |
 | AI-04 | Rate limit handling | not_implemented | missing |
-| AI-05 | Provider outage handling | passed | implemented |
+| AI-05 | Provider outage handling | not_run | implemented |
 | AI-06 | Capability validation | not_implemented | missing |
 | AI-07 | Budget exhaustion | not_implemented | missing |
 | AI-08 | Local endpoint support | not_implemented | partial |
-| MA-01 | Concurrent workers | passed | implemented |
-| MA-02 | Dependency ordering | passed | implemented |
-| MA-03 | Independent edits | passed | implemented |
-| MA-04 | Conflicting edits | passed | partial |
+| MA-01 | Concurrent workers | not_run | implemented |
+| MA-02 | Dependency ordering | not_run | implemented |
+| MA-03 | Independent edits | not_run | implemented |
+| MA-04 | Conflicting edits | not_run | partial |
 | MA-05 | Scoped delegation | not_implemented | missing |
-| MA-06 | Worker crash isolation | passed | partial |
+| MA-06 | Worker crash isolation | passed | implemented |
 | MA-07 | Parent cancellation | passed | implemented |
-| MA-08 | Verified integration | not_implemented | partial |
-| CI-01 | Repository indexing | passed | implemented |
-| CI-02 | Exact symbol lookup | passed | implemented |
-| CI-03 | Caller discovery | passed | implemented |
+| MA-08 | Verified integration | not_run | implemented |
+| CI-01 | Repository indexing | not_run | implemented |
+| CI-02 | Exact symbol lookup | not_run | implemented |
+| CI-03 | Caller discovery | not_run | implemented |
 | CI-04 | Scope-safe rename | not_implemented | missing |
-| CI-05 | Incremental refresh | passed | implemented |
+| CI-05 | Incremental refresh | not_run | implemented |
 | CI-06 | Invalid syntax handling | not_implemented | missing |
-| CI-07 | Dependency impact | passed | implemented |
-| CI-08 | Symbol identity | passed | implemented |
+| CI-07 | Dependency impact | not_run | implemented |
+| CI-08 | Symbol identity | not_run | implemented |
 | PM-01 | Durable decisions | not_implemented | missing |
 | PM-02 | Fresh-session retrieval | not_implemented | missing |
 | PM-03 | Decision versioning | not_implemented | missing |
@@ -54,14 +54,14 @@ Revision `faa705c5b757d19b5e0c0ccc4d0919e621d0a6ba` · profile deterministic · 
 | PM-06 | Contradiction handling | not_implemented | missing |
 | PM-07 | Untrusted memory content | not_implemented | missing |
 | PM-08 | Project memory isolation | not_implemented | missing |
-| VE-01 | Compiler diagnostics | not_implemented | missing |
-| VE-02 | Failing test feedback | not_implemented | missing |
-| VE-03 | Repair and rerun | not_implemented | missing |
-| VE-04 | Lint enforcement | not_implemented | missing |
-| VE-05 | Dependency advisory detection | not_implemented | missing |
-| VE-06 | Structured edit integrity | not_implemented | missing |
-| VE-07 | Bounded repair attempts | not_implemented | missing |
-| VE-08 | Completion enforcement | not_implemented | missing |
+| VE-01 | Compiler diagnostics | not_run | implemented |
+| VE-02 | Failing test feedback | not_run | implemented |
+| VE-03 | Repair and rerun | not_run | implemented |
+| VE-04 | Lint enforcement | not_run | implemented |
+| VE-05 | Dependency advisory detection | not_run | implemented |
+| VE-06 | Structured edit integrity | not_run | implemented |
+| VE-07 | Bounded repair attempts | not_run | implemented |
+| VE-08 | Completion enforcement | not_run | implemented |
 | BA-01 | Local site launch | not_implemented | missing |
 | BA-02 | Form submission | not_implemented | missing |
 | BA-03 | Navigation chain | not_implemented | missing |
@@ -82,7 +82,7 @@ Revision `faa705c5b757d19b5e0c0ccc4d0919e621d0a6ba` · profile deterministic · 
 | OB-02 | Invocation detail | not_implemented | partial |
 | OB-03 | Usage fidelity | not_implemented | partial |
 | OB-04 | Failure diagnostics | not_implemented | partial |
-| OB-05 | Trace persistence | passed | implemented |
+| OB-05 | Trace persistence | not_run | implemented |
 | OB-06 | Resume correlation | not_implemented | partial |
 | OB-07 | Secret redaction | not_implemented | missing |
 | OB-08 | Deterministic replay | not_implemented | missing |
@@ -102,7 +102,7 @@ Revision `faa705c5b757d19b5e0c0ccc4d0919e621d0a6ba` · profile deterministic · 
 | SE-06 | Repository injection resistance | not_implemented | missing |
 | SE-07 | Scoped approval audit | not_implemented | partial |
 | SE-08 | Alternate route bypass | not_implemented | missing |
-| LR-01 | Local execution | passed | implemented |
+| LR-01 | Local execution | not_run | implemented |
 | LR-02 | Container equivalence | not_implemented | missing |
 | LR-03 | Remote dispatch | not_implemented | missing |
 | LR-04 | Desktop-independent jobs | not_implemented | missing |

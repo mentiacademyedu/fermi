@@ -92,6 +92,13 @@ Found and fixed while writing the tests; listed so the history is complete.
 | AI-03, AI-05 | accounts reported "not logged in": the harness wrote no credential files, so the engine skipped them | `Fermi::new` writes stand-in credential files per provider |
 | AI-01 | the check required identical event sequences, but optional text deltas differ by provider | compare the lifecycle (routed, tools, usage, done) without deltas |
 | MA-07 | the fake CLI started its child after waiting on the barrier, so cancel arrived before the child existed | start the child first, then wait |
+| VE-08 | read the task's history file right after the task left `running` in memory; the hub writes the file a moment later | poll the file until it shows the final state |
+| MA-08 | asked for a task's diff without a file, which returns a diffstat, then looked for code in it | ask for each worker's file |
+| VE-08 control | the first negative-control mutation didn't compile, so the case "failed" for the wrong reason; discarded | a compiling mutation (no checks, merge without the gate): VE-08 failed, runner exit 1 |
+
+## Design gap caught before release
+
+While adding the merge gate, the first version told the user to fix failing checks "in a task's conversation", but a task branch already merged into the integration branch is never merged again, so such a fix could not reach what gets merged. Fixed before commit: failing checks on the integrated branch now start a debugger step in the integration worktree (bounded by `max_repairs`) and the checks run again; MA-08 covers it.
 
 ## Environment notes
 

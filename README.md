@@ -200,14 +200,58 @@ A team run puts several agents with roles on one goal in a git repository
 3. **Merge branches.** Finished branches are merged in dependency order into an
    integration branch; a conflict goes to a debugger agent in that worktree.
 4. **Check.** Optionally a final test pass and a security review run on the
-   merged result.
-5. **Approve.** You see each branch's diff, the combined changes and every risk
-   the agents raised, then merge into your branch (it must be checked out and
-   clean) or discard. Your branch isn't touched before that.
+   merged result. Then fermi runs the project's checks itself (see
+   *Verification*); if they fail, a debugger fixes the integrated branch and
+   they run again, up to `max_repairs` times.
+5. **Approve.** You see each branch's diff, the combined changes, the check
+   results and every risk the agents raised, then merge into your branch (it
+   must be checked out and clean) or discard. Merging needs the checks to have
+   passed on exactly the commit being merged; your branch isn't touched before
+   that.
 
 Agents that hit an approval show it on their card; with *Let them run commands*
 they don't ask. Worktrees live in `~/.fermi/teams/<run>/wt` and are removed on
 merge or discard. A run stopped by closing fermi can be resumed.
+
+## Verification
+
+fermi runs a project's checks itself instead of trusting an agent's "all tests
+pass". The checks come from `.fermi/checks.toml` in the repository, or are
+detected from its manifests (Cargo, npm, Go, pytest):
+
+```toml
+max_repairs = 3             # fix turns a verified task gets
+protect = ["tests/**"]      # files the agent must leave as they are
+
+[[check]]
+name = "build"
+kind = "build"              # build | test | lint | audit | other
+run = "cargo check --workspace --all-targets --message-format=json"
+
+[[check]]
+name = "tests"
+kind = "test"
+run = "cargo test --workspace --no-fail-fast --message-format=json"
+needs = ["build"]           # not run unless build passed
+
+[[check]]
+name = "advisories"
+kind = "audit"              # no command: fermi's own lockfile scanner
+advisories = "~/.fermi/advisories"   # OSV records (JSON)
+```
+
+Each check ends passed, failed, skipped or not run, with compiler and linter
+diagnostics (file, line, column, rule), failing tests with their output, or the
+advisories found, plus the exact revision checked. Mandatory checks (the
+default) must all pass.
+
+- **Verified tasks** (*Check & fix* in the composer, or `fermi run --verify`):
+  after the agent finishes, fermi runs the checks and sends the failures back
+  to the same conversation, up to `max_repairs` times. The task ends done only
+  when the checks pass.
+- **Agents** get a `run_checks` tool, and `code_replace`, which rewrites one
+  whole definition and refuses edits that don't parse.
+- `fermi verify [--check NAME] [--json]` runs them in the terminal.
 
 ## Skills & agents
 

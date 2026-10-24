@@ -23,7 +23,8 @@ Status: **implemented** for the deterministic profile (T0–T2 without a browser
 | Fixture | State |
 | --- | --- |
 | F-CODE | built: 3-crate Rust workspace (`util`, `engine`, `app`) with duplicate `helper` functions in separate modules, a call cycle (`ping`/`pong`), cross-crate imports, a test, and sentinel strings in a comment and a string literal. Ground truth: `manifest.json`, `symbols.json`, `references.json`, `dependency-graph.json`, `expected/engine-lib-greet.rs`. |
-| F-PROVIDER, F-WORKER | built inline in the tests as fake-CLI scenarios (outages, limits, crashes, barriers, children). |
+| F-CODE (verification) | `repo/.fermi/checks.toml` pins the checks (offline `cargo check` and `cargo test`, `max_repairs = 3`); `repo/Cargo.lock` and `.gitignore` keep runs reproducible. `advisories/` is a pinned two-record OSV dataset; `expected/vulnerable-Cargo.lock` pins an affected `smallvec`; `expected/util-text-helper-edit.rs` is the oracle for the structured edit. |
+| F-PROVIDER, F-WORKER | built inline in the tests as fake-CLI scenarios (outages, limits, crashes, barriers, children, scripted repairs). |
 | F-SECURITY, F-WEB, F-MEMORY, F-PLUGIN, F-EVAL | not built yet; they come with the systems that need them. |
 
 ## Layout
@@ -33,7 +34,8 @@ crates/acceptance-tests/
   src/lib.rs                    # Case (evidence), Fermi (engine with fake accounts), fixtures, git, process helpers
   src/bin/fake-cli.rs           # deterministic Claude/Codex/Gemini CLI stand-in
   tests/model_providers.rs      # AI-01 02 03 05
-  tests/agent_execution.rs      # MA-01 02 03 04 06 07
+  tests/agent_execution.rs      # MA-01 02 03 04 06 07 08
+  tests/verification.rs         # VE-01 … VE-08
   tests/code_intelligence.rs    # CI-01 02 03 05 07 08
   tests/observability.rs        # OB-05
   tests/execution.rs            # LR-01
@@ -75,7 +77,7 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 
 | Profile | Tiers | What runs |
 | --- | --- | --- |
-| deterministic (default) | T0, T1, local T2 | engine, hub, teams and code index with the fake CLI and fixtures |
+| deterministic (default) | T0, T1, local T2 | engine, hub, teams, code index and verification with the fake CLI and fixtures; real cargo, clippy and git; the dashboard API over HTTP (VE-08) |
 | security | T3 | real process trees: crash isolation (MA-06) and cancellation (MA-07); sandbox and secret cases come with System 10 |
 | live | T4 | opt-in real provider smoke tests; requires `--allow-billable` (no live tests yet) |
 
@@ -92,4 +94,4 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 
 ## Next
 
-Build the missing systems in an agreed order, each with its eight cases, starting where existing pieces make the gap smallest (verification engine, budgets and price tables, project memory).
+Build the missing systems in an agreed order, each with its eight cases. Done: the verification engine (System 5). Next suggested: budgets and price tables (System 9 with AI-07), then project memory (System 4).
