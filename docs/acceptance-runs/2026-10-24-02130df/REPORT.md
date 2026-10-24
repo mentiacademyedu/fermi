@@ -1,67 +1,67 @@
-# Acceptance report: 2026-10-24-e72c2c7-security
+# Acceptance report: 2026-10-24-02130df
 
-Revision `e72c2c737ea6d08fc964b0231ebd24ec00b46199` · profile security · windows
+Revision `02130df9d80b5db173a5f14b5755a8668a52af41` · profile deterministic · windows
 
-**Overall acceptance: 5 / 106 passed.** Cases that did not run, or have no test, stay in the denominator.
+**Overall acceptance: 47 / 106 passed.** Cases that did not run, or have no test, stay in the denominator.
 
-| System | Cases | Passed | Failed | Not implemented | Not run |
-| --- | --- | --- | --- | --- | --- |
-| agent-observability | 8 | 0 | 0 | 7 | 1 |
-| browser-and-application-control | 8 | 0 | 0 | 8 | 0 |
-| composable-harness-and-plugins | 8 | 0 | 0 | 8 | 0 |
-| cost-and-performance | 8 | 0 | 0 | 0 | 8 |
-| end-to-end | 10 | 1 | 0 | 9 | 0 |
-| evaluation-and-self-improvement | 8 | 0 | 0 | 8 | 0 |
-| integrated-verification-engine | 8 | 0 | 0 | 0 | 8 |
-| local-and-remote-execution | 8 | 0 | 0 | 7 | 1 |
-| model-agnostic-ai-engine | 8 | 0 | 0 | 3 | 5 |
-| multi-agent-orchestration | 8 | 2 | 0 | 1 | 5 |
-| persistent-project-memory | 8 | 2 | 0 | 0 | 6 |
-| security-and-isolation | 8 | 0 | 0 | 8 | 0 |
-| semantic-codebase-intelligence | 8 | 0 | 0 | 2 | 6 |
+| System | Cases | Passed | Failed | Blocked | Not implemented | Not run |
+| --- | --- | --- | --- | --- | --- | --- |
+| agent-observability | 8 | 1 | 0 | 0 | 7 | 0 |
+| browser-and-application-control | 8 | 0 | 0 | 0 | 8 | 0 |
+| composable-harness-and-plugins | 8 | 0 | 0 | 0 | 8 | 0 |
+| cost-and-performance | 8 | 8 | 0 | 0 | 0 | 0 |
+| end-to-end | 10 | 1 | 0 | 0 | 9 | 0 |
+| evaluation-and-self-improvement | 8 | 0 | 0 | 0 | 8 | 0 |
+| integrated-verification-engine | 8 | 8 | 0 | 0 | 0 | 0 |
+| local-and-remote-execution | 8 | 1 | 0 | 0 | 7 | 0 |
+| model-agnostic-ai-engine | 8 | 5 | 0 | 0 | 3 | 0 |
+| multi-agent-orchestration | 8 | 7 | 0 | 0 | 1 | 0 |
+| persistent-project-memory | 8 | 8 | 0 | 0 | 0 | 0 |
+| security-and-isolation | 8 | 2 | 0 | 0 | 0 | 6 |
+| semantic-codebase-intelligence | 8 | 6 | 0 | 0 | 2 | 0 |
 
 | ID | Case | Result | Capability (audit) |
 | --- | --- | --- | --- |
-| AI-01 | Adapter normalization | not_run | partial |
-| AI-02 | Common task interface | not_run | implemented |
-| AI-03 | Model switching with state | not_run | implemented |
+| AI-01 | Adapter normalization | passed | partial |
+| AI-02 | Common task interface | passed | implemented |
+| AI-03 | Model switching with state | passed | implemented |
 | AI-04 | Rate limit handling | not_implemented | missing |
-| AI-05 | Provider outage handling | not_run | implemented |
+| AI-05 | Provider outage handling | passed | implemented |
 | AI-06 | Capability validation | not_implemented | missing |
-| AI-07 | Budget exhaustion | not_run | implemented |
+| AI-07 | Budget exhaustion | passed | implemented |
 | AI-08 | Local endpoint support | not_implemented | partial |
-| MA-01 | Concurrent workers | not_run | implemented |
-| MA-02 | Dependency ordering | not_run | implemented |
-| MA-03 | Independent edits | not_run | implemented |
-| MA-04 | Conflicting edits | not_run | partial |
+| MA-01 | Concurrent workers | passed | implemented |
+| MA-02 | Dependency ordering | passed | implemented |
+| MA-03 | Independent edits | passed | implemented |
+| MA-04 | Conflicting edits | passed | partial |
 | MA-05 | Scoped delegation | not_implemented | missing |
 | MA-06 | Worker crash isolation | passed | implemented |
 | MA-07 | Parent cancellation | passed | implemented |
-| MA-08 | Verified integration | not_run | implemented |
-| CI-01 | Repository indexing | not_run | implemented |
-| CI-02 | Exact symbol lookup | not_run | implemented |
-| CI-03 | Caller discovery | not_run | implemented |
+| MA-08 | Verified integration | passed | implemented |
+| CI-01 | Repository indexing | passed | implemented |
+| CI-02 | Exact symbol lookup | passed | implemented |
+| CI-03 | Caller discovery | passed | implemented |
 | CI-04 | Scope-safe rename | not_implemented | missing |
-| CI-05 | Incremental refresh | not_run | implemented |
+| CI-05 | Incremental refresh | passed | implemented |
 | CI-06 | Invalid syntax handling | not_implemented | missing |
-| CI-07 | Dependency impact | not_run | implemented |
-| CI-08 | Symbol identity | not_run | implemented |
-| PM-01 | Durable decisions | not_run | implemented |
-| PM-02 | Fresh-session retrieval | not_run | implemented |
-| PM-03 | Decision versioning | not_run | implemented |
-| PM-04 | Stale source detection | not_run | implemented |
-| PM-05 | Semantic retrieval | not_run | implemented |
-| PM-06 | Contradiction handling | not_run | implemented |
+| CI-07 | Dependency impact | passed | implemented |
+| CI-08 | Symbol identity | passed | implemented |
+| PM-01 | Durable decisions | passed | implemented |
+| PM-02 | Fresh-session retrieval | passed | implemented |
+| PM-03 | Decision versioning | passed | implemented |
+| PM-04 | Stale source detection | passed | implemented |
+| PM-05 | Semantic retrieval | passed | implemented |
+| PM-06 | Contradiction handling | passed | implemented |
 | PM-07 | Untrusted memory content | passed | implemented |
 | PM-08 | Project memory isolation | passed | implemented |
-| VE-01 | Compiler diagnostics | not_run | implemented |
-| VE-02 | Failing test feedback | not_run | implemented |
-| VE-03 | Repair and rerun | not_run | implemented |
-| VE-04 | Lint enforcement | not_run | implemented |
-| VE-05 | Dependency advisory detection | not_run | implemented |
-| VE-06 | Structured edit integrity | not_run | implemented |
-| VE-07 | Bounded repair attempts | not_run | implemented |
-| VE-08 | Completion enforcement | not_run | implemented |
+| VE-01 | Compiler diagnostics | passed | implemented |
+| VE-02 | Failing test feedback | passed | implemented |
+| VE-03 | Repair and rerun | passed | implemented |
+| VE-04 | Lint enforcement | passed | implemented |
+| VE-05 | Dependency advisory detection | passed | implemented |
+| VE-06 | Structured edit integrity | passed | implemented |
+| VE-07 | Bounded repair attempts | passed | implemented |
+| VE-08 | Completion enforcement | passed | implemented |
 | BA-01 | Local site launch | not_implemented | missing |
 | BA-02 | Form submission | not_implemented | missing |
 | BA-03 | Navigation chain | not_implemented | missing |
@@ -82,27 +82,27 @@ Revision `e72c2c737ea6d08fc964b0231ebd24ec00b46199` · profile security · windo
 | OB-02 | Invocation detail | not_implemented | partial |
 | OB-03 | Usage fidelity | not_implemented | partial |
 | OB-04 | Failure diagnostics | not_implemented | partial |
-| OB-05 | Trace persistence | not_run | implemented |
+| OB-05 | Trace persistence | passed | implemented |
 | OB-06 | Resume correlation | not_implemented | partial |
 | OB-07 | Secret redaction | not_implemented | missing |
 | OB-08 | Deterministic replay | not_implemented | missing |
-| CO-01 | Token cost arithmetic | not_run | implemented |
-| CO-02 | Cached token discounts | not_run | implemented |
-| CO-03 | Economy routing | not_run | implemented |
-| CO-04 | Quality routing | not_run | implemented |
-| CO-05 | Shared budget reservations | not_run | implemented |
-| CO-06 | Versioned price updates | not_run | implemented |
-| CO-07 | Large context warnings | not_run | implemented |
-| CO-08 | Usage attribution | not_run | implemented |
-| SE-01 | Forbidden file read | not_implemented | partial |
-| SE-02 | Secret isolation | not_implemented | missing |
-| SE-03 | Destructive action gating | not_implemented | partial |
-| SE-04 | Network restrictions | not_implemented | missing |
-| SE-05 | Cross-task isolation | not_implemented | partial |
-| SE-06 | Repository injection resistance | not_implemented | missing |
-| SE-07 | Scoped approval audit | not_implemented | partial |
-| SE-08 | Alternate route bypass | not_implemented | missing |
-| LR-01 | Local execution | not_run | implemented |
+| CO-01 | Token cost arithmetic | passed | implemented |
+| CO-02 | Cached token discounts | passed | implemented |
+| CO-03 | Economy routing | passed | implemented |
+| CO-04 | Quality routing | passed | implemented |
+| CO-05 | Shared budget reservations | passed | implemented |
+| CO-06 | Versioned price updates | passed | implemented |
+| CO-07 | Large context warnings | passed | implemented |
+| CO-08 | Usage attribution | passed | implemented |
+| SE-01 | Forbidden file read | not_run | implemented |
+| SE-02 | Secret isolation | not_run | implemented |
+| SE-03 | Destructive action gating | not_run | implemented |
+| SE-04 | Network restrictions | not_run | implemented |
+| SE-05 | Cross-task isolation | not_run | implemented |
+| SE-06 | Repository injection resistance | passed | implemented |
+| SE-07 | Scoped approval audit | passed | implemented |
+| SE-08 | Alternate route bypass | not_run | implemented |
+| LR-01 | Local execution | passed | implemented |
 | LR-02 | Container equivalence | not_implemented | missing |
 | LR-03 | Remote dispatch | not_implemented | missing |
 | LR-04 | Desktop-independent jobs | not_implemented | missing |

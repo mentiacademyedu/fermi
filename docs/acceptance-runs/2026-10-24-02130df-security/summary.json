@@ -1,0 +1,146 @@
+{
+  "cases": [
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1408,
+      "id": "MA-06",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3770,
+      "id": "MA-07",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "the OS file sandbox needs Linux (Landlock); fermi's deny_read policy and the canary scan were verified on this platform",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 906,
+      "id": "SE-01",
+      "status": "blocked",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 869,
+      "id": "SE-02",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2558,
+      "id": "SE-03",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "blocking a connection that bypasses the proxy needs Linux (Landlock); the proxy allowlist was verified on this platform",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 835,
+      "id": "SE-04",
+      "status": "blocked",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "file isolation between tasks needs Linux (Landlock); on this platform each task has its own folder, temp and environment but no OS boundary",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 958,
+      "id": "SE-05",
+      "status": "blocked",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1309,
+      "id": "SE-06",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 885,
+      "id": "SE-07",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1908,
+      "id": "SE-08",
+      "status": "passed",
+      "system": "security-and-isolation"
+    }
+  ],
+  "commitSha": "02130df9d80b5db173a5f14b5755a8668a52af41",
+  "dirtyTree": false,
+  "os": "windows",
+  "profile": "security",
+  "runId": "2026-10-24-02130df-security"
+}

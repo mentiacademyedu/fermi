@@ -26,6 +26,7 @@ Status: **implemented** for the deterministic profile (T0–T2 without a browser
 | F-CODE (verification) | `repo/.fermi/checks.toml` pins the checks (offline `cargo check` and `cargo test`, `max_repairs = 3`); `repo/Cargo.lock` and `.gitignore` keep runs reproducible. `advisories/` is a pinned two-record OSV dataset; `expected/vulnerable-Cargo.lock` pins an affected `smallvec`; `expected/util-text-helper-edit.rs` is the oracle for the structured edit. |
 | F-PROVIDER | `cost-cases.json`: a pinned price table and usage with costs worked out by hand (the CO-01 oracle, including zero tokens and rounding boundaries). Price tables, budgets and models for the other cost cases are declared in each test's config. |
 | F-MEMORY | `records.json`: ten decisions with sources, six paraphrase queries with the expected record, two contradictory notes. The two project scopes are separate F-CODE copies; the private record, planted comment, secret file and canaries are created by each test. |
+| F-SECURITY | built inline: canary files outside the task root, a synthetic controller secret, disposable sentinels, two task scopes, and real local endpoints (allowed and forbidden) for the network cases. |
 | F-WORKER | built inline in the tests as fake-CLI scenarios (outages, limits, crashes, barriers, children, scripted repairs, scripted usage including cached tokens). |
 | F-SECURITY, F-WEB, F-MEMORY, F-PLUGIN, F-EVAL | not built yet; they come with the systems that need them. |
 
@@ -40,6 +41,7 @@ crates/acceptance-tests/
   tests/verification.rs         # VE-01 … VE-08
   tests/cost.rs                 # CO-01 … CO-08, AI-07, E2E-08
   tests/memory.rs               # PM-01 … PM-08
+  tests/security.rs             # SE-01 … SE-08
   tests/code_intelligence.rs    # CI-01 02 03 05 07 08
   tests/observability.rs        # OB-05
   tests/execution.rs            # LR-01
@@ -98,4 +100,4 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 
 ## Next
 
-Build the missing systems in an agreed order, each with its eight cases. Done: project memory (System 4), the verification engine (System 5) and cost and performance (System 9, with AI-07 and E2E-08). Next suggested: security and isolation (System 10), then agent observability (System 8).
+Build the missing systems in an agreed order, each with its eight cases. Done: project memory (System 4), the verification engine (System 5), cost and performance (System 9, with AI-07 and E2E-08) and security and isolation (System 10). Next suggested: agent observability (System 8), then the composable plugin system (System 7). The OS sandbox (SE-01/04/05) is Linux-only, so a Linux CI step runs the security profile; on Windows those three report blocked.

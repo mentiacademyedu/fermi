@@ -99,6 +99,13 @@ Found and fixed while writing the tests; listed so the history is complete.
 | E2E-08 | counted every fake-CLI invocation as a model call, but the dashboard runs the CLI once at start to check the login (`auth status`) | count only calls that carry a prompt |
 | VE-08 control | the first negative-control mutation didn't compile, so the case "failed" for the wrong reason; discarded | a compiling mutation (no checks, merge without the gate): VE-08 failed, runner exit 1 |
 
+## Test-implementation issues found while building System 10 (no product defects)
+
+| Case | Issue | Fix |
+| --- | --- | --- |
+| SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
+| SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
+
 ## Design gap caught before release
 
 While adding the merge gate, the first version told the user to fix failing checks "in a task's conversation", but a task branch already merged into the integration branch is never merged again, so such a fix could not reach what gets merged. Fixed before commit: failing checks on the integrated branch now start a debugger step in the integration worktree (bounded by `max_repairs`) and the checks run again; MA-08 covers it.

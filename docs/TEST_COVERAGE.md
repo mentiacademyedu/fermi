@@ -5,27 +5,27 @@
 | Measure | Value |
 | --- | --- |
 | Acceptance cases in the registry | 106 (`tests/acceptance/systems.yaml`) |
-| Cases with an executable acceptance test | 45 |
-| Execution coverage (cases executed / 106) | 45 / 106 |
-| Overall acceptance (cases passed / 106) | 45 / 106 |
-| Capabilities found in the audit | 43 implemented, 21 partial, 42 missing |
-| Systems at their completion gate (8 / 8) | System 4 (project memory), System 5 (verification engine), System 9 (cost and performance) |
+| Cases with an executable acceptance test | 53 |
+| Execution coverage (cases executed / 106) | 53 / 106 |
+| Overall acceptance (cases passed / 106) | 53 / 106 (50 on Windows; SE-01/04/05 pass on Linux CI, blocked on Windows) |
+| Capabilities found in the audit | 51 implemented, 17 partial, 38 missing |
+| Systems at their completion gate (8 / 8) | System 4 (project memory), System 5 (verification engine), System 9 (cost and performance), System 10 (security; 8/8 on Linux CI) |
 
-All 43 capabilities audited as *implemented* have a passing test. Two cases audited as *partial* also pass: AI-01 (the three CLI adapters; the API adapters are untested) and MA-04 (conflicts go to a debugger agent instead of the user). The 19 other partial capabilities have no test yet: their missing piece is what the case checks, so the test waits for the capability.
+All 51 capabilities audited as *implemented* have a passing test (the three OS-sandbox cases on Linux CI). Two cases audited as *partial* also pass: AI-01 (the three CLI adapters; the API adapters are untested) and MA-04 (conflicts go to a debugger agent instead of the user). The 15 other partial capabilities have no test yet: their missing piece is what the case checks, so the test waits for the capability.
 
 ## Code coverage
 
-`cargo llvm-cov --workspace --locked` on Windows at `e72c2c7` (unit tests and acceptance tests together; the only uncommitted changes were documentation):
+`cargo llvm-cov --workspace --locked` on Windows at `02130df` (unit and acceptance tests together). The Linux-only sandbox code (Landlock) isn't exercised here; the egress proxy, environment allowlist and policy are:
 
 | Scope | Lines | Functions |
 | --- | --- | --- |
-| fermi-core (engine, providers, hub, teams, code index, verification, billing, memory, decks) | 73.1% (6266 / 8573) | 71.5% |
-| fermi (CLI, TUI, server, setup, skills, slides) | 40.2% (1771 / 4406) | 37.9% |
-| **Product total** | **61.9% (8037 / 12979)** | **59.3%** |
+| fermi-core (…, verification, billing, memory, security, decks) | 74.2% (6719 / 9058) | 72.7% |
+| fermi (CLI, TUI, server, setup, skills, slides) | 40.0% (1772 / 4435) | 37.6% |
+| **Product total** | **62.9% (8491 / 13493)** | **60.4%** |
 
 Excluded from the product total: `crates/acceptance-tests` (the harness), `xtask` (the runner) and `crates/fermi-desktop` (the Tauri shell, no tests). CI produces `lcov.info` on Ubuntu on every push and uploads it as an artifact.
 
-Earlier measurements: 54.1% at `faa705c`, 59.1% at `19f85c1`, 60.9% at `d44f68e`. New code is well covered: `memory.rs` 94%, `policy.rs` 94%, `billing.rs` 90%, `router.rs` 95%, `verify.rs` 78%.
+Earlier measurements: 54.1% at `faa705c`, 59.1% at `19f85c1`, 61.9% at `e72c2c7`. New code is well covered: `sandbox.rs` 95%, `policy.rs` 93%, `memory.rs` 94%, `billing.rs` 90%, `approvals.rs` 77%.
 
 ### Notable gaps
 
