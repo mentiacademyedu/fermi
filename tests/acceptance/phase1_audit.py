@@ -152,8 +152,14 @@ a("LR-06", "missing", "", "No remote workers or heartbeats beyond local stale de
 a("LR-07", "missing", "", "No remote cancellation.")
 a("LR-08", "missing", "", "No worker protocol versioning.")
 # System 12
-for i in range(1, 9):
-    a(f"EV-0{i}", "missing", "", "No evaluation harness, datasets or scoring.")
+a("EV-01", "implemented", f"{core}/eval.rs (run, run_task)", "Each task runs in a fresh fixture copy through the normal engine and is scored by fermi's evaluator in its own folder; every task gets a score, status and evidence (patch, check outputs); failed runs and no change earn no credit.")
+a("EV-02", "implemented", f"{core}/eval.rs (Report)", "Every run produces the same report schema bound to the dataset hash, evaluator and limits, with the model and account, latency, tokens and cost (unknown when no price applies).")
+a("EV-03", "implemented", f"{core}/eval.rs (hidden files, scoring folder)", "Hidden tests are laid over a pristine copy only when scoring, so a wrong implementation that passes the visible tests still fails; failure output is kept.")
+a("EV-04", "implemented", f"{core}/eval.rs (compare), crates/fermi/src/server.rs (/api/evals), web/index.html (Evaluations)", "Runs of the same dataset version are compared per task and in total (quality, latency, cost), reconciling to the raw records, with missing measurements and the sample size shown and no significance claimed.")
+a("EV-05", "implemented", f"{core}/eval.rs (reproducibility, task_hash)", "Reports pin dataset, fixture and evaluator hashes, the configuration fingerprint and limits; two runs are checked for the same setup and scores, and differing outputs are reported as variation.")
+a("EV-06", "implemented", f"{core}/eval.rs (protect, lock)", "Protected assets are read-only to the candidate (read-only files and folders on Unix; locked files and a deny ACL on Windows), hashed before and after, and scoring uses pristine copies; any change invalidates the task.")
+a("EV-07", "implemented", f"{core}/eval.rs (register, history)", "Datasets are registered by version and content hash; reports stay bound to theirs, changed contents need a new version, and runs of different versions aren't compared.")
+a("EV-08", "implemented", f"{core}/eval.rs (propose, evaluate, adopt)", "An agent's proposal cites the failures it addresses and the evaluation rule; it can't become the active configuration until evaluated without regressions and approved by a named person.")
 # E2E
 a("E2E-01", "partial", "dashboard + engine", "Task, model routing and file changes work; no fermi-run test step or verified-change gate.")
 a("E2E-02", "partial", f"{core}/team.rs", "Team runs isolate agents in worktrees; plain parallel tasks share the workspace folder.")

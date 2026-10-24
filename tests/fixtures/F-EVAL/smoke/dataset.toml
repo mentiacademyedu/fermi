@@ -1,0 +1,114 @@
+name = "smoke"
+version = "1"
+description = "Five small Rust coding tasks: a smoke test, not a benchmark of model quality."
+timeout_secs = 300
+
+[[tasks]]
+id = "add"
+prompt = "Task add: implement `add` in src/lib.rs: the sum of two integers. The tests in tests/ show what is expected."
+fixture = "tasks/add/repo"
+protected = ["tests"]
+hidden = "tasks/add/hidden"
+
+[[tasks.checks]]
+name = "builds"
+run = ["cargo", "build", "--offline", "--quiet"]
+weight = 1
+
+[[tasks.checks]]
+name = "visible tests"
+run = ["cargo", "test", "--offline", "--quiet", "--test", "visible"]
+weight = 1
+
+[[tasks.checks]]
+name = "hidden tests"
+run = ["cargo", "test", "--offline", "--quiet", "--test", "hidden"]
+weight = 3
+
+[[tasks]]
+id = "reverse"
+prompt = "Task reverse: implement `reverse` in src/lib.rs: the string with its characters in reverse order (by character, not byte). The tests in tests/ show what is expected."
+fixture = "tasks/reverse/repo"
+protected = ["tests"]
+hidden = "tasks/reverse/hidden"
+
+[[tasks.checks]]
+name = "builds"
+run = ["cargo", "build", "--offline", "--quiet"]
+weight = 1
+
+[[tasks.checks]]
+name = "visible tests"
+run = ["cargo", "test", "--offline", "--quiet", "--test", "visible"]
+weight = 1
+
+[[tasks.checks]]
+name = "hidden tests"
+run = ["cargo", "test", "--offline", "--quiet", "--test", "hidden"]
+weight = 3
+
+[[tasks]]
+id = "fizzbuzz"
+prompt = "Task fizzbuzz: implement `fizzbuzz` in src/lib.rs: \"Fizz\" for multiples of 3, \"Buzz\" for multiples of 5, \"FizzBuzz\" for both, else the number. The tests in tests/ show what is expected."
+fixture = "tasks/fizzbuzz/repo"
+protected = ["tests"]
+hidden = "tasks/fizzbuzz/hidden"
+
+[[tasks.checks]]
+name = "builds"
+run = ["cargo", "build", "--offline", "--quiet"]
+weight = 1
+
+[[tasks.checks]]
+name = "visible tests"
+run = ["cargo", "test", "--offline", "--quiet", "--test", "visible"]
+weight = 1
+
+[[tasks.checks]]
+name = "hidden tests"
+run = ["cargo", "test", "--offline", "--quiet", "--test", "hidden"]
+weight = 3
+
+[[tasks]]
+id = "palindrome"
+prompt = "Task palindrome: implement `is_palindrome` in src/lib.rs: true when the letters and digits read the same both ways, ignoring case and everything else. The tests in tests/ show what is expected."
+fixture = "tasks/palindrome/repo"
+protected = ["tests"]
+hidden = "tasks/palindrome/hidden"
+
+[[tasks.checks]]
+name = "builds"
+run = ["cargo", "build", "--offline", "--quiet"]
+weight = 1
+
+[[tasks.checks]]
+name = "visible tests"
+run = ["cargo", "test", "--offline", "--quiet", "--test", "visible"]
+weight = 1
+
+[[tasks.checks]]
+name = "hidden tests"
+run = ["cargo", "test", "--offline", "--quiet", "--test", "hidden"]
+weight = 3
+
+[[tasks]]
+id = "word_count"
+prompt = "Task word_count: implement `word_count` in src/lib.rs: the number of words separated by any whitespace. The tests in tests/ show what is expected."
+fixture = "tasks/word_count/repo"
+protected = ["tests"]
+hidden = "tasks/word_count/hidden"
+
+[[tasks.checks]]
+name = "builds"
+run = ["cargo", "build", "--offline", "--quiet"]
+weight = 1
+
+[[tasks.checks]]
+name = "visible tests"
+run = ["cargo", "test", "--offline", "--quiet", "--test", "visible"]
+weight = 1
+
+[[tasks.checks]]
+name = "hidden tests"
+run = ["cargo", "test", "--offline", "--quiet", "--test", "hidden"]
+weight = 3

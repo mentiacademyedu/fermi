@@ -429,7 +429,7 @@ pub fn parse_plan(v: &Value) -> Result<(String, Vec<TeamTask>)> {
 }
 
 /// The last JSON object in a reply (a ```json block, or the last {...}).
-fn json_in_text(text: &str) -> Option<Value> {
+pub(crate) fn json_in_text(text: &str) -> Option<Value> {
     if let Some(start) = text.rfind("```json") {
         let rest = &text[start + 7..];
         if let Some(end) = rest.find("```") {

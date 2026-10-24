@@ -452,6 +452,42 @@ name = "proxy"
 - A plugin needing a plugin API this fermi doesn't support is refused at
   install, saying which versions are needed and supported.
 
+## Evaluations
+
+Measure which model and configuration does best on the same tasks, and keep
+changes honest.
+
+```bash
+fermi eval run datasets/smoke --name sonnet --model claude:sonnet
+fermi eval run datasets/smoke --name gpt --model openai:gpt --verify
+fermi eval compare <run A> <run B>
+```
+
+- **Datasets** are folders with a `dataset.toml`: a name, a version, and tasks
+  (a prompt, a fixture repository, the paths the candidate may read but not
+  change, files only the evaluator sees, such as hidden tests, and weighted
+  check commands). `tests/fixtures/F-EVAL/smoke` is a five-task example.
+  Each version is registered by content hash: change a dataset and it needs a
+  new version, and old results stay with the version they ran on.
+- **Runs**: every task starts from a fresh copy of its fixture with the
+  protected files locked. The candidate works through the normal engine; then
+  fermi's evaluator scores it in a separate folder (the pristine fixture, the
+  candidate's changes, the hidden files). A failed run, no change at all, or a
+  protected file that changed anyway earns nothing. Reports record the dataset
+  and fixture hashes, the evaluator, the configuration's fingerprint, each
+  task's score and evidence, latency, tokens and cost (shown as unknown when
+  no price applies, never as zero).
+- **Comparisons** pair runs of the same dataset version only, per task and in
+  total, with missing measurements and the sample size shown. Five tasks are a
+  smoke test: the comparison describes those runs and claims no statistical
+  significance. The dashboard's **Evaluations** page shows runs, reports and
+  comparisons.
+- **Improvements**: `fermi eval propose <run>…` asks an agent for one
+  configuration change, citing the failures. It stays a proposal until
+  `fermi eval evaluate <proposal> <dataset>` shows no lower score and no
+  regressions against the active configuration, and a person adopts it
+  (`fermi eval adopt <proposal> --reviewer <name>`, or the dashboard).
+
 ## Skills & agents
 
 Every fermi account keeps its own config folder, so skills you installed in
@@ -518,6 +554,7 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   trace.rs         operation traces, tapes of CLI responses, replay
   redact.rs        removes secrets before anything about a task is saved
   plugins.rs       plugin manifests, registry, sandboxed MCP client, model adapters
+  eval.rs          evaluation datasets, runs, scoring, comparisons, gated improvements
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
   slides.rs        .pptx parts in and out (the dashboard renders and edits the XML)

@@ -10,6 +10,7 @@ pub mod code;
 pub mod config;
 pub mod deck;
 pub mod engine;
+pub mod eval;
 pub mod events;
 pub mod hub;
 pub mod mcp;

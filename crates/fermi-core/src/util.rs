@@ -8,6 +8,11 @@ pub fn now() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
+/// Unix milliseconds.
+pub fn now_ms() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+}
+
 /// Random v4 UUID (session ids for the CLIs).
 pub fn uuid_v4() -> String {
     let mut b = [0u8; 16];
