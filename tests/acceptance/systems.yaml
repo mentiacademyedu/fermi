@@ -736,13 +736,13 @@ cases:
     action: "Launch a local website"
     expected: "Browser opens at the expected URL"
     evidence: "Browser trace final url and page screenshot."
-    capability: missing
-    implementation: "crates/fermi/src/preview.rs (user-facing only)"
-    auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
+    capability: implemented
+    implementation: "crates/fermi-core/src/browser.rs (open), mcp.rs (browser tools)"
+    auditNote: "Agents open pages in a headless Chromium-based browser through fermi's bridge; the result names the URL, title and page identity, and an unreachable page or an HTTP error is a failure."
     testFile: crates/acceptance-tests/tests/browser.rs
     testName: ba_01_local_site_launch
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: BA-02
     title: "Form submission"
     system: browser-and-application-control
@@ -754,13 +754,13 @@ cases:
     action: "Fill and submit a form"
     expected: "Correct data reaches the app and success state appears"
     evidence: "Interaction trace request body and persisted fixture record."
-    capability: missing
-    implementation: "crates/fermi/src/preview.rs (user-facing only)"
-    auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
+    capability: implemented
+    implementation: "crates/fermi-core/src/browser.rs (fill, click)"
+    auditNote: "Fields are typed into once visible and enabled; clicks use real mouse events on the element's centre once it is visible, enabled and uncovered."
     testFile: crates/acceptance-tests/tests/browser.rs
     testName: ba_02_form_submission
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: BA-03
     title: "Navigation chain"
     system: browser-and-application-control
@@ -772,13 +772,13 @@ cases:
     action: "Navigate through three pages"
     expected: "Agent verifies the correct final route"
     evidence: "Route events trace and final screenshot."
-    capability: missing
-    implementation: "crates/fermi/src/preview.rs (user-facing only)"
-    auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
+    capability: implemented
+    implementation: "crates/fermi-core/src/browser.rs (click, navigations)"
+    auditNote: "A click that starts a navigation returns once the new page has loaded; every main-frame navigation is recorded in the trace."
     testFile: crates/acceptance-tests/tests/browser.rs
     testName: ba_03_navigation_chain
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: BA-04
     title: "Screenshot artifact"
     system: browser-and-application-control
@@ -790,13 +790,13 @@ cases:
     action: "Capture a screenshot"
     expected: "Valid screenshot artifact is saved"
     evidence: "Image file dimensions checksum and trace reference."
-    capability: missing
-    implementation: "crates/fermi/src/preview.rs (user-facing only)"
-    auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
+    capability: implemented
+    implementation: "crates/fermi-core/src/browser.rs (screenshot)"
+    auditNote: "PNG screenshots of the viewport or full page are saved with their size and SHA-256, referenced from the trace."
     testFile: crates/acceptance-tests/tests/browser.rs
     testName: ba_04_screenshot_artifact
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: BA-05
     title: "Console error capture"
     system: browser-and-application-control
@@ -808,13 +808,13 @@ cases:
     action: "Trigger a JavaScript exception"
     expected: "Browser console error captured"
     evidence: "Sanitized console log error event and page identity."
-    capability: missing
-    implementation: "crates/fermi/src/preview.rs (user-facing only)"
-    auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
+    capability: implemented
+    implementation: "crates/fermi-core/src/browser.rs (observe)"
+    auditNote: "Console errors, warnings and uncaught exceptions are captured with their source, redacted, and kept in the task's trace."
     testFile: crates/acceptance-tests/tests/browser.rs
     testName: ba_05_console_error_capture
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: BA-06
     title: "Network failure detection"
     system: browser-and-application-control
@@ -826,13 +826,13 @@ cases:
     action: "Simulate an HTTP 500 response"
     expected: "Network failure is detected and recorded"
     evidence: "Network trace response status and error-state screenshot."
-    capability: missing
-    implementation: "crates/fermi/src/preview.rs (user-facing only)"
-    auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
+    capability: implemented
+    implementation: "crates/fermi-core/src/browser.rs (observe)"
+    auditNote: "Failed requests (HTTP 4xx/5xx and network errors) are recorded with URL, method and status."
     testFile: crates/acceptance-tests/tests/browser.rs
     testName: ba_06_network_failure_detection
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: BA-07
     title: "Mobile layout assertions"
     system: browser-and-application-control
@@ -844,13 +844,13 @@ cases:
     action: "Change the viewport to mobile dimensions"
     expected: "Responsive behavior is tested against specified assertions"
     evidence: "Viewport metadata screenshots and interaction assertions."
-    capability: missing
-    implementation: "crates/fermi/src/preview.rs (user-facing only)"
-    auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
+    capability: implemented
+    implementation: "crates/fermi-core/src/browser.rs (viewport, check, state)"
+    auditNote: "Viewport and mobile emulation; element checks report visibility, enablement, coverage and viewport placement; the page state reports horizontal overflow."
     testFile: crates/acceptance-tests/tests/browser.rs
     testName: ba_07_mobile_layout_assertions
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: BA-08
     title: "Dynamic readiness"
     system: browser-and-application-control
@@ -862,13 +862,13 @@ cases:
     action: "Encounter a modal or dynamically loaded element"
     expected: "Agent waits for correct conditions and interacts reliably"
     evidence: "Timed trace modal states and resulting app record."
-    capability: missing
-    implementation: "crates/fermi/src/preview.rs (user-facing only)"
-    auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
+    capability: implemented
+    implementation: "crates/fermi-core/src/browser.rs (wait, click)"
+    auditNote: "Actions wait for readiness with recorded state changes; a wait that runs out is an error and a click never fires on a disabled or covered element."
     testFile: crates/acceptance-tests/tests/browser.rs
     testName: ba_08_dynamic_readiness
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: PL-01
     title: "Plugin registration"
     system: composable-harness-and-plugins

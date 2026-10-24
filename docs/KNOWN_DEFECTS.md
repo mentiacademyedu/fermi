@@ -106,6 +106,13 @@ Found and fixed while writing the tests; listed so the history is complete.
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
 
+## Found while building System 6 (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Test flake, caught by CI's coverage step | OB-04 read a task's saved history right after the run finished in memory; the hub writes the final record a moment later, and under coverage instrumentation the read came first | `wait_saved` waits for the history file to show the task finished; it replaces the fixed 300 ms pauses in the OB cases |
+| Test implementation | BA-01's unreachable URL used port 9, which Chromium refuses as an unsafe port instead of trying; BA-08 first measured readiness from the click's trace entry, which is written after the click's short wait for a navigation | a freshly released ordinary port gives a real connection refusal; BA-08 checks the recorded state changes and the order the server saw the requests |
+
 ## Found while building System 12 (no open defects)
 
 | Kind | Issue | Fix |

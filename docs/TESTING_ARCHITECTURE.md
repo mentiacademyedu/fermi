@@ -30,7 +30,7 @@ Status: **implemented** for the deterministic profile (T0–T2 without a browser
 | F-WORKER | built inline in the tests as fake-CLI scenarios (outages, limits, crashes, barriers, children, scripted repairs, scripted usage including cached tokens). |
 | F-PLUGIN | `tests/fixtures/F-PLUGIN/`: eight sample plugins (manifests whose program is the harness's `fake-plugin`, an MCP server over stdio that can speak either protocol era, crash, hang, report tool errors, read files and play scripted adapter replies). |
 | F-EVAL | `tests/fixtures/F-EVAL/smoke`: dataset version 1, five small Rust crates with stubs, protected visible tests and hidden tests (score 5 each); `solutions/` holds the correct and the known-wrong implementations the fake candidate applies. |
-| F-WEB | not built yet; it comes with browser control. |
+| F-WEB | `tests/fixtures/F-WEB/site`: eight small pages (home, a three-page tour, a form, an error page, a failing-data page, a responsive page and a delayed modal), served with a small API by `acceptance_tests::web_fixture` (`src/web.rs`) on a free port; the server keeps what it receives and a log of every request. |
 
 ## Layout
 
@@ -49,6 +49,8 @@ crates/acceptance-tests/
   tests/observability.rs        # OB-01 … OB-08
   tests/plugins.rs              # PL-01 … PL-08
   tests/evaluation.rs           # EV-01 … EV-08
+  tests/browser.rs              # BA-01 … BA-08 (a headless Chromium-based browser; blocked where none is installed)
+  src/web.rs                    # the F-WEB fixture server
   tests/execution.rs            # LR-01
 xtask/src/main.rs               # acceptance runner
 tests/acceptance/systems.yaml   # registry of all 106 IDs, with test mappings and published status
@@ -101,8 +103,7 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 - **HTTP provider mock** for the API adapters (`base_url`): needed for AI-04 (429 backoff), AI-08 and the API side of AI-05.
 - **Dashboard tests** (Playwright against `fermi ui`): the web UI has no automated tests.
 - **Container and remote workers** (LR-02 onwards): Docker is not available on the development machine, so those cases would be `blocked`.
-- Fixtures for systems that don't exist yet (browser control).
 
 ## Next
 
-Build the missing systems in an agreed order, each with its eight cases. Done: project memory (System 4), the verification engine (System 5), the plugin system (System 7), agent observability (System 8), cost and performance (System 9, with AI-07 and E2E-08), security and isolation (System 10) and evaluation (System 12). Next suggested: browser and application control (System 6), then local and remote execution (System 11). The OS sandbox (PL-07, SE-01/04/05) is Linux-only, so a Linux CI step runs the security profile for SE, MA, PL and EV; on Windows those four report blocked.
+Build the missing systems in an agreed order, each with its eight cases. Done: project memory (System 4), the verification engine (System 5), the plugin system (System 7), agent observability (System 8), cost and performance (System 9, with AI-07 and E2E-08), security and isolation (System 10), evaluation (System 12) and browser control (System 6). Next suggested: local and remote execution (System 11), then the remaining gaps in Systems 1 to 3 and the end-to-end workflows. The OS sandbox (PL-07, SE-01/04/05) is Linux-only, so a Linux CI step runs the security profile for SE, MA, PL and EV; on Windows those four report blocked.

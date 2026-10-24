@@ -2,7 +2,7 @@
 
 Phase 1 audit of fermi (called APEX in the spec) against `docs/FERMI_ADE_Verification_and_Acceptance_Testing`.
 
-Published run `2026-10-24-c3b1f83` on revision `c3b1f833cc1d`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-24-c3b1f83/REPORT.md`.
+Published run `2026-10-24-45735d6` on revision `45735d666886`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-24-45735d6/REPORT.md`.
 
 *Result* is the published acceptance outcome: `passed` or `failed` from an executed test with validated evidence; `not_implemented` when no test exists (usually because the capability is missing); `not_run` when a test exists but wasn't in the published run.
 *Capability* is an audit finding from reading the code; it is not verification.
@@ -18,7 +18,7 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | 3 Semantic codebase intelligence | 8 | 6 | 0 | 2 | 6 / 8 |
 | 4 Persistent project memory | 8 | 8 | 0 | 0 | 8 / 8 |
 | 5 Integrated verification engine | 8 | 8 | 0 | 0 | 8 / 8 |
-| 6 Browser and application control | 8 | 0 | 0 | 8 | 0 / 8 |
+| 6 Browser and application control | 8 | 8 | 0 | 0 | 8 / 8 |
 | 7 Composable harness and plugin system | 8 | 8 | 0 | 0 | 7 / 8 |
 | 8 Agent observability | 8 | 8 | 0 | 0 | 8 / 8 |
 | 9 Cost and performance optimization | 8 | 8 | 0 | 0 | 8 / 8 |
@@ -26,7 +26,7 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | 11 Local and remote execution | 8 | 1 | 1 | 6 | 1 / 8 |
 | 12 Evaluation and self-improvement | 8 | 8 | 0 | 0 | 8 / 8 |
 | End-to-end workflows | 10 | 1 | 6 | 3 | 1 / 10 |
-| **Total** | **106** | **74** | **10** | **22** | **72 / 106** |
+| **Total** | **106** | **82** | **10** | **14** | **80 / 106** |
 
 ## 1 Model-agnostic AI engine
 
@@ -97,14 +97,14 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| BA-01 | Local site launch | T2 | **not_implemented** | — | missing | crates/fermi/src/preview.rs (user-facing only) | The Preview tab is a browser for the user; agents have no browser automation tools in fermi. |
-| BA-02 | Form submission | T2 | **not_implemented** | — | missing | crates/fermi/src/preview.rs (user-facing only) | The Preview tab is a browser for the user; agents have no browser automation tools in fermi. |
-| BA-03 | Navigation chain | T2 | **not_implemented** | — | missing | crates/fermi/src/preview.rs (user-facing only) | The Preview tab is a browser for the user; agents have no browser automation tools in fermi. |
-| BA-04 | Screenshot artifact | T2 | **not_implemented** | — | missing | crates/fermi/src/preview.rs (user-facing only) | The Preview tab is a browser for the user; agents have no browser automation tools in fermi. |
-| BA-05 | Console error capture | T2 | **not_implemented** | — | missing | crates/fermi/src/preview.rs (user-facing only) | The Preview tab is a browser for the user; agents have no browser automation tools in fermi. |
-| BA-06 | Network failure detection | T2 | **not_implemented** | — | missing | crates/fermi/src/preview.rs (user-facing only) | The Preview tab is a browser for the user; agents have no browser automation tools in fermi. |
-| BA-07 | Mobile layout assertions | T2 | **not_implemented** | — | missing | crates/fermi/src/preview.rs (user-facing only) | The Preview tab is a browser for the user; agents have no browser automation tools in fermi. |
-| BA-08 | Dynamic readiness | T2 | **not_implemented** | — | missing | crates/fermi/src/preview.rs (user-facing only) | The Preview tab is a browser for the user; agents have no browser automation tools in fermi. |
+| BA-01 | Local site launch | T2 | **passed** | ba_01_local_site_launch | implemented | crates/fermi-core/src/browser.rs (open), mcp.rs (browser tools) | Agents open pages in a headless Chromium-based browser through fermi's bridge; the result names the URL, title and page identity, and an unreachable page or an HTTP error is a failure. |
+| BA-02 | Form submission | T2 | **passed** | ba_02_form_submission | implemented | crates/fermi-core/src/browser.rs (fill, click) | Fields are typed into once visible and enabled; clicks use real mouse events on the element's centre once it is visible, enabled and uncovered. |
+| BA-03 | Navigation chain | T2 | **passed** | ba_03_navigation_chain | implemented | crates/fermi-core/src/browser.rs (click, navigations) | A click that starts a navigation returns once the new page has loaded; every main-frame navigation is recorded in the trace. |
+| BA-04 | Screenshot artifact | T2 | **passed** | ba_04_screenshot_artifact | implemented | crates/fermi-core/src/browser.rs (screenshot) | PNG screenshots of the viewport or full page are saved with their size and SHA-256, referenced from the trace. |
+| BA-05 | Console error capture | T2 | **passed** | ba_05_console_error_capture | implemented | crates/fermi-core/src/browser.rs (observe) | Console errors, warnings and uncaught exceptions are captured with their source, redacted, and kept in the task's trace. |
+| BA-06 | Network failure detection | T2 | **passed** | ba_06_network_failure_detection | implemented | crates/fermi-core/src/browser.rs (observe) | Failed requests (HTTP 4xx/5xx and network errors) are recorded with URL, method and status. |
+| BA-07 | Mobile layout assertions | T2 | **passed** | ba_07_mobile_layout_assertions | implemented | crates/fermi-core/src/browser.rs (viewport, check, state) | Viewport and mobile emulation; element checks report visibility, enablement, coverage and viewport placement; the page state reports horizontal overflow. |
+| BA-08 | Dynamic readiness | T2 | **passed** | ba_08_dynamic_readiness | implemented | crates/fermi-core/src/browser.rs (wait, click) | Actions wait for readiness with recorded state changes; a wait that runs out is an error and a click never fires on a disabled or covered element. |
 
 ## 7 Composable harness and plugin system
 
