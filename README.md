@@ -321,18 +321,50 @@ dashboard's *Memory* page, or `fermi memory`):
 Memory lives in `~/.fermi/memory/<project>/log.jsonl`, one folder per
 repository; a project can't read another's.
 
-### Files agents may not read
+### Security policy
 
 ```toml
 [security]
-deny_read = ["~/.ssh/**", "**/.env", "C:/work/secrets/**"]
+deny_read = ["~/.ssh/**", "**/.env", "C:/work/secrets/**"]   # never read
+deny_commands = ["git push *", "curl *"]                      # never run
+confirm_commands = ["rm *", "docker *"]                       # ask me first
+sandbox = true                                                # see below
+net_allow = ["api.github.com"]                                # extra hosts in the sandbox
+env_allow = ["GITHUB_TOKEN"]                                  # extra env vars in the sandbox
 ```
 
-Claude agents get these as `--disallowedTools "Read(//…)"` rules, which Claude
-Code enforces for its file tools and the file commands it recognizes, in every
-permission mode; programs an agent runs aren't covered (that needs an OS
-sandbox). fermi's own tools refuse the paths too. Codex and Gemini have no
-equivalent switch.
+When any of these is set, every tool call a Claude agent makes is decided by
+one policy (through Claude Code's permission hook), so the same rule applies
+whether the agent uses the file tool, the shell, or one of fermi's own tools:
+
+- **deny_read**: these paths are never read. A plain read is refused, a shell
+  command that names the path is refused, and fermi's own tools refuse it too.
+- **deny_commands** / **confirm_commands**: Claude-style patterns (`rm *`).
+  Denied commands never run; confirmed ones wait for you. An approval covers
+  exactly that command once — a replay or a broader command is asked again.
+- **Approvals** are audited: `~/.fermi/approvals/` records who decided, when,
+  for which task and exactly what. Held actions show in the conversation with
+  *Approve once and continue* or *Deny*.
+
+Programs an agent starts itself aren't bound by the permission hook; that takes
+the sandbox. Codex and Gemini agents don't have the permission hook, so the
+policy reaches them only through the sandbox.
+
+### Sandbox
+
+With `sandbox = true`, each agent CLI (and everything it starts) runs confined:
+
+- **Environment**: only an allowlist of variables (the system ones a program
+  needs, plus `env_allow`); fermi's own secrets, including API keys, are left
+  out. Every platform.
+- **Network**: traffic goes through fermi's egress proxy, which passes only the
+  providers' API hosts plus `net_allow` and logs every decision to
+  `~/.fermi/egress.jsonl`.
+- **Files and ports** (Linux, via Landlock, kernel 6.7+): read/write only in
+  the task's folder, its account's config and a private temp; read-only system
+  folders; TCP only to the proxy, so a program can't go around it. On Windows
+  and macOS only the environment allowlist and the proxy apply; the file and
+  network boundaries aren't drawn by the OS there.
 
 ## Skills & agents
 

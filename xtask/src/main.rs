@@ -119,6 +119,8 @@ struct Opts {
     implemented: bool,
     profile: String,
     allow_billable: bool,
+    /// Treat a `blocked` case (the platform can't exercise it) as acceptable, not a failure.
+    allow_blocked: bool,
     repeat: Option<u32>,
 }
 
@@ -241,7 +243,8 @@ fn acceptance(o: Opts) -> Result<bool, String> {
     let manifest = json!({ "runId": run_id, "profile": o.profile, "commitSha": commit, "dirtyTree": dirty, "os": std::env::consts::OS, "cases": summary });
     std::fs::write(reports.join("summary.json"), serde_json::to_vec_pretty(&manifest).unwrap()).map_err(|e| e.to_string())?;
     report(&run_id)?;
-    Ok(summary.iter().all(|c| c["status"] == "passed"))
+    let acceptable = |st: &str| st == "passed" || (o.allow_blocked && st == "blocked");
+    Ok(summary.iter().all(|c| acceptable(c["status"].as_str().unwrap_or(""))))
 }
 
 /// Writes REPORT.md for a run: every one of the registry's cases is counted,
@@ -306,13 +309,14 @@ fn main() -> ExitCode {
             implemented: flag("--implemented"),
             profile: values("--profile").pop().unwrap_or_else(|| "deterministic".into()),
             allow_billable: flag("--allow-billable"),
+            allow_blocked: flag("--allow-blocked"),
             repeat: values("--repeat").pop().and_then(|r| r.parse().ok()),
         }),
         Some("report") => match values("--run-id").pop() {
             Some(r) => report(&r).map(|_| true),
             None => Err("report needs --run-id".into()),
         },
-        _ => Err("usage: xtask acceptance [--id X]… [--system AI]… [--implemented | --all] [--profile deterministic|security|live] [--allow-billable] [--repeat N]\n       xtask report --run-id <runId>".into()),
+        _ => Err("usage: xtask acceptance [--id X]… [--system AI]… [--implemented | --all] [--allow-blocked] [--profile deterministic|security|live] [--allow-billable] [--repeat N]\n       xtask report --run-id <runId>".into()),
     };
     match res {
         Ok(true) => ExitCode::SUCCESS,

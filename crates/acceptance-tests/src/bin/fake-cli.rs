@@ -331,11 +331,39 @@ fn pattern_matches(pattern: &str, text: &str) -> bool {
     true
 }
 
+/// A file path as Claude Code resolves it before matching a rule: relative to
+/// the working directory, with `.`/`..` removed lexically.
+fn resolved_path(raw: &str) -> String {
+    let p = Path::new(raw);
+    let base = if p.is_absolute() || (raw.len() > 2 && raw.as_bytes()[1] == b':') {
+        p.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_default().join(p)
+    };
+    let mut out = PathBuf::new();
+    for c in base.components() {
+        match c {
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            std::path::Component::CurDir => {}
+            other => out.push(other),
+        }
+    }
+    let s = out.to_string_lossy().replace('\\', "/");
+    // Claude Code normalizes Windows paths to POSIX before matching (C:/x -> /c/x).
+    if s.len() > 2 && s.as_bytes()[1] == b':' {
+        format!("/{}{}", s[..1].to_ascii_lowercase(), &s[2..])
+    } else {
+        s
+    }
+}
+
 /// How Claude Code decides before asking anyone: Some(allowed), or None to ask.
 fn claude_decides(tool: &str, input: &Value, allowed: &[String], disallowed: &[String], mode: &str) -> Option<bool> {
     let target = match tool {
         "Bash" => input["command"].as_str().unwrap_or("").to_string(),
-        _ => input["file_path"].as_str().unwrap_or("").to_string(),
+        _ => resolved_path(input["file_path"].as_str().unwrap_or("")),
     };
     let rule_hits = |rule: &str| -> bool {
         let Some(inner) = rule.strip_prefix(&format!("{tool}(")).and_then(|r| r.strip_suffix(')')) else { return rule == tool };
