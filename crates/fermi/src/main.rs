@@ -32,6 +32,10 @@ struct Target {
     /// Working directory for the task
     #[arg(short = 'C', long)]
     dir: Option<PathBuf>,
+    /// Check the work with the project's checks and send failures back to the
+    /// agent, up to REPAIRS more turns (default: the project's max_repairs, else 3)
+    #[arg(long, value_name = "REPAIRS", num_args = 0..=1)]
+    verify: Option<Option<u32>>,
     /// Task prompt (reads stdin when omitted)
     prompt: Vec<String>,
 }
@@ -70,6 +74,19 @@ enum Cmd {
     /// Skills and subagents of your accounts: list, export to a .zip, import
     #[command(subcommand)]
     Skills(SkillsCmd),
+    /// Run this repository's checks (build, tests, lint, advisories) as fermi
+    /// verifies work: .fermi/checks.toml, or detected from the manifests
+    Verify {
+        /// Only these checks (repeat for several)
+        #[arg(long)]
+        check: Vec<String>,
+        /// The full report as JSON
+        #[arg(long)]
+        json: bool,
+        /// Repository folder (default: the current one)
+        #[arg(short = 'C', long)]
+        dir: Option<PathBuf>,
+    },
     /// Code intelligence for this repository: symbols, callers, tests, change impact
     #[command(subcommand)]
     Code(CodeCmd),
@@ -180,6 +197,7 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Import { which, limit } => import(which, limit)?,
         Cmd::Skills(cmd) => skills_cmd(cmd)?,
         Cmd::Code(cmd) => code_cmd(cmd)?,
+        Cmd::Verify { check, json, dir } => return verify_cmd(check, json, dir).await,
         Cmd::Tui { profile } => {
             if !fermi_core::Config::path().exists() {
                 setup::init(false)?;
@@ -212,7 +230,23 @@ fn task_from(t: Target) -> Result<Task> {
     task.model = t.model;
     task.account = t.account;
     task.effort = t.effort;
+    task.verify = t.verify.map(|max_repairs| fermi_core::verify::VerifyOpts { max_repairs, checks: vec![] });
     Ok(task)
+}
+
+async fn verify_cmd(only: Vec<String>, as_json: bool, dir: Option<PathBuf>) -> Result<ExitCode> {
+    use fermi_core::verify::{run, text, RunOpts};
+    let dir = match dir {
+        Some(d) => d,
+        None => std::env::current_dir()?,
+    };
+    let report = run(&dir, RunOpts { only: &only, ..Default::default() }).await?;
+    if as_json {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        print!("{}", text(&report));
+    }
+    Ok(if report.passed { ExitCode::SUCCESS } else { ExitCode::FAILURE })
 }
 
 fn route(t: Target) -> Result<()> {
@@ -246,7 +280,14 @@ async fn run(t: Target) -> Result<ExitCode> {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let job = tokio::spawn({
         let engine = engine.clone();
-        async move { engine.run(&task, &tx).await }
+        async move {
+            match task.verify.clone() {
+                Some(v) => fermi_core::verify::run_task(&engine, task, &v, &tx).await,
+                None => {
+                    let _ = engine.run(&task, &tx).await;
+                }
+            }
+        }
     });
 
     let mut ok = false;
@@ -293,6 +334,13 @@ async fn run(t: Target) -> Result<ExitCode> {
             Event::Blocked { tool, detail, .. } => eprintln!("{}", paint("33", format!("  ⚠ needed approval: {tool} {detail}"))),
             Event::Artifact { path } => eprintln!("{}", paint("35", format!("  ⇒ {path}"))),
             Event::Log { line } => eprintln!("{}", paint("2", format!("  {line}"))),
+            Event::Verify { passed, report, .. } => {
+                let summary = serde_json::from_value::<fermi_core::verify::Report>(report).map(|r| r.summary()).unwrap_or_default();
+                eprintln!("{}", paint(if passed { "32" } else { "31" }, format!("  {} {summary}", if passed { "✓" } else { "✗" })));
+            }
+            Event::Repair { attempt, max, .. } => {
+                eprintln!("{}", paint("33", format!("  ↻ repair {attempt} of {max}: the failures go back to the agent")))
+            }
             Event::Done { ok: success, summary } => {
                 ok = success;
                 eprintln!("{}", paint(if success { "32" } else { "31" }, format!("{} {summary}", if success { "✓" } else { "✗" })));

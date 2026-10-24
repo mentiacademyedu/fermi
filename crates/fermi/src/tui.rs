@@ -231,6 +231,13 @@ fn push_event(t: &mut TaskView, ev: Event) {
         Event::Blocked { tool, detail, .. } => t.lines.push((Kind::Warn, format!("⚠ needed approval: {tool} {detail}"))),
         Event::Artifact { path } => t.lines.push((Kind::Good, format!("⇒ {path}"))),
         Event::Log { line } => t.lines.push((Kind::Dim, line)),
+        Event::Verify { passed, report, .. } => {
+            let summary = serde_json::from_value::<fermi_core::verify::Report>(report).map(|r| r.summary()).unwrap_or_default();
+            t.lines.push((if passed { Kind::Good } else { Kind::Bad }, format!("{} {summary}", if passed { "✓" } else { "✗" })));
+        }
+        Event::Repair { attempt, max, .. } => {
+            t.lines.push((Kind::Warn, format!("↻ repair {attempt} of {max}: the failures go back to the agent")))
+        }
         Event::Done { ok, summary } => {
             t.st = if ok { St::Done } else { St::Failed };
             t.elapsed = Some(t.started.elapsed());

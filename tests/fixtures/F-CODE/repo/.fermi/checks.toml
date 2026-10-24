@@ -1,0 +1,13 @@
+# The checks fermi runs to verify work on this fixture (see fermi_core::verify).
+max_repairs = 3
+
+[[check]]
+name = "build"
+kind = "build"
+run = "cargo check --workspace --all-targets --offline --message-format=json"
+
+[[check]]
+name = "tests"
+kind = "test"
+run = "cargo test --workspace --offline --no-fail-fast --message-format=json"
+needs = ["build"]

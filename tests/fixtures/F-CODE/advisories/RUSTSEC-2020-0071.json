@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.4.0",
+  "id": "RUSTSEC-2020-0071",
+  "modified": "2020-11-18T12:00:00Z",
+  "published": "2020-11-18T12:00:00Z",
+  "aliases": ["CVE-2020-26235"],
+  "summary": "Potential segfault in the time crate",
+  "affected": [
+    {
+      "package": { "ecosystem": "crates.io", "name": "time" },
+      "ranges": [{ "type": "SEMVER", "events": [{ "introduced": "0.0.0-0" }, { "fixed": "0.2.23" }] }]
+    }
+  ]
+}

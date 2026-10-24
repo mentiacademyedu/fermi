@@ -183,6 +183,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/fs/write", post(fs_write))
         .route("/api/fs/search", get(fs_search))
         .route("/api/code/{query}", get(code_query))
+        .route("/api/checks", get(checks_list).post(checks_run))
         .route("/api/teams", get(teams_list).post(team_create))
         .route("/api/teams/{id}", get(team_get))
         .route("/api/teams/{id}/diff", get(team_diff))
@@ -446,6 +447,9 @@ struct NewTask {
     effort: Option<String>,
     permission: Option<String>,
     cwd: Option<String>,
+    /// Check the agent's work and send failures back (see `fermi_core::verify`).
+    #[serde(default)]
+    verify: Option<fermi_core::verify::VerifyOpts>,
 }
 
 async fn create_task(State(s): S, Json(b): Json<NewTask>) -> Response {
@@ -463,6 +467,7 @@ async fn create_task(State(s): S, Json(b): Json<NewTask>) -> Response {
     task.account = non_empty(b.account);
     task.effort = non_empty(b.effort);
     task.permission = non_empty(b.permission);
+    task.verify = b.verify;
     // Surface routing errors (unknown profile, no account…) right away.
     if let Err(e) = s.hub.engine().plan(&task) {
         return err(StatusCode::BAD_REQUEST, format!("{e:#}"));
@@ -771,6 +776,43 @@ struct CodeQuery {
 }
 
 /// Index queries for a workspace: stats, search, symbol, file, impact, deps.
+#[derive(Deserialize)]
+struct ChecksQuery {
+    root: String,
+    #[serde(default)]
+    checks: Vec<String>,
+}
+
+/// The checks fermi would run for a folder's repository.
+async fn checks_list(State(s): S, Query(q): Query<ChecksQuery>) -> Response {
+    let dir = match files::check(&s.workspaces(), &q.root) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    let root = fermi_core::code::repo_root(&dir);
+    match fermi_core::verify::load(&root) {
+        Ok(c) => Json(json!({
+            "root": root, "source": c.source, "checks": c.checks, "protect": c.protect,
+            "max_repairs": c.max_repairs.unwrap_or(fermi_core::verify::DEFAULT_REPAIRS),
+            "config_file": fermi_core::verify::CONFIG_FILE,
+        }))
+        .into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+/// Runs a folder's checks now and returns the report.
+async fn checks_run(State(s): S, Json(q): Json<ChecksQuery>) -> Response {
+    let dir = match files::check(&s.workspaces(), &q.root) {
+        Ok(p) => p,
+        Err(e) => return fs_err(e),
+    };
+    match fermi_core::verify::run(&dir, fermi_core::verify::RunOpts { only: &q.checks, ..Default::default() }).await {
+        Ok(r) => Json(serde_json::to_value(r.trimmed()).unwrap_or_default()).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
 async fn code_query(State(s): S, Path(query): Path<String>, Query(q): Query<CodeQuery>) -> Response {
     let dir = match files::check(&s.workspaces(), &q.root) {
         Ok(p) => p,
@@ -857,6 +899,7 @@ async fn team_action(State(s): S, Path((id, action)): Path<(u64, String)>, body:
             "retry" => teams.retry(id, &key()?).map(|_| json!({ "ok": true })),
             "skip" => teams.skip(id, &key()?).map(|_| json!({ "ok": true })),
             "merge" => teams.merge(id).map(|branch| json!({ "branch": branch })),
+            "verify" => teams.verify(id).map(|_| json!({ "ok": true })),
             "discard" => teams.discard(id).map(|_| json!({ "ok": true })),
             other => bail!("unknown action {other}"),
         }

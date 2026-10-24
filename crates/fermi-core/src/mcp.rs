@@ -59,6 +59,8 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
         "mcp__fermi__code_symbol",
         "mcp__fermi__code_impact",
         "mcp__fermi__code_file",
+        "mcp__fermi__code_replace",
+        "mcp__fermi__run_checks",
     ];
     let mut prompt = format!(
         "You are running inside the fermi harness, profile {}. For slides or a presentation, call the fermi create_deck tool: \
@@ -67,7 +69,10 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
          fermi also keeps a code index of this repository (Rust, Python, JavaScript/TypeScript, Go) that resolves calls, imports and \
          tests, which text search can't. For who calls a function, what it calls, which tests reach it, or what a change could \
          break, use the fermi code tools (code_symbol, code_impact, code_search, code_file) rather than grep: call code_symbol \
-         before changing a function, and code_impact after changing code to find what could break and which tests to run.",
+         before changing a function, and code_impact after changing code to find what could break and which tests to run. \
+         To rewrite a whole function or type, code_replace swaps exactly that definition and refuses edits that don't parse. \
+         Before saying you're done, call run_checks: fermi runs the project's build, tests and linters and reports exact \
+         failures (file, line, failing tests); fix what it reports.",
         profile.name
     );
     if !image.is_empty() {
@@ -101,6 +106,23 @@ fn tool_list(e: &Engine, profile: &Profile) -> Value {
     tools.push(json!({ "name": "code_search", "description": "Find functions, methods and types by name in this repository's code index.", "inputSchema": { "type": "object", "properties": { "query": { "type": "string" } }, "required": ["query"] } }));
     tools.push(json!({ "name": "code_impact", "description": "What the uncommitted changes (or changes since `base`) could break: changed symbols, callers affected (transitively), files importing them, tests to run, and changes no test reaches.", "inputSchema": { "type": "object", "properties": { "base": { "type": "string", "description": "A commit or branch to compare with; default HEAD" } } } }));
     tools.push(json!({ "name": "code_file", "description": "Outline of a file (its symbols), what it imports and what imports it.", "inputSchema": { "type": "object", "properties": { "path": { "type": "string", "description": "Path relative to the repository" } }, "required": ["path"] } }));
+    tools.push(json!({
+        "name": "code_replace",
+        "description": "Replace one whole definition (function, method, struct, class…) with new source. Only that definition changes; \
+            the edit is refused, and nothing written, if the file wouldn't parse or the definition would disappear.",
+        "inputSchema": { "type": "object", "properties": {
+            "target": { "type": "string", "description": "The definition: a name, Type::name, module::name or path:line" },
+            "source": { "type": "string", "description": "The complete new definition, from its first keyword to its end" }
+        }, "required": ["target", "source"] }
+    }));
+    tools.push(json!({
+        "name": "run_checks",
+        "description": "Run the project's checks (build, tests, lint, dependency advisories) the way fermi verifies work, and get \
+            exact results: pass or fail per check, compiler errors with file and line, failing tests with their output.",
+        "inputSchema": { "type": "object", "properties": {
+            "checks": { "type": "array", "items": { "type": "string" }, "description": "Only these checks (by name); default all" }
+        } }
+    }));
     if let Some(m) = &team {
         let list = json!({ "type": "array", "items": { "type": "string" } });
         tools.push(json!({
@@ -155,12 +177,18 @@ fn tool_list(e: &Engine, profile: &Profile) -> Value {
     Value::Array(tools)
 }
 
-async fn call_tool(e: &Engine, profile: &Profile, name: &str, args: &Value) -> Result<String> {
+/// Runs one bridge tool as if called from `cwd` (the agent's folder).
+pub async fn call_tool(e: &Engine, profile: &Profile, cwd: &std::path::Path, name: &str, args: &Value) -> Result<String> {
     let (text, image) = delegates(e, profile);
     let prompt = args["prompt"].as_str().unwrap_or_default().to_string();
-    let cwd = std::env::current_dir()?;
+    let cwd = cwd.to_path_buf();
     if let Some(kind) = name.strip_prefix("code_") {
         return code_tool(&cwd, kind, args);
+    }
+    if name == "run_checks" {
+        let only: Vec<String> = args["checks"].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect();
+        let report = crate::verify::run(&cwd, crate::verify::RunOpts { only: &only, ..Default::default() }).await?;
+        return Ok(crate::verify::text(&report));
     }
     if name == "handoff" || name == "submit_plan" {
         let m = crate::team::marker(&cwd).ok_or_else(|| anyhow::anyhow!("this isn't a team task"))?;
@@ -217,9 +245,23 @@ fn code_tool(cwd: &std::path::Path, kind: &str, args: &Value) -> Result<String> 
         }
         _ => *slot = Some(Index::open(&root)?),
     }
-    let idx = slot.as_ref().unwrap();
+    let idx = slot.as_mut().unwrap();
     let arg = |k: &str| args[k].as_str().unwrap_or_default().to_string();
     Ok(match kind {
+        "replace" => {
+            let r = idx.replace_symbol(&arg("target"), &arg("source"))?;
+            format!(
+                "Replaced {} {} in {} (lines {}-{} are now {}-{}).\n{}",
+                r["kind"].as_str().unwrap_or(""),
+                r["symbol"].as_str().unwrap_or(""),
+                r["file"].as_str().unwrap_or(""),
+                r["before"]["line"],
+                r["before"]["end"],
+                r["after"]["line"],
+                r["after"]["end"],
+                r["patch"].as_str().unwrap_or("")
+            )
+        }
         "search" => text::search(&idx.search(&arg("query"), 30)),
         "symbol" => text::symbol(&idx.symbol(&arg("target"))),
         "file" => text::file(&idx.file(&arg("path"))),
@@ -269,7 +311,8 @@ pub async fn serve(engine: Arc<Engine>, profile_name: String) -> Result<()> {
                 let (e, p, tx) = (engine.clone(), profile.clone(), out_tx.clone());
                 tokio::spawn(async move {
                     let name = msg["params"]["name"].as_str().unwrap_or_default();
-                    let result = match call_tool(&e, &p, name, &msg["params"]["arguments"]).await {
+                    let cwd = std::env::current_dir().unwrap_or_default();
+                    let result = match call_tool(&e, &p, &cwd, name, &msg["params"]["arguments"]).await {
                         Ok(text) => json!({ "content": [{ "type": "text", "text": text }] }),
                         Err(err) => json!({ "content": [{ "type": "text", "text": format!("{err:#}") }], "isError": true }),
                     };

@@ -423,7 +423,7 @@ button:disabled { opacity: .45; cursor: default; }
 .tm-main { flex: 1; min-width: 0; overflow: auto; padding: 22px 28px 40px; }
 .tm-main h2 { margin: 0 0 4px; font-size: 17px; line-height: 1.35; }
 .tm-st { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--muted); white-space: nowrap; }
-.tm-st.planning, .tm-st.running, .tm-st.integrating, .tm-st.checking { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.tm-st.planning, .tm-st.running, .tm-st.integrating, .tm-st.checking, .tm-st.verifying { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 .tm-st.review, .tm-st.attention, .tm-st.waiting { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); }
 .tm-st.ready, .tm-st.merged, .tm-st.done { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 50%, var(--line)); }
 .tm-st.failed { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
@@ -644,6 +644,39 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
 #toast.show { opacity: 1; transform: translateX(-50%); }
 #toast.bad { border-color: var(--bad); }
 
+/* Verification results */
+.checks { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 6px 12px 4px; margin: 10px 0; font: 13px/1.45 var(--sans); white-space: normal; }
+.checks.ok { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+.checks.bad { border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
+.ck-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; padding: 4px 0 8px; }
+.ck-title { font-weight: 600; }
+.checks.ok .ck-title { color: var(--ok); }
+.checks.bad .ck-title { color: var(--bad); }
+.ck-rev { font: 12px var(--mono); color: var(--muted); }
+.ck-src, .ck-empty { color: var(--faint); font-size: 12px; }
+.ck-empty { padding-bottom: 6px; }
+.ck { border-top: 1px solid var(--line); }
+.ck-row { display: flex; gap: 10px; align-items: center; padding: 7px 0; min-width: 0; }
+summary.ck-row { cursor: pointer; list-style: none; }
+summary.ck-row::-webkit-details-marker { display: none; }
+.ck-st { flex: none; font-size: 11.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--panel-2); color: var(--muted); }
+.ck-st.passed { color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
+.ck-st.failed { color: var(--bad); background: color-mix(in srgb, var(--bad) 13%, transparent); }
+.ck-st.skipped, .ck-st.not_run { color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); }
+.ck-name { font-weight: 600; flex: none; }
+.ck-why { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ck-ms { margin-left: auto; color: var(--faint); font-size: 12px; flex: none; }
+.ck-body { display: grid; gap: 4px; padding: 0 0 10px 4px; }
+.ck-cmd { font: 12px var(--mono); color: var(--faint); overflow-wrap: anywhere; }
+.ck-diag, .ck-test { font: 12.5px/1.5 var(--mono); overflow-wrap: anywhere; }
+.ck-diag.error, .ck-test { color: var(--bad); }
+.ck-diag.warning { color: var(--warn); }
+.ck-diag a { color: var(--accent); cursor: pointer; text-decoration: none; }
+.ck-diag a:hover { text-decoration: underline; }
+.checks pre, .ev.repair pre { margin: 2px 0 4px; max-height: 240px; overflow: auto; font: 12px/1.45 var(--mono); background: var(--panel-2); color: var(--text); padding: 8px 10px; border-radius: 8px; white-space: pre-wrap; }
+.ev.repair { color: var(--warn); margin: 8px 0; }
+.ev.repair summary { cursor: pointer; font: 13px var(--sans); }
+
 /* Dropdowns: the closed control in forms, and the menu every <select> opens (see Menu). */
 dialog select, label.f select, .tm-form select, .tm-plan select, .tr-controls select {
   appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 30px;
@@ -759,6 +792,7 @@ select[aria-expanded=true] { border-color: var(--accent); }
             <label class="chip new-only" title="What the agent may do"><span data-i="shield"></span><select id="f-perm"></select></label>
             <label class="chip new-only" title="Profile"><span data-i="layers"></span><select id="f-profile"></select></label>
             <label class="chip new-only" title="Account"><span data-i="key"></span><select id="f-account"></select></label>
+            <label class="chip new-only" title="After the agent finishes, fermi runs the project's build and tests itself; failures go back to the agent to fix"><span data-i="shieldCheck"></span><select id="f-verify"></select></label>
             <span class="spacer"></span>
             <span class="route reply-only" id="reply-route"></span>
             <label class="chip bold new-reply" title="Model (you can switch it in the middle of a conversation)"><select id="f-model"></select></label>
@@ -1081,6 +1115,7 @@ const I = {
   folderPlus: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/>',
+  shieldCheck: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/>',
   arrowUp: '<path d="M12 19V5M6 11l6-6 6 6"/>',
@@ -1551,6 +1586,54 @@ function userNode(text, cwd) {
   }
   return n;
 }
+// Verification: fermi runs the project's checks after the agent (see verify.rs).
+const VERIFY_CHOICES = [["", "No checks"], ["auto", "Check & fix"], ["0", "Check only"]];
+const verifyOpts = (v) => (v === "" ? null : { max_repairs: v === "auto" ? null : Number(v) });
+const CK_LABEL = { passed: "passed", failed: "failed", skipped: "skipped", not_run: "not run" };
+const fmtMs = (ms) => (ms == null ? "" : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.floor(ms / 60000)}m ${Math.round((ms % 60000) / 1000)}s`);
+function checksNode(r, title) {
+  r = r || {};
+  const box = el("div", "checks " + (r.passed ? "ok" : "bad"));
+  const head = el("div", "ck-head");
+  head.append(el("span", "ck-title", title || (r.passed ? "✓ Checks passed" : "✗ Checks failed")));
+  const rev = el("span", "ck-rev", r.fingerprint || "");
+  rev.title = `Tested revision${r.dirty ? " (with uncommitted changes)" : ""}: ${r.revision || "no commit"}`;
+  head.append(rev);
+  if (r.source === "detected") head.append(el("span", "ck-src", "detected from the project · add .fermi/checks.toml to choose"));
+  box.append(head);
+  if (!(r.checks || []).length) box.append(el("div", "ck-empty", "No checks found for this project."));
+  const abs = (f) => (/^([a-z]:)?[\\/]/i.test(f) ? f : `${(r.root || "").replace(/[\\/]+$/, "")}/${f}`);
+  for (const c of r.checks || []) {
+    const detail = c.status !== "passed" && (c.diagnostics?.length || c.failed_tests?.length || c.findings?.length || c.output || c.command);
+    const row = el(detail ? "details" : "div", "ck");
+    const sum = el(detail ? "summary" : "div", "ck-row");
+    sum.append(el("span", "ck-st " + c.status, CK_LABEL[c.status] || c.status), el("span", "ck-name", c.name));
+    sum.append(el("span", "ck-why", (c.mandatory ? "" : "optional · ") + (c.reason || "")), el("span", "ck-ms", fmtMs(c.duration_ms)));
+    row.append(sum);
+    if (detail) {
+      row.open = c.status === "failed" && c.mandatory;
+      const body = el("div", "ck-body");
+      if (c.command) body.append(el("div", "ck-cmd", `$ ${c.command}${c.exit_code != null ? `   (exit ${c.exit_code})` : ""}`));
+      for (const d of (c.diagnostics || []).slice(0, 20)) {
+        const line = el("div", "ck-diag " + d.severity);
+        const at = el("a", null, `${d.file}:${d.line}:${d.column}`);
+        at.onclick = () => openFile(abs(d.file));
+        line.append(at, ` ${d.severity}${d.code ? `[${d.code}]` : ""}: ${d.message}`);
+        body.append(line);
+      }
+      for (const t of (c.failed_tests || []).slice(0, 10)) {
+        body.append(el("div", "ck-test", `✗ ${t.name}`));
+        if (t.output) body.append(el("pre", null, t.output));
+      }
+      for (const f of c.findings || []) body.append(el("div", "ck-diag error", `${f.id} · ${f.package} ${f.version} (${f.lockfile})${f.fixed ? ` · fixed in ${f.fixed}` : ""}${f.summary ? ` · ${f.summary}` : ""}`));
+      if (c.tool?.dataset) body.append(el("div", "ck-cmd", `${c.tool.scanner} ${c.tool.version} · dataset ${c.tool.dataset.records} records · sha256 ${String(c.tool.dataset.sha256).slice(0, 16)}…`));
+      if (!c.diagnostics?.length && !c.failed_tests?.length && !c.findings?.length && c.output) body.append(el("pre", null, c.output));
+      row.append(body);
+    }
+    box.append(row);
+  }
+  return box;
+}
 function evNode(ev, cwd) {
   switch (ev.type) {
     case "user": return userNode(ev.text, cwd);
@@ -1566,6 +1649,12 @@ function evNode(ev, cwd) {
     case "artifact": { const n = el("div", "ev art", `⇒ ${ev.path}`); n.title = "Open"; n.onclick = () => openFile(ev.path); return n; }
     case "log": return el("div", "ev dim", ev.line);
     case "done": return el("div", "ev " + (ev.ok ? "ok" : "bad"), `${ev.ok ? "✓" : "✗"} ${ev.summary}`);
+    case "verify": return checksNode(ev.report, ev.passed ? "✓ Checks passed" : `✗ Checks failed${ev.attempt ? ` after repair ${ev.attempt}` : ""}`);
+    case "repair": {
+      const n = el("details", "ev repair");
+      n.append(el("summary", null, `↻ Repair ${ev.attempt} of ${ev.max}: fermi sent the failures back to the agent`), el("pre", null, ev.prompt));
+      return n;
+    }
   }
   return null;
 }
@@ -1819,6 +1908,8 @@ function renderComposer() {
   fillSelect($("#f-perm"), [["", "Profile default"], ...st.permissions.map((p) => [p, PERM_LABEL[p] || p])]);
   fillSelect($("#f-profile"), [["", `Auto profile${w?.profile ? " (" + w.profile + ")" : ""}`], ...st.profiles.map((p) => [p.name, p.name])]);
   fillSelect($("#f-account"), [["", "Any account"], ...st.accounts.map((a) => [a.id, a.id])]);
+  fillSelect($("#f-verify"), VERIFY_CHOICES);
+  if (!$("#f-verify").dataset.init) { $("#f-verify").value = pref.get("verify", ""); $("#f-verify").dataset.init = "1"; }
   const mode = composerMode(); const t = S.tasks.get(S.sel);
   // A new task keeps the last model/effort picked for new tasks; a reply
   // starts on "keep" each time it's opened.
@@ -1879,7 +1970,7 @@ $("#composer").onsubmit = async (e) => {
       const r = await api("/api/tasks", {
         prompt, cwd: w ? w.path : (S.state.home || S.state.cwd),
         profile: $("#f-profile").value, model: $("#f-model").value, account: $("#f-account").value,
-        effort: $("#f-effort").value, permission: $("#f-perm").value,
+        effort: $("#f-effort").value, permission: $("#f-perm").value, verify: verifyOpts($("#f-verify").value),
       });
       if (!S.tasks.has(r.id)) S.tasks.set(r.id, { id: r.id, prompt, cwd: w ? w.path : S.state.home, status: "running", started: nowS() });
       S.logs.set(r.id, S.logs.get(r.id) || [{ type: "user", text: prompt }]);
@@ -1891,6 +1982,7 @@ $("#composer").onsubmit = async (e) => {
   } catch (err) { note.textContent = err.message; note.className = "composer-note err"; }
   finally { $("#send").disabled = false; renderComposer(); }
 };
+$("#f-verify").onchange = () => pref.set("verify", $("#f-verify").value);
 $("#f-model").onchange = $("#f-effort").onchange = () => {
   const t = S.tasks.get(S.sel);
   if (composerMode() === "reply" && t) $("#reply-route").textContent = $("#reply-route").title = replyRoute(t);
@@ -3226,7 +3318,7 @@ $("#open-code").onclick = () => openCode();
 // ── team runs ───────────────────────────────────────────────────────────────
 const ROLES = [["architect", "Architect"], ["developer", "Developer"], ["tester", "Tester"], ["security", "Security reviewer"], ["debugger", "Debugger"], ["researcher", "Researcher"]];
 const ROLE_NAME = Object.fromEntries(ROLES);
-const TEAM_STEPS = [["planning", "Plan"], ["review", "Review plan"], ["running", "Build"], ["integrating", "Merge branches"], ["checking", "Check"], ["ready", "Approve"]];
+const TEAM_STEPS = [["planning", "Plan"], ["review", "Review plan"], ["running", "Build"], ["integrating", "Merge branches"], ["checking", "Check"], ["verifying", "Run checks"], ["ready", "Approve"]];
 S.tm = { runs: new Map(), sel: pref.get("tmSel", null), edit: null, loaded: false };
 function openTeams() {
   if (!S.tabs.some((t) => t.id === "teams")) S.tabs.unshift({ id: "teams", name: "Teams", kind: "teams" });
@@ -3321,11 +3413,12 @@ function teamRunView(run) {
   info.append(el("h2", null, run.goal));
   const sub = el("div", "sub"); sub.append(stChip(run.status), el("span", null, `  ${baseName(run.repo)} · from ${run.base_branch || "detached HEAD"} @ ${run.base.slice(0, 8)} · ${run.parallel} at a time`));
   info.append(sub);
-  const acts = el("div", "acts"), live = ["planning", "running", "integrating", "checking"].includes(run.status);
+  const acts = el("div", "acts"), live = ["planning", "running", "integrating", "checking", "verifying"].includes(run.status);
   const btn = (label, cls, fn) => { const b = el("button", "small " + cls, label); b.onclick = fn; acts.append(b); return b; };
   if (run.planner) btn("Architect’s conversation", "ghost", () => selectTask(run.planner));
   if (live) btn("Stop", "ghost", () => teamAct(run, "cancel"));
   if (["attention", "cancelled"].includes(run.status)) btn("Resume", "primary", () => teamAct(run, "resume"));
+  if (run.integration && ["ready", "attention"].includes(run.status)) btn("Run checks", "", () => teamAct(run, "verify"));
   if (run.status === "ready") btn("Changes", "", () => teamDiff(run, null));
   if (run.status === "ready") btn(`Merge into ${run.base_branch || "the base"}`, "primary", async () => {
     if (!confirm(`Merge the team's work into ${run.base_branch || "the base commit"} in ${run.repo}?`)) return;
@@ -3340,6 +3433,12 @@ function teamRunView(run) {
   box.append(steps);
   if (run.error) box.append(el("div", "tm-err", run.error));
   if (run.status === "review") { box.append(planEditor(run)); return box; }
+  // The merge gate: the project's checks on the integrated branch.
+  if (run.status === "verifying") box.append(el("div", "faint", "fermi is running the project's checks on the integrated branch…"));
+  else if (run.verification) {
+    const v = run.verification;
+    box.append(checksNode(v, v.passed ? "✓ Checks passed: ready to merge" : "✗ Checks failed: merging is blocked"));
+  }
   if (run.plan_summary) box.append(el("div", "faint", run.plan_summary));
   // The tasks, by dependency level, then the integration steps.
   const plan = run.tasks.filter((t) => t.stage === "plan"), level = {};

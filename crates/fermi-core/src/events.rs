@@ -57,6 +57,18 @@ pub enum Event {
     Log {
         line: String,
     },
+    /// fermi ran the project's checks after the agent's turn (`verify::Report::compact`).
+    Verify {
+        attempt: u32,
+        passed: bool,
+        report: serde_json::Value,
+    },
+    /// The checks failed: fermi sends the failures back to the agent.
+    Repair {
+        attempt: u32,
+        max: u32,
+        prompt: String,
+    },
     Done {
         ok: bool,
         summary: String,

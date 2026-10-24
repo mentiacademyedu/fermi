@@ -66,6 +66,9 @@ pub struct TaskRec {
     /// Tool rules the user allowed for this conversation (see `Task::allowed`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub allowed: Vec<String>,
+    /// fermi checks the agent's work and sends failures back (see `verify`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verify: Option<crate::verify::VerifyOpts>,
     /// Sessions earlier turns ran in (before a switch to another provider).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub past_sessions: Vec<String>,
@@ -108,6 +111,7 @@ impl TaskRec {
             session: None,
             past_sessions: vec![],
             allowed: task.allowed.clone(),
+            verify: task.verify.clone(),
             team: task.team.clone(),
             updated: now(),
             via: Some(via.to_string()),
@@ -125,6 +129,8 @@ impl TaskRec {
             "resumable": self.session.is_some() && self.ran_on.is_some(),
             "ran_model": self.ran_on.as_ref().map(|r| &r.model), "imported": self.origin.is_some(), "team": self.team,
             "turns": self.events.iter().filter(|e| matches!(e, Event::User { .. })).count(),
+            "verify": self.verify,
+            "checks": self.events.iter().rev().find_map(|e| match e { Event::Verify { passed, .. } => Some(*passed), _ => None }),
         })
     }
 
@@ -402,6 +408,7 @@ fn provider_of(model: &str) -> &str {
 pub fn continuation(engine: &Engine, t: &TaskRec, prompt: &str, opts: &FollowUp) -> Task {
     let mut task = Task::new(prompt, t.cwd.clone());
     task.team = t.team.clone();
+    task.verify = t.verify.clone();
     task.permission = opts.permission.clone().or_else(|| t.permission.clone());
     task.allowed = t.allowed.clone();
     for r in &opts.allow {
@@ -480,6 +487,10 @@ pub fn transcript(engine: &Engine, t: &TaskRec) -> String {
             Event::Done { ok: false, summary } => {
                 flush(&mut tools, &mut msgs);
                 msgs.push(format!("(That turn failed: {})", clip(summary, 500)));
+            }
+            Event::Repair { prompt, .. } => {
+                flush(&mut tools, &mut msgs);
+                msgs.push(format!("fermi (the project's checks failed): {}", clip(prompt, MESSAGE_MAX)));
             }
             _ => {}
         }
@@ -731,7 +742,12 @@ impl Hub {
         let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
         let engine = self.engine();
         let runner = tokio::spawn(async move {
-            let _ = engine.run(&task, &tx).await;
+            match task.verify.clone() {
+                Some(v) => crate::verify::run_task(&engine, task, &v, &tx).await,
+                None => {
+                    let _ = engine.run(&task, &tx).await;
+                }
+            }
         });
         self.handles.lock().unwrap().insert(id, runner.abort_handle());
 

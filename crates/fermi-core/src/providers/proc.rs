@@ -79,24 +79,7 @@ impl Proc {
         if !matches!(self.child.try_wait(), Ok(None)) {
             return; // it exited on its own
         }
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            let _ = std::process::Command::new("taskkill")
-                .args(["/T", "/F", "/PID", &pid.to_string()])
-                .creation_flags(0x0800_0000)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
-        #[cfg(unix)]
-        {
-            let _ = std::process::Command::new("kill")
-                .args(["-KILL", "--", &format!("-{pid}")])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
+        kill_tree(pid);
     }
 
     /// Waits for exit; returns (success, stderr tail).
@@ -114,5 +97,28 @@ impl Drop for Proc {
     /// still working: stop the whole tree, not just the CLI.
     fn drop(&mut self) {
         self.kill_tree();
+    }
+}
+
+/// Stops a process and every process it started.
+pub(crate) fn kill_tree(pid: u32) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/T", "/F", "/PID", &pid.to_string()])
+            .creation_flags(0x0800_0000)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
+    }
+    #[cfg(unix)]
+    {
+        // It leads its own process group (see `Proc::spawn`).
+        let _ = std::process::Command::new("kill")
+            .args(["-KILL", "--", &format!("-{pid}")])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status();
     }
 }

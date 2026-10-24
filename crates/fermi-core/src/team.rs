@@ -103,6 +103,8 @@ pub enum RunStatus {
     Integrating,
     /// Final tests and security review on the integrated branch.
     Checking,
+    /// fermi runs the project's checks on the integrated branch.
+    Verifying,
     /// Waiting for the user to merge.
     Ready,
     Merged,
@@ -236,6 +238,10 @@ pub struct TeamRun {
     pub planner: Option<u64>,
     #[serde(default)]
     pub integration: Option<Integration>,
+    /// The project's checks on the integrated branch; merging needs them
+    /// passed on exactly the commit being merged.
+    #[serde(default)]
+    pub verification: Option<crate::verify::Report>,
     #[serde(default)]
     pub log: Vec<(u64, String)>,
     #[serde(default)]
@@ -569,6 +575,7 @@ pub struct Teams {
     hub: Arc<Hub>,
     home: PathBuf,
     runs: Mutex<BTreeMap<u64, TeamRun>>,
+    me: std::sync::Weak<Teams>,
 }
 
 impl Teams {
@@ -586,7 +593,12 @@ impl Teams {
             // (Unless another fermi window is running it: its agents are alive.)
             let agents: Vec<u64> = run.tasks.iter().filter_map(|t| t.task_id).chain(run.planner).collect();
             let elsewhere = agents.iter().any(|id| hub.get(*id).is_some_and(|t| t.status == HubStatus::Running));
-            if !elsewhere && matches!(run.status, RunStatus::Planning | RunStatus::Running | RunStatus::Integrating | RunStatus::Checking) {
+            if !elsewhere
+                && matches!(
+                    run.status,
+                    RunStatus::Planning | RunStatus::Running | RunStatus::Integrating | RunStatus::Checking | RunStatus::Verifying
+                )
+            {
                 for t in run.tasks.iter_mut().filter(|t| matches!(t.state, TaskState::Running | TaskState::Waiting)) {
                     t.state = TaskState::Interrupted;
                 }
@@ -595,7 +607,7 @@ impl Teams {
             }
             runs.insert(run.id, run);
         }
-        let teams = Arc::new(Teams { hub: hub.clone(), home, runs: Mutex::new(runs) });
+        let teams = Arc::new_cyclic(|me| Teams { hub: hub.clone(), home, runs: Mutex::new(runs), me: me.clone() });
         // Agents finishing (or stopping for an approval) move the runs on.
         let weak = Arc::downgrade(&teams);
         let mut rx = hub.subscribe();
@@ -672,6 +684,7 @@ impl Teams {
             tasks: vec![],
             planner: None,
             integration: None,
+            verification: None,
             log: vec![],
             error: None,
             created: now(),
@@ -1071,10 +1084,63 @@ impl Teams {
             };
             return self.start_integration_task(run, check);
         }
-        run.status = RunStatus::Ready;
-        run.error = None;
-        run.note(format!("Ready: review the result on {} and merge it.", integ.branch));
+        self.start_verification(run);
         Ok(())
+    }
+
+    /// Runs the project's checks on the integrated branch; the run is ready
+    /// to merge only if they pass.
+    fn start_verification(&self, run: &mut TeamRun) {
+        let Some(integ) = run.integration.clone() else { return };
+        run.status = RunStatus::Verifying;
+        run.verification = None;
+        run.error = None;
+        run.note(format!("fermi is running the project's checks on {}.", integ.branch));
+        let (me, id) = (self.me.clone(), run.id);
+        tokio::spawn(async move {
+            let report = crate::verify::run(&integ.worktree, Default::default()).await;
+            let Some(teams) = me.upgrade() else { return };
+            let _ = teams.with(id, |run| {
+                if run.status != RunStatus::Verifying {
+                    return Ok(()); // cancelled or discarded meanwhile
+                }
+                match report {
+                    Ok(r) if r.passed => {
+                        run.status = RunStatus::Ready;
+                        run.note(format!("Checks: {}.", r.summary()));
+                        run.note(format!("Ready: review the result on {} and merge it.", integ.branch));
+                        run.verification = Some(r.trimmed());
+                    }
+                    Ok(r) => {
+                        run.status = RunStatus::Attention;
+                        run.error = Some(format!("{}. Fix it in a task's conversation, then run the checks again.", r.summary()));
+                        run.note(format!("Checks: {}.", r.summary()));
+                        run.verification = Some(r.trimmed());
+                    }
+                    Err(e) => {
+                        run.status = RunStatus::Attention;
+                        run.error = Some(format!("the checks couldn't run: {e:#}"));
+                    }
+                }
+                Ok(())
+            });
+        });
+    }
+
+    /// Runs the project's checks on the integrated branch again.
+    pub fn verify(&self, id: u64) -> Result<()> {
+        self.with(id, |run| {
+            if run.integration.is_none() {
+                bail!("there's no integrated branch to check yet");
+            }
+            if !matches!(run.status, RunStatus::Ready | RunStatus::Attention)
+                || run.tasks.iter().any(|t| matches!(t.state, TaskState::Running | TaskState::Waiting))
+            {
+                bail!("wait until the agents have stopped");
+            }
+            self.start_verification(run);
+            Ok(())
+        })
     }
 
     fn start_integration_task(&self, run: &mut TeamRun, mut t: TeamTask) -> Result<()> {
@@ -1188,10 +1254,21 @@ impl Teams {
     /// Merges the integration branch into the branch the run started on.
     pub fn merge(&self, id: u64) -> Result<String> {
         let run = self.get(id).context("no such team run")?;
+        let integ = run.integration.clone().context("nothing to merge")?;
+        // The gate: the project's checks passed on exactly what gets merged.
+        match &run.verification {
+            None => bail!("the project's checks haven't run on {} yet; run them first", integ.branch),
+            Some(v) if !v.passed => bail!("the merge is blocked: {}", v.summary()),
+            Some(v) => {
+                let (_, _, now) = crate::verify::fingerprint(&integ.worktree);
+                if now != v.fingerprint {
+                    bail!("{} changed since the checks passed ({} then, {now} now); run the checks again", integ.branch, v.fingerprint);
+                }
+            }
+        }
         if run.status != RunStatus::Ready {
             bail!("the run isn't ready to merge");
         }
-        let integ = run.integration.clone().context("nothing to merge")?;
         let current = git(&run.repo, &["rev-parse", "--abbrev-ref", "HEAD"])?;
         if let Some(b) = &run.base_branch {
             if &current != b {

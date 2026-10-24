@@ -595,8 +595,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No verification service; agents run compilers themselves."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/verification.rs
+    testName: ve_01_compiler_diagnostics
     executionState: not_run
     status: not_implemented
   - id: VE-02
@@ -613,8 +613,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No verification tool; test output is only what the agent reports."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/verification.rs
+    testName: ve_02_failing_test_feedback
     executionState: not_run
     status: not_implemented
   - id: VE-03
@@ -631,8 +631,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No repair-and-rerun loop owned by fermi."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/verification.rs
+    testName: ve_03_repair_and_rerun
     executionState: not_run
     status: not_implemented
   - id: VE-04
@@ -649,8 +649,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No lint integration."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/verification.rs
+    testName: ve_04_lint_enforcement
     executionState: not_run
     status: not_implemented
   - id: VE-05
@@ -667,8 +667,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No dependency advisory scanner."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/verification.rs
+    testName: ve_05_dependency_advisory_detection
     executionState: not_run
     status: not_implemented
   - id: VE-06
@@ -685,8 +685,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No structured (syntax-tree) edit API."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/verification.rs
+    testName: ve_06_structured_edit_integrity
     executionState: not_run
     status: not_implemented
   - id: VE-07
@@ -703,8 +703,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No bounded repair attempts."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/verification.rs
+    testName: ve_07_bounded_repair_attempts
     executionState: not_run
     status: not_implemented
   - id: VE-08
@@ -721,8 +721,8 @@ cases:
     capability: missing
     implementation: "crates/fermi-core/src/team.rs (merge)"
     auditNote: "No completion gate tied to mandatory checks (team merge needs user approval only)."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/verification.rs
+    testName: ve_08_completion_enforcement
     executionState: not_run
     status: not_implemented
   - id: BA-01

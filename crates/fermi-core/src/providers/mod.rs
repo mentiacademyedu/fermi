@@ -6,7 +6,7 @@ mod claude_cli;
 mod codex_cli;
 pub mod gemini_cli;
 mod image;
-mod proc;
+pub(crate) mod proc;
 
 use crate::config::{Account, Auth, Profile, Provider};
 use crate::engine::{Engine, Task};

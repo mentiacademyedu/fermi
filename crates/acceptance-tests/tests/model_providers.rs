@@ -23,6 +23,8 @@ fn kinds(events: &[Event]) -> Vec<&'static str> {
             Event::Blocked { .. } => "blocked",
             Event::Artifact { .. } => "artifact",
             Event::Log { .. } => "log",
+            Event::Verify { .. } => "verify",
+            Event::Repair { .. } => "repair",
             Event::Done { .. } => "done",
         })
         .collect()

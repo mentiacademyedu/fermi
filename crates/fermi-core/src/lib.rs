@@ -18,6 +18,7 @@ pub mod sessions;
 pub mod state;
 pub mod team;
 pub mod util;
+pub mod verify;
 
 pub use config::{Account, Auth, Config, Mode, Profile, Provider};
 pub use engine::{Engine, Outcome, Task};

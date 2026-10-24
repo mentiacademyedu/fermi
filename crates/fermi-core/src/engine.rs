@@ -40,6 +40,9 @@ pub struct Task {
     pub allowed: Vec<String>,
     /// Set when the task is one agent of a team run.
     pub team: Option<TeamRef>,
+    /// Run the project's checks after the agent and send failures back to it
+    /// (see `verify::run_task`). The hub honors it; `Engine::run` ignores it.
+    pub verify: Option<crate::verify::VerifyOpts>,
 }
 
 /// Which team run and plan task an agent's conversation belongs to.
@@ -68,6 +71,7 @@ impl Task {
             context: None,
             allowed: vec![],
             team: None,
+            verify: None,
         }
     }
 

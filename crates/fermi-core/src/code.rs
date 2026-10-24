@@ -347,6 +347,63 @@ impl Index {
 
 // ── parsing one file ────────────────────────────────────────────────────────
 
+fn language(lang: usize) -> tree_sitter::Language {
+    match LANGS[lang].id {
+        "rust" => tree_sitter_rust::LANGUAGE.into(),
+        "python" => tree_sitter_python::LANGUAGE.into(),
+        "javascript" => tree_sitter_javascript::LANGUAGE.into(),
+        "typescript" => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+        "tsx" => tree_sitter_typescript::LANGUAGE_TSX.into(),
+        _ => tree_sitter_go::LANGUAGE.into(),
+    }
+}
+
+/// Where the first syntax error is (1-based line and column), if any.
+pub fn syntax_error_in(path: &str, src: &[u8]) -> Option<(u32, u32)> {
+    syntax_error(lang_of(path)?, src)
+}
+
+fn syntax_error(lang: usize, src: &[u8]) -> Option<(u32, u32)> {
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&language(lang)).ok()?;
+    let tree = parser.parse(src, None)?;
+    let root = tree.root_node();
+    if !root.has_error() {
+        return None;
+    }
+    let mut cursor = root.walk();
+    let mut node = root;
+    // Descend into the first child that contains the error.
+    'down: loop {
+        if node.is_error() || node.is_missing() {
+            break;
+        }
+        for child in node.children(&mut cursor) {
+            if child.has_error() {
+                node = child;
+                continue 'down;
+            }
+        }
+        break;
+    }
+    let p = node.start_position();
+    Some((p.row as u32 + 1, p.column as u32 + 1))
+}
+
+/// The byte range of the definition named `name` that starts on `line`.
+fn definition_range(lang: usize, src: &[u8], name: &str, line: u32) -> Option<std::ops::Range<usize>> {
+    let config = configs()[lang].as_ref()?;
+    let mut ctx = TagsContext::new();
+    let (tags, _) = ctx.generate_tags(config, src, None).ok()?;
+    let starts = line_starts(src);
+    let found = tags
+        .filter_map(|t| t.ok())
+        .filter(|t| t.is_definition && &src[t.name_range.clone()] == name.as_bytes() && line_at(&starts, t.range.start) == line)
+        .map(|t| t.range)
+        .max_by_key(|r| r.end - r.start);
+    found
+}
+
 fn line_starts(src: &[u8]) -> Vec<usize> {
     std::iter::once(0).chain(src.iter().enumerate().filter(|(_, b)| **b == b'\n').map(|(i, _)| i + 1)).collect()
 }
@@ -1295,6 +1352,61 @@ impl Index {
             "risk": risk,
             "scope": SCOPE,
         })
+    }
+
+    /// Replaces one definition (function, method, type…) with new source as a
+    /// syntax-tree edit: only that definition's bytes change, the file must
+    /// still parse, and the definition must still be there under its name.
+    /// Nothing is written when any of that fails.
+    pub fn replace_symbol(&mut self, target: &str, new_source: &str) -> Result<Value> {
+        self.update()?;
+        let id = match self.find(target).as_slice() {
+            [one] => *one,
+            [] => anyhow::bail!("no symbol matches `{target}`"),
+            many => anyhow::bail!("`{target}` matches {} symbols; name one by path:line", many.len()),
+        };
+        let r = self.sym_ref(id).context("unknown symbol")?;
+        let (_, s) = self.sym(id).context("unknown symbol")?;
+        let (name, line, end) = (s.name.clone(), s.line, s.end);
+        let path = self.root.join(&r.file);
+        let src = std::fs::read(&path)?;
+        let lang = lang_of(&r.file).context("not a supported language")?;
+        let range = definition_range(lang, &src, &name, line).with_context(|| format!("`{name}` is no longer at {}:{line}", r.file))?;
+        let new = new_source.trim();
+        let mut out = Vec::with_capacity(src.len() + new.len());
+        out.extend_from_slice(&src[..range.start]);
+        out.extend_from_slice(new.as_bytes());
+        out.extend_from_slice(&src[range.end..]);
+        if let Some((l, c)) = syntax_error(lang, &out) {
+            anyhow::bail!("the edited file doesn't parse (syntax error at {}:{l}:{c}); nothing was written", r.file);
+        }
+        let new_end = range.start + new.len();
+        let starts = line_starts(&out);
+        if definition_range(lang, &out, &name, line_at(&starts, range.start)).is_none_or(|nr| nr.start != range.start) {
+            anyhow::bail!("the new source doesn't define `{name}` in its place; nothing was written");
+        }
+        let tmp = path.with_extension("fermi-edit");
+        std::fs::write(&tmp, &out)?;
+        std::fs::rename(&tmp, &path)?;
+        let after_end = line_at(&starts, new_end.saturating_sub(1).max(range.start));
+        let old_text = String::from_utf8_lossy(&src);
+        let new_text = String::from_utf8_lossy(&out);
+        let old_lines: Vec<&str> = old_text.lines().skip(line as usize - 1).take((end - line + 1) as usize).collect();
+        let new_lines: Vec<&str> = new_text.lines().skip(line as usize - 1).take((after_end - line + 1) as usize).collect();
+        let mut patch = format!("--- a/{f}\n+++ b/{f}\n@@ -{line},{} +{line},{} @@\n", old_lines.len(), new_lines.len(), f = r.file);
+        for l in &old_lines {
+            patch += &format!("-{l}\n");
+        }
+        for l in &new_lines {
+            patch += &format!("+{l}\n");
+        }
+        self.update()?;
+        Ok(json!({
+            "file": r.file, "symbol": name, "kind": r.kind,
+            "before": { "line": line, "end": end, "bytes": [range.start, range.end] },
+            "after": { "line": line, "end": after_end, "bytes": [range.start, new_end] },
+            "patch": patch,
+        }))
     }
 
     /// Changed line ranges from git: working tree against `base` (default HEAD), plus new files.

@@ -88,14 +88,14 @@ a("CI-08", "implemented", f"{core}/code.rs (find, resolution)", "Duplicate names
 for i in range(1, 9):
     a(f"PM-0{i}", "missing", "", "fermi has no project memory store (only conversation history in ~/.fermi/history).")
 # System 5
-a("VE-01", "missing", "", "No verification service; agents run compilers themselves.")
-a("VE-02", "missing", "", "No verification tool; test output is only what the agent reports.")
-a("VE-03", "missing", "", "No repair-and-rerun loop owned by fermi.")
-a("VE-04", "missing", "", "No lint integration.")
-a("VE-05", "missing", "", "No dependency advisory scanner.")
-a("VE-06", "missing", "", "No structured (syntax-tree) edit API.")
-a("VE-07", "missing", "", "No bounded repair attempts.")
-a("VE-08", "missing", f"{core}/team.rs (merge)", "No completion gate tied to mandatory checks (team merge needs user approval only).")
+a("VE-01", "implemented", f"{core}/verify.rs (run, parse_output)", "fermi runs the project's checks (.fermi/checks.toml or detected from manifests) and parses diagnostics from cargo JSON and common text formats (rustc, gcc, go, tsc, eslint, ruff, Python) with file, line and column. Added 2026-10-23.")
+a("VE-02", "implemented", f"{core}/verify.rs, mcp.rs (run_checks)", "Agents call the run_checks tool and get each failing test with its output and the exit code; verified tasks record a Verify event. Added 2026-10-23.")
+a("VE-03", "implemented", f"{core}/verify.rs (run_task)", "Verified tasks: after the agent, fermi runs the checks and sends failures back to the same session; protected files (protect globs) must stay unchanged. Added 2026-10-23.")
+a("VE-04", "implemented", f"{core}/verify.rs (Kind::Lint)", "Lint checks run like any other; clippy and text-format rule ids and locations are reported and a mandatory lint failure fails the task. Added 2026-10-23.")
+a("VE-05", "implemented", f"{core}/verify.rs (audit)", "Built-in scanner matches Cargo.lock, package-lock.json and requirements.txt against OSV records; records scanner version and dataset SHA-256; nothing is installed or run. Added 2026-10-23.")
+a("VE-06", "implemented", f"{core}/code.rs (replace_symbol), mcp.rs (code_replace)", "Replaces one definition by its syntax-tree byte range, refuses ambiguous targets and edits that don't parse or drop the definition. Added 2026-10-23.")
+a("VE-07", "implemented", f"{core}/verify.rs (run_task)", "Repair turns are bounded by max_repairs (task option, else the project's, else 3); the final failure is explicit. Added 2026-10-23.")
+a("VE-08", "implemented", f"{core}/verify.rs, team.rs (merge), hub.rs", "A verified task ends done only if every mandatory check passed; a team run is mergeable only with passing checks on exactly the commit being merged (service and API). Added 2026-10-23.")
 # System 6
 for i in range(1, 9):
     a(f"BA-0{i}", "missing", "crates/fermi/src/preview.rs (user-facing only)", "The Preview tab is a browser for the user; agents have no browser automation tools in fermi.")
