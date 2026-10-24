@@ -2,7 +2,7 @@
 
 Phase 1 audit of fermi (called APEX in the spec) against `docs/FERMI_ADE_Verification_and_Acceptance_Testing`.
 
-Published run `2026-10-24-d0302dc` on revision `d0302dcabef2`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-24-d0302dc/REPORT.md`.
+Published run `2026-10-24-f56fd58` on revision `f56fd58c9b48`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-24-f56fd58/REPORT.md`.
 
 *Result* is the published acceptance outcome: `passed` or `failed` from an executed test with validated evidence; `not_implemented` when no test exists (usually because the capability is missing); `not_run` when a test exists but wasn't in the published run.
 *Capability* is an audit finding from reading the code; it is not verification.
@@ -19,14 +19,14 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | 4 Persistent project memory | 8 | 8 | 0 | 0 | 8 / 8 |
 | 5 Integrated verification engine | 8 | 8 | 0 | 0 | 8 / 8 |
 | 6 Browser and application control | 8 | 0 | 0 | 8 | 0 / 8 |
-| 7 Composable harness and plugin system | 8 | 0 | 2 | 6 | 0 / 8 |
+| 7 Composable harness and plugin system | 8 | 8 | 0 | 0 | 7 / 8 |
 | 8 Agent observability | 8 | 8 | 0 | 0 | 8 / 8 |
 | 9 Cost and performance optimization | 8 | 8 | 0 | 0 | 8 / 8 |
 | 10 Security and isolation | 8 | 8 | 0 | 0 | 5 / 8 |
 | 11 Local and remote execution | 8 | 1 | 1 | 6 | 1 / 8 |
 | 12 Evaluation and self-improvement | 8 | 0 | 0 | 8 | 0 / 8 |
 | End-to-end workflows | 10 | 1 | 6 | 3 | 1 / 10 |
-| **Total** | **106** | **58** | **12** | **36** | **57 / 106** |
+| **Total** | **106** | **66** | **10** | **30** | **64 / 106** |
 
 ## 1 Model-agnostic AI engine
 
@@ -110,14 +110,14 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| PL-01 | Plugin registration | T1 | **not_implemented** | — | missing | — | No plugin manager or manifest format. |
-| PL-02 | Plugin disabling | T1 | **not_implemented** | — | missing | — | No plugin manager. |
-| PL-03 | Command collisions | T0 T1 | **not_implemented** | — | missing | — | No command registry. |
-| PL-04 | Plugin fault isolation | T1 T3 | **not_implemented** | — | missing | — | No plugin host. |
-| PL-05 | MCP interoperability | T1 | **not_implemented** | — | partial | crates/fermi-core/src/mcp.rs | fermi is itself an MCP server (bridge tools); connecting fermi to an external MCP server is left to the CLIs' own configs. |
-| PL-06 | Adapter substitution | T1 | **not_implemented** | — | partial | crates/fermi-core/src/providers/mod.rs, config.rs ([[models]], bins) | Models and CLI binaries can be overridden in config; no pluggable adapter interface. |
-| PL-07 | Plugin boundary enforcement | T3 | **not_implemented** | — | missing | — | No plugin sandbox. |
-| PL-08 | API incompatibility | T0 T1 | **not_implemented** | — | missing | — | No plugin API versioning. |
+| PL-01 | Plugin registration | T1 | **passed** | pl_01_plugin_registration | implemented | crates/fermi-core/src/plugins.rs (install, enable, registry) | A plugin folder with a plugin.toml (name, version, plugin API, command, declared capabilities: tool, command or adapter) is installed and enabled; only declared capabilities register, each attributed to the plugin version. |
+| PL-02 | Plugin disabling | T1 | **passed** | pl_02_plugin_disabling | implemented | crates/fermi-core/src/plugins.rs (disable) | Disabling removes a plugin's capabilities from the registry and the agents' bridge; other plugins keep working. |
+| PL-03 | Command collisions | T0 T1 | **passed** | pl_03_command_collisions | implemented | crates/fermi-core/src/plugins.rs (build, Registry::resolve), config.rs ([plugins] collisions) | Plugins are registered in name order; a shared name is namespaced (<plugin>.<name>, the bare name ambiguous) or rejected for all claimants, by policy, independent of install order. |
+| PL-04 | Plugin fault isolation | T1 T3 | **passed** | pl_04_plugin_fault_isolation | implemented | crates/fermi-core/src/plugins.rs (Client) | Every call runs the plugin in its own process with a timeout; crashes, hangs and protocol errors fail that call only and are logged against the plugin. |
+| PL-05 | MCP interoperability | T1 | **passed** | pl_05_mcp_interoperability | implemented | crates/fermi-core/src/plugins.rs (Client, validate, add_mcp) | An MCP client for current servers (server/discover, per-request metadata) and older ones (initialize); tool schemas are kept as discovered and arguments are validated against them before a call. |
+| PL-06 | Adapter substitution | T1 | **passed** | pl_06_adapter_substitution | implemented | crates/fermi-core/src/plugins.rs (run_adapter), providers/mod.rs | An account can name a plugin adapter; its runs go through the normal engine path and come back as the usual events, usage records and classified errors (limits fail over). |
+| PL-07 | Plugin boundary enforcement | T3 | **blocked** | pl_07_plugin_boundary_enforcement | implemented | crates/fermi-core/src/plugins.rs (scope), sandbox.rs | Plugins run sandboxed (environment allowlist and egress proxy everywhere; Landlock files on Linux); path arguments outside the call's folder and the plugin's own, or under deny_read, are refused before the call, also when an agent calls through the bridge. |
+| PL-08 | API incompatibility | T0 T1 | **passed** | pl_08_api_incompatibility | implemented | crates/fermi-core/src/plugins.rs (Manifest::check) | A manifest needing an unsupported plugin API version is refused with the required and supported versions before anything is copied, registered or started. |
 
 ## 8 Agent observability
 

@@ -106,6 +106,14 @@ Found and fixed while writing the tests; listed so the history is complete.
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
 
+## Found while building System 7 (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Regression, caught by SE-04 on Linux CI before merge | the egress proxy was changed to stop when dropped (so per-call plugin proxies don't leak), but the engine kept only the proxy's port, so agents' proxy stopped at once and sandboxed agents lost their allowed network | the engine keeps the proxy itself for its whole life; SE-04 passes again on Linux |
+| Test harness | `Case::block` recorded a case as blocked even when one of its checks had already failed, so a real failure on a platform without the OS sandbox could hide behind "blocked" | a case with a failed check finishes as failed; the PL-07 negative control confirms it |
+| Test implementation, caught on Linux CI | the test plugins wrote their marker and log files, and read the adapter's script, outside their sandbox scope; Landlock correctly refused, so PL-01, PL-05 and PL-06 failed on Linux while Windows (no OS boundary) passed | the test plugins' manifests grant one probe folder with `read_write`; the PL-07 sentinel stays outside every grant |
+
 ## Found while building System 8 (no open defects)
 
 | Kind | Issue | Fix |
