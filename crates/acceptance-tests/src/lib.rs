@@ -478,6 +478,19 @@ pub async fn wait_task(hub: &Hub, id: u64, timeout: Duration) -> Result<TaskRec>
     }
 }
 
+/// Waits until a task's history file shows it finished (the hub writes the
+/// final record just after the run ends).
+pub async fn wait_saved(home: &Path, id: u64, timeout: Duration) {
+    let dir = fermi_core::hub::history_dir(home);
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if fermi_core::hub::read_task(&dir, id).is_some_and(|t| t.status != TaskStatus::Running) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 /// Waits until `file` exists.
 pub async fn wait_file(file: &Path, timeout: Duration) -> Result<()> {
     let start = Instant::now();

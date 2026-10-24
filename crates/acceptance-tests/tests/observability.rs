@@ -1,6 +1,6 @@
 //! System 8: agent observability.
 
-use acceptance_tests::{account, sha256, wait_task, Case, Fermi};
+use acceptance_tests::{account, sha256, wait_saved, wait_task, Case, Fermi};
 use fermi_core::events::Event;
 use fermi_core::hub::{Hub, TaskStatus};
 use fermi_core::trace;
@@ -73,7 +73,7 @@ async fn ob_01_complete_operation_trace() {
     let hub = f.hub();
     let id = hub.submit(f.task("Check that add works.", &c.work));
     let rec = wait_task(&hub, id, T).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    wait_saved(&f.home, id, T).await;
     let saved = history(&f, id);
     let export = trace::export(&fermi_core::hub::read_task(&f.home.join("history"), id).unwrap());
     c.json("trace-export.json", &export);
@@ -130,7 +130,7 @@ async fn ob_02_invocation_detail() {
     let hub = f.hub();
     let id = hub.submit(f.task("Check the service status.", &c.work));
     wait_task(&hub, id, T).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    wait_saved(&f.home, id, T).await;
     let rec = fermi_core::hub::read_task(&f.home.join("history"), id).unwrap();
     let export = trace::export(&rec);
     let op = ops(&export, "tool").into_iter().find(|o| o["id"] == "toolu_status").cloned().unwrap_or_default();
@@ -171,7 +171,7 @@ async fn ob_03_usage_fidelity() {
     let hub = f.hub();
     let id = hub.submit(f.task("Read two files.", &c.work));
     wait_task(&hub, id, T).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    wait_saved(&f.home, id, T).await;
     let rec = fermi_core::hub::read_task(&f.home.join("history"), id).unwrap();
     let calls: Vec<Value> = rec
         .events
@@ -283,7 +283,17 @@ async fn ob_04_failure_diagnostics() {
                 out.contains("src/lib.rs:3:5") && !out.contains(pw) && out.contains("[REDACTED]"),
                 "location kept, the password redacted",
             );
-            let saved = std::fs::read_to_string(f.home.join("history").join(format!("{id}.json"))).unwrap_or_default();
+            // The hub writes the finished record just after the run ends: wait for it on disk.
+            let file = f.home.join("history").join(format!("{id}.json"));
+            let started = std::time::Instant::now();
+            let mut saved = String::new();
+            while started.elapsed() < T {
+                saved = std::fs::read_to_string(&file).unwrap_or_default();
+                if saved.contains("\"status\":\"done\"") || saved.contains("\"status\":\"failed\"") {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
             c.check(
                 "parentTrace",
                 saved.contains("\"tool_result\"") && saved.contains("toolu_build") && !saved.contains(pw),
@@ -308,7 +318,7 @@ async fn ob_05_trace_persistence() {
         let id = hub.submit(f.task("Run something traceable.", &c.work));
         wait_task(&hub, id, Duration::from_secs(60)).await.unwrap();
         // Let the final write land, then "close the app".
-        tokio::time::sleep(Duration::from_millis(300)).await;
+        wait_saved(&f.home, id, T).await;
         id
     };
     let before = std::fs::read(f.home.join("history").join(format!("{id}.json"))).unwrap();
@@ -377,7 +387,7 @@ async fn ob_06_resume_correlation() {
     let resumed = hub2.resume(id);
     c.check("resumeAccepted", resumed.is_ok(), format!("{resumed:?}"));
     let rec = wait_task(&hub2, id, T).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    wait_saved(&f.home, id, T).await;
     let saved = history(&f, id);
     c.json("trace-after-resume.json", &saved);
     c.check("sameTask", rec.status == TaskStatus::Done && saved["id"] == id, format!("task {id} {:?}", rec.status));
@@ -450,7 +460,8 @@ async fn ob_07_secret_redaction() {
     wait_task(&hub, a, T).await.unwrap();
     let b = hub.submit(f.task("Try again.", &c.work));
     wait_task(&hub, b, T).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    wait_saved(&f.home, a, T).await;
+    wait_saved(&f.home, b, T).await;
     let mut live = String::new();
     while let Ok(m) = bus.try_recv() {
         live += &m.to_string();
@@ -520,7 +531,7 @@ async fn ob_08_deterministic_replay() {
     wait_task(&hub, id, T).await.unwrap();
     hub.follow_up(id, "Now fix the failing case.", Default::default()).unwrap();
     wait_task(&hub, id, T).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    wait_saved(&f.home, id, T).await;
     let calls_before = f.calls("c1").len();
     // The replay can't start a CLI even by mistake: the binaries point nowhere.
     let mut cfg = f.engine.cfg.clone();
