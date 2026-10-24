@@ -279,7 +279,7 @@ async fn pl_05_mcp_interoperability() {
         if legacy {
             cmd.push("--legacy".into());
         }
-        let added = plugins::add_mcp(&f.engine, name, cmd).await;
+        let added = plugins::add_mcp(&f.engine, name, cmd, Default::default()).await;
         c.check(
             &format!("{name}Discovered"),
             added.as_ref().is_ok_and(|e| e.len() == 2),

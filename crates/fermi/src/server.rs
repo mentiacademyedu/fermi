@@ -913,13 +913,15 @@ async fn plugins_install(State(s): S, Json(b): Json<PluginInstall>) -> Response 
 struct AddMcp {
     name: String,
     command: Vec<String>,
+    #[serde(flatten)]
+    access: fermi_core::plugins::Access,
 }
 
 async fn plugins_add_mcp(State(s): S, Json(b): Json<AddMcp>) -> Response {
     if b.command.is_empty() {
         return err(StatusCode::BAD_REQUEST, "give the command that starts the server");
     }
-    match fermi_core::plugins::add_mcp(&s.hub.engine(), &b.name, b.command).await {
+    match fermi_core::plugins::add_mcp(&s.hub.engine(), &b.name, b.command, b.access).await {
         Ok(entries) => Json(json!({ "ok": true, "registered": entries })).into_response(),
         Err(x) => err(StatusCode::BAD_REQUEST, format!("{x:#}")),
     }

@@ -428,8 +428,11 @@ name = "proxy"
   only the capabilities it declares are registered. `fermi plugin list`,
   `enable`, `disable`, `remove`, and `fermi plugin run <command> '{"arg": 1}'`.
   The dashboard's **Plugins** page does the same.
-- **MCP servers**: `fermi plugin add-mcp github -- npx -y @modelcontextprotocol/server-github`
-  installs a server as a plugin offering its tools to agents. Current servers
+- **MCP servers**: `fermi plugin add-mcp github --env GITHUB_PERSONAL_ACCESS_TOKEN --net api.github.com --net registry.npmjs.org --write ~/.npm -- npx -y @modelcontextprotocol/server-github`
+  installs a server as a plugin offering its tools to agents. `--env`,
+  `--net` and `--write` are what it may use inside its sandbox (`npx` needs
+  the npm registry and its cache); a manifest says the same with `env`, `net`,
+  `read_only` and `read_write`. Current servers
   (`server/discover`) and older ones (`initialize`) both work; arguments are
   checked against each tool's schema before a call.
 - **Isolation**: every call runs the plugin in its own sandboxed process, with

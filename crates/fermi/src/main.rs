@@ -195,6 +195,15 @@ enum PluginCmd {
     /// Add an MCP server as a plugin: fermi plugin add-mcp <name> -- <command> [args…]
     AddMcp {
         name: String,
+        /// An environment variable it gets (repeat for several)
+        #[arg(long)]
+        env: Vec<String>,
+        /// A host it may reach (repeat for several)
+        #[arg(long)]
+        net: Vec<String>,
+        /// A folder it may write, such as a package cache (repeat for several)
+        #[arg(long)]
+        write: Vec<String>,
         #[arg(last = true, required = true)]
         command: Vec<String>,
     },
@@ -451,8 +460,8 @@ async fn plugin_cmd(cmd: PluginCmd) -> Result<()> {
                 anyhow::bail!("{} reported an error", out.capability);
             }
         }
-        PluginCmd::AddMcp { name, command } => {
-            let entries = plugins::add_mcp(&engine, &name, command).await?;
+        PluginCmd::AddMcp { name, env, net, write, command } => {
+            let entries = plugins::add_mcp(&engine, &name, command, plugins::Access { env, net, write }).await?;
             println!("added; registered:");
             show(&entries);
         }

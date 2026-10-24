@@ -109,6 +109,11 @@ pub struct Manifest {
     /// Environment variables it gets, besides the system ones.
     #[serde(default)]
     pub env: Vec<String>,
+    /// More folders it may read, or read and write (`~/…` allowed), e.g. a package cache.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub read_only: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub read_write: Vec<String>,
     /// Longest a call may take (default 60 s).
     #[serde(default)]
     pub timeout_secs: Option<u64>,
@@ -440,8 +445,20 @@ pub fn remove(engine: &Engine, name: &str) -> Result<()> {
     Ok(())
 }
 
+/// What an added MCP server may use in its sandbox.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Access {
+    #[serde(default)]
+    pub env: Vec<String>,
+    #[serde(default)]
+    pub net: Vec<String>,
+    #[serde(default)]
+    pub write: Vec<String>,
+}
+
 /// Makes an MCP server a plugin: discovers its tools and installs a manifest declaring them.
-pub async fn add_mcp(engine: &Engine, name: &str, command: Vec<String>) -> Result<Vec<Entry>> {
+/// `access` is what it may use in its sandbox: variables, hosts and writable folders.
+pub async fn add_mcp(engine: &Engine, name: &str, command: Vec<String>, access: Access) -> Result<Vec<Entry>> {
     let staging = dir(&engine.home).join(format!(".new-{name}"));
     let _ = std::fs::remove_dir_all(&staging);
     std::fs::create_dir_all(&staging)?;
@@ -452,8 +469,10 @@ pub async fn add_mcp(engine: &Engine, name: &str, command: Vec<String>) -> Resul
         description: format!("MCP server: {}", command.join(" ")),
         command,
         capabilities: vec![],
-        net: vec![],
-        env: vec![],
+        net: access.net,
+        env: access.env,
+        read_only: vec![],
+        read_write: access.write,
         timeout_secs: None,
     };
     m.check()?;
@@ -797,9 +816,10 @@ impl Client {
             let p = crate::sandbox::Proxy::start(m.net.clone(), dir(&engine.home).join("egress.jsonl")).await?;
             let mut read_only = crate::sandbox::system_dirs();
             read_only.push(pdir.to_path_buf());
+            read_only.extend(m.read_only.iter().map(|p| crate::util::expand(p)));
             read_only.extend(std::fs::canonicalize(&prog).ok().and_then(|r| r.parent().map(Path::to_path_buf)));
             let jail = crate::sandbox::Jail {
-                read_write: vec![cwd.to_path_buf(), t.clone()],
+                read_write: [cwd.to_path_buf(), t.clone()].into_iter().chain(m.read_write.iter().map(|p| crate::util::expand(p))).collect(),
                 read_only,
                 env_allow: m.env.clone(),
                 proxy: Some(p.port),
@@ -1019,6 +1039,8 @@ mod tests {
             capabilities: vec![],
             net: vec![],
             env: vec![],
+            read_only: vec![],
+            read_write: vec![],
             timeout_secs: None,
         };
         let e = bad.check().unwrap_err().to_string();
