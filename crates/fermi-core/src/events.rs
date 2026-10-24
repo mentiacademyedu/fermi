@@ -29,9 +29,41 @@ pub enum Event {
     Text {
         text: String,
     },
+    /// A tool invocation starts. `id` is the provider's (or fermi's) id for
+    /// it, `call` the model call that requested it, `input` its arguments.
     Tool {
         name: String,
         detail: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        call: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        input: Option<serde_json::Value>,
+    },
+    /// How a tool invocation ended. `status`: ok | error | declined |
+    /// no_result (the run ended before the tool reported back; never read as success).
+    ToolResult {
+        id: String,
+        status: String,
+        /// The output, redacted and shortened.
+        #[serde(default)]
+        output: String,
+        /// The error code, when the tool or the CLI gives one (`exit 2`, `FILE_NOT_FOUND`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        code: Option<String>,
+        /// Milliseconds from the call to its result, measured by fermi (monotonic clock).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ms: Option<u64>,
+    },
+    /// One model call finished, with the usage the provider reported for it,
+    /// field for field (fields it didn't report are absent, not zero).
+    Call {
+        id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+        #[serde(default)]
+        usage: serde_json::Value,
     },
     Limit {
         account: String,
@@ -89,6 +121,13 @@ pub enum Event {
         ok: bool,
         summary: String,
     },
+}
+
+impl Event {
+    /// A tool line without invocation detail (imported sessions, simple adapters).
+    pub fn tool(name: impl Into<String>, detail: impl Into<String>) -> Event {
+        Event::Tool { name: name.into(), detail: detail.into(), id: None, call: None, input: None }
+    }
 }
 
 pub type Tx = tokio::sync::mpsc::UnboundedSender<Event>;

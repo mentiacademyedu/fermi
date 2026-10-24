@@ -1,16 +1,19 @@
 //! `claude -p --output-format stream-json`, one config dir per account
 //! (`CLAUDE_CONFIG_DIR`).
 
-use super::proc::Proc;
 use super::{brief, classify_error, RunCtx, RunResult, Usage};
 use crate::events::{emit, Event};
 use crate::mcp;
-use crate::util::{resolve_bin, uuid_v4};
+use crate::trace::{content_text, exit_code, Ops};
+use std::collections::HashSet;
+
+/// A model call being streamed: its id, model and latest usage.
+type OpenCall = Option<(String, Option<String>, serde_json::Value)>;
 use anyhow::Result;
 
 pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     let e = ctx.engine;
-    let bin = resolve_bin("claude", e.cfg.bins.claude.as_deref())?;
+    let bin = ctx.bin("claude", e.cfg.bins.claude.as_deref())?;
     let mut args: Vec<String> =
         ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages"].map(String::from).to_vec();
     if let Some(m) = &ctx.model.cli {
@@ -23,7 +26,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     match &ctx.task.resume {
         Some(id) => args.extend(["--resume".into(), id.clone()]),
         None => {
-            let id = uuid_v4();
+            let id = ctx.new_session()?;
             args.extend(["--session-id".into(), id.clone()]);
             emit(ctx.tx, Event::Session { id });
         }
@@ -83,10 +86,20 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         envs.push(("CLAUDE_CONFIG_DIR".into(), home.display().to_string()));
     }
 
-    let jail = ctx.jail(&bin).await?;
-    let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, &ctx.task.input(), ctx.tx, jail.as_ref()).await?;
+    let mut p = ctx.spawn(&bin, &args, &envs, &ctx.task.input()).await?;
     let (mut text, mut usage) = (String::new(), Usage::default());
     let (mut blocked, mut resets, mut error, mut got_result) = (false, None, None::<String>, false);
+    let mut ops = Ops::new(ctx);
+    // The model call being streamed: one API response arrives as several
+    // `assistant` lines sharing its id (one per content block).
+    let mut call: OpenCall = None;
+    let mut closed = HashSet::new();
+    let close = |call: &mut OpenCall, ops: &mut Ops, closed: &mut HashSet<String>| {
+        if let Some((id, model, usage)) = call.take() {
+            ops.call(&id, model.as_deref(), &usage);
+            closed.insert(id);
+        }
+    };
 
     while let Some(v) = p.next_json().await? {
         match v["type"].as_str().unwrap_or_default() {
@@ -100,7 +113,19 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
                 }
             }
             "assistant" => {
-                for block in v["message"]["content"].as_array().into_iter().flatten() {
+                let msg = &v["message"];
+                let id = msg["id"].as_str().map(str::to_string);
+                if let Some(id) = id.as_ref().filter(|id| !closed.contains(*id)) {
+                    if call.as_ref().is_some_and(|(c, ..)| c != id) {
+                        close(&mut call, &mut ops, &mut closed);
+                    }
+                    let usage = if msg["usage"].is_object() { msg["usage"].clone() } else { serde_json::Value::Null };
+                    match &mut call {
+                        Some((_, _, u)) => *u = usage, // the latest counts for this call
+                        None => call = Some((id.clone(), msg["model"].as_str().map(str::to_string), usage)),
+                    }
+                }
+                for block in msg["content"].as_array().into_iter().flatten() {
                     match block["type"].as_str() {
                         Some("text") => {
                             let t = block["text"].as_str().unwrap_or_default();
@@ -109,12 +134,24 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
                                 emit(ctx.tx, Event::Text { text: t.to_string() });
                             }
                         }
-                        Some("tool_use") => emit(
-                            ctx.tx,
-                            Event::Tool { name: block["name"].as_str().unwrap_or("tool").to_string(), detail: brief(&block["input"]) },
-                        ),
+                        Some("tool_use") => {
+                            ops.tool(block["id"].as_str(), block["name"].as_str().unwrap_or("tool"), &block["input"], id.as_deref());
+                        }
                         _ => {}
                     }
+                }
+            }
+            // Tool results come back as a user turn.
+            "user" => {
+                close(&mut call, &mut ops, &mut closed);
+                for block in v["message"]["content"].as_array().into_iter().flatten().filter(|b| b["type"] == "tool_result") {
+                    let out = content_text(&block["content"]);
+                    let (status, code) = if block["is_error"].as_bool() == Some(true) {
+                        ("error", exit_code(&out).or(Some("tool_error".into())))
+                    } else {
+                        ("ok", None)
+                    };
+                    ops.result(block["tool_use_id"].as_str().unwrap_or_default(), status, &out, code);
                 }
             }
             "rate_limit_event" => {
@@ -128,6 +165,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
                 emit(ctx.tx, Event::Limit { account: ctx.account.id.clone(), utilization: util, resets_at: resets, blocked: is_blocked });
             }
             "result" => {
+                close(&mut call, &mut ops, &mut closed);
                 got_result = true;
                 let u = &v["usage"];
                 let n = |k: &str| u[k].as_u64().unwrap_or(0);
@@ -137,6 +175,15 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
                     cache_write: n("cache_creation_input_tokens"),
                     output: n("output_tokens"),
                     cost_usd: v["total_cost_usd"].as_f64(),
+                    reported: Usage::present(
+                        u,
+                        &[
+                            ("input_tokens", Usage::INPUT),
+                            ("cache_read_input_tokens", Usage::CACHED),
+                            ("cache_creation_input_tokens", Usage::CACHE_WRITE),
+                            ("output_tokens", Usage::OUTPUT),
+                        ],
+                    ),
                 };
                 // Calls that needed an approval nobody could give (we run headless).
                 let mut seen = std::collections::HashSet::new();
@@ -158,6 +205,8 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
             _ => {}
         }
     }
+    close(&mut call, &mut ops, &mut closed);
+    ops.finish();
 
     let (success, stderr) = p.finish().await?;
     let mut res = if blocked {

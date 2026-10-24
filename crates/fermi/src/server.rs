@@ -164,6 +164,8 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/tasks", post(create_task))
         .route("/api/tasks/{id}", get(task))
         .route("/api/tasks/{id}/cancel", post(cancel))
+        .route("/api/tasks/{id}/trace", get(task_trace))
+        .route("/api/tasks/{id}/resume", post(resume))
         .route("/api/tasks/{id}/reply", post(reply))
         .route("/api/tasks/{id}/delete", post(delete_task))
         .route("/api/sessions", get(sessions_list))
@@ -494,6 +496,22 @@ async fn task(State(s): S, Path(id): Path<u64>) -> Response {
             Json(v).into_response()
         }
         None => err(StatusCode::NOT_FOUND, "no such task"),
+    }
+}
+
+/// Every model call and tool invocation, correlated (see `trace::export`).
+async fn task_trace(State(s): S, Path(id): Path<u64>) -> Response {
+    match s.hub.get(id) {
+        Some(t) => Json(fermi_core::trace::export(&t)).into_response(),
+        None => err(StatusCode::NOT_FOUND, "no such task"),
+    }
+}
+
+/// Continues an interrupted task in its provider session, as its next attempt.
+async fn resume(State(s): S, Path(id): Path<u64>) -> Response {
+    match s.hub.resume(id) {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
     }
 }
 

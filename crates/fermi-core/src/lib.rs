@@ -17,11 +17,13 @@ pub mod memory;
 pub mod models;
 pub mod policy;
 pub mod providers;
+pub mod redact;
 pub mod router;
 pub mod sandbox;
 pub mod sessions;
 pub mod state;
 pub mod team;
+pub mod trace;
 pub mod util;
 pub mod verify;
 

@@ -80,7 +80,7 @@ a random local port, so the desktop app and `fermi ui` are the same interface.
 
 ```sh
 cargo run -p fermi-desktop                 # run it
-cargo tauri build -c crates/fermi-desktop  # installers (.msi / .exe) â€” needs `cargo install tauri-cli`
+cargo tauri build -c crates/fermi-desktop  # installers (.msi / .exe) — needs `cargo install tauri-cli`
 ```
 
 The icon is the periodic-table tile of Fermium (Fm, 100), named after Fermi.
@@ -366,6 +366,37 @@ With `sandbox = true`, each agent CLI (and everything it starts) runs confined:
   and macOS only the environment allowlist and the proxy apply; the file and
   network boundaries aren't drawn by the OS there.
 
+## Traces, resume and replay
+
+Every task keeps a trace: each model call (with the usage the provider reported
+for it, field for field) and each tool invocation (inputs, output, status,
+error code, and how long it took on fermi's clock), with its sequence number,
+the attempt it belongs to and, for tools, the model call that asked for it.
+
+- `fermi trace <id>` (or **Trace** on a conversation in the dashboard, or
+  `GET /api/tasks/<id>/trace`) lists the operations; failures show their code
+  and diagnostics. A tool that never reported back is marked `no_result`, never
+  counted as a success.
+- **Resume**: a task that was cancelled or interrupted (its window closed)
+  continues in the same provider session as the next attempt of the same task,
+  so its trace stays one sequence (dashboard **Resume**, or
+  `POST /api/tasks/<id>/resume`).
+- **Replay**: fermi records each CLI's responses for a task in
+  `~/.fermi/tapes/<id>/`. `fermi replay <id>` runs the task again from them,
+  starting no CLI and touching no network, on a fixed clock, and checks the
+  events and state come out the same. The text is the recorded text: a live
+  model wouldn't reproduce it word for word. Turn recordings off with
+  `[trace] tapes = false`.
+- **Redaction**: before anything is saved (history, tapes, exports) or shown,
+  fermi removes credentials (API keys, tokens, private keys, `password=…`
+  values), the values of this machine's secret-looking environment variables,
+  and anything matching your own patterns:
+
+```toml
+[trace]
+redact = ["ACME-[0-9a-f]{16}"]   # regular expressions
+```
+
 ## Skills & agents
 
 Every fermi account keeps its own config folder, so skills you installed in
@@ -418,9 +449,9 @@ to tier 2.
 
 ```
 crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
-  config.rs        accounts, profiles, folder â†’ profile resolution
+  config.rs        accounts, profiles, folder → profile resolution
   router.rs        task classification + candidate ordering
-  engine.rs        run loop: route â†’ pick account â†’ run â†’ failover
+  engine.rs        run loop: route → pick account → run → failover
   state.rs         per-account usage (~/.fermi/state.json) + usage.jsonl log
   providers/       claude_cli, codex_cli, gemini_cli, api (Anthropic/OpenAI), image
   mcp.rs           `fermi mcp` stdio server attached to Claude sessions
@@ -429,6 +460,8 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   code.rs          code intelligence: tree-sitter symbol index, call/import graphs, tests, change impact
   deck.rs          designed .pptx decks from a slide description (the create_deck tool)
   sessions.rs      finds and imports Claude Code / Codex / Gemini CLI sessions
+  trace.rs         operation traces, tapes of CLI responses, replay
+  redact.rs        removes secrets before anything about a task is saved
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
   slides.rs        .pptx parts in and out (the dashboard renders and edits the XML)

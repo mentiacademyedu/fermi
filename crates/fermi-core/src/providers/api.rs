@@ -75,6 +75,15 @@ pub async fn anthropic(ctx: &RunCtx<'_>) -> Result<RunResult> {
         cache_write: n("cache_creation_input_tokens"),
         output: n("output_tokens"),
         cost_usd: None,
+        reported: Usage::present(
+            u,
+            &[
+                ("input_tokens", Usage::INPUT),
+                ("cache_read_input_tokens", Usage::CACHED),
+                ("cache_creation_input_tokens", Usage::CACHE_WRITE),
+                ("output_tokens", Usage::OUTPUT),
+            ],
+        ),
     };
     Ok(RunResult::ok(text, usage))
 }
@@ -105,6 +114,8 @@ pub async fn openai(ctx: &RunCtx<'_>) -> Result<RunResult> {
         input: u["input_tokens"].as_u64().unwrap_or(0),
         cached_input: u["input_tokens_details"]["cached_tokens"].as_u64().unwrap_or(0),
         output: u["output_tokens"].as_u64().unwrap_or(0),
+        reported: Usage::present(u, &[("input_tokens", Usage::INPUT), ("output_tokens", Usage::OUTPUT)])
+            | Usage::present(&u["input_tokens_details"], &[("cached_tokens", Usage::CACHED)]),
         ..Default::default()
     };
     Ok(RunResult::ok(text, usage))

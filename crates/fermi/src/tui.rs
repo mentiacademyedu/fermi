@@ -219,7 +219,12 @@ fn push_event(t: &mut TaskView, ev: Event) {
             t.lines.extend(text.lines().map(|l| (Kind::Text, l.to_string())));
             t.lines.push((Kind::Text, String::new()));
         }
-        Event::Tool { name, detail } => t.lines.push((Kind::Tool, format!("· {name} {detail}"))),
+        Event::Tool { name, detail, .. } => t.lines.push((Kind::Tool, format!("· {name} {detail}"))),
+        Event::ToolResult { status, output, code, .. } if status != "ok" => {
+            let first = output.lines().next().unwrap_or_default().to_string();
+            t.lines.push((Kind::Bad, format!("  ✗ {status}{} {first}", code.map(|c| format!(" ({c})")).unwrap_or_default())))
+        }
+        Event::ToolResult { .. } | Event::Call { .. } => {}
         Event::Limit { account, utilization, blocked, .. } => {
             if blocked {
                 t.lines.push((Kind::Warn, format!("! {account} is rate limited")));
@@ -794,7 +799,7 @@ impl App {
 
         let id = self.tasks.len();
         // Saved to the shared history so the desktop app and dashboard see it.
-        let mut history = Recorder::start(&self.engine.home, &task, "tui");
+        let mut history = Recorder::start(&self.engine, &mut task, "tui");
         let hist = history.id();
         let (engine, tx) = (self.engine.clone(), ev_tx.clone());
         // The run lives inside this future, so aborting it (cancel, quit)

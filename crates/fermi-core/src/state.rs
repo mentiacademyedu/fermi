@@ -44,11 +44,12 @@ pub struct UsageRecord<'a> {
     pub model: &'a str,
     /// ok | limited | failed (failed attempts are retried on another account or model).
     pub status: &'a str,
-    /// Every input token, including cached ones.
-    pub input_tokens: u64,
-    pub cached_input_tokens: u64,
-    pub cache_write_tokens: u64,
-    pub output_tokens: u64,
+    /// Every input token, including cached ones. A count the provider didn't
+    /// report is null, not zero.
+    pub input_tokens: Option<u64>,
+    pub cached_input_tokens: Option<u64>,
+    pub cache_write_tokens: Option<u64>,
+    pub output_tokens: Option<u64>,
     /// Cost the provider reported.
     pub cost_usd: Option<f64>,
     /// Cost from the price table in effect, with its version and breakdown.
@@ -133,8 +134,8 @@ impl Store {
         self.update(rec.account, |s| {
             s.last_used = rec.ts;
             s.tasks += 1;
-            s.input_tokens += rec.input_tokens;
-            s.output_tokens += rec.output_tokens;
+            s.input_tokens += rec.input_tokens.unwrap_or(0);
+            s.output_tokens += rec.output_tokens.unwrap_or(0);
             if rec.status == "ok" {
                 s.limited_until = None;
             }

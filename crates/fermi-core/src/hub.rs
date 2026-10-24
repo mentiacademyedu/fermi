@@ -8,6 +8,7 @@
 
 use crate::engine::{Engine, Task};
 use crate::events::Event;
+use crate::trace::Stamp;
 use crate::util::now;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
@@ -83,6 +84,12 @@ pub struct TaskRec {
     #[serde(default)]
     pub origin: Option<String>,
     pub events: Vec<Event>,
+    /// Runs of this task so far (the first, follow-ups, resumes).
+    #[serde(default)]
+    pub attempt: u32,
+    /// Sequence number, time and attempt of each event (see `trace::Stamp`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stamps: Vec<Stamp>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,7 +101,12 @@ pub struct RanOn {
 
 impl TaskRec {
     pub fn new(id: u64, task: &Task, via: &str) -> Self {
-        TaskRec {
+        Self::new_at(id, task, via, now_ms())
+    }
+
+    /// A new record on a given clock (unix milliseconds).
+    pub fn new_at(id: u64, task: &Task, via: &str, at: u64) -> Self {
+        let mut rec = TaskRec {
             id,
             prompt: task.prompt.clone(),
             profile: task.profile.clone(),
@@ -116,7 +128,50 @@ impl TaskRec {
             updated: now(),
             via: Some(via.to_string()),
             origin: None,
-            events: vec![Event::User { text: task.prompt.clone() }],
+            events: vec![],
+            attempt: task.attempt.max(1),
+            stamps: vec![],
+        };
+        rec.started = at / 1000;
+        rec.updated = at / 1000;
+        rec.push_at(Event::User { text: task.prompt.clone() }, at);
+        rec
+    }
+
+    /// Adds an event to the trace with the next sequence number.
+    pub fn push_at(&mut self, ev: Event, at: u64) {
+        // Events saved before stamps existed get theirs now (time and attempt unknown).
+        while self.stamps.len() < self.events.len() {
+            let seq = self.stamps.len() as u64 + 1;
+            self.stamps.push(Stamp { seq, at: 0, attempt: 0 });
+        }
+        let seq = self.stamps.last().map_or(0, |s| s.seq) + 1;
+        self.events.push(ev);
+        self.stamps.push(Stamp { seq, at, attempt: self.attempt });
+    }
+
+    /// Every event's stamp (made up for events saved before stamps existed).
+    pub fn stamps(&self) -> Vec<Stamp> {
+        let missing = self.events.len().saturating_sub(self.stamps.len());
+        let mut out: Vec<Stamp> = (1..=missing as u64).map(|seq| Stamp { seq, at: 0, attempt: 0 }).collect();
+        out.extend(self.stamps.iter().copied());
+        out.truncate(self.events.len());
+        out
+    }
+
+    /// Starts the next attempt with the user's message.
+    pub fn reopen(&mut self, attempt: u32, prompt: &str, at: u64) {
+        self.attempt = attempt;
+        self.status = TaskStatus::Running;
+        self.ended = None;
+        self.push_at(Event::User { text: prompt.to_string() }, at);
+    }
+
+    /// Removes secrets from what this record keeps so far (see `redact`).
+    pub fn redact(&mut self, r: &crate::redact::Redactor) {
+        self.prompt = r.text(&self.prompt).into_owned();
+        for ev in &mut self.events {
+            *ev = r.event(ev);
         }
     }
 
@@ -136,6 +191,10 @@ impl TaskRec {
 
     /// Folds one event into the record. Returns true when the run finished.
     pub fn apply(&mut self, ev: &Event) -> bool {
+        self.apply_at(ev, now_ms())
+    }
+
+    pub fn apply_at(&mut self, ev: &Event, at: u64) -> bool {
         if self.status != TaskStatus::Running {
             return false; // cancelled: drop late events
         }
@@ -153,7 +212,7 @@ impl TaskRec {
             }
             Event::Done { ok, .. } => {
                 self.status = if *ok { TaskStatus::Done } else { TaskStatus::Failed };
-                self.ended = Some(now());
+                self.ended = Some(at / 1000);
                 finished = true;
             }
             _ => {}
@@ -161,15 +220,20 @@ impl TaskRec {
         // Session ids are bookkeeping, and streamed chunks are superseded by
         // the finished `Text`: neither belongs in the saved history.
         if !matches!(ev, Event::Session { .. } | Event::Delta { .. }) {
-            self.events.push(ev.clone());
+            self.push_at(ev.clone(), at);
         }
         finished
     }
 
     fn cancel(&mut self) {
+        self.cancel_at(now_ms());
+    }
+
+    pub fn cancel_at(&mut self, at: u64) {
         if self.status == TaskStatus::Running {
+            self.push_at(Event::Log { line: "cancelled".into() }, at);
             self.status = TaskStatus::Cancelled;
-            self.ended = Some(now());
+            self.ended = Some(at / 1000);
         }
     }
 
@@ -181,7 +245,7 @@ impl TaskRec {
     fn mark_interrupted(&mut self) {
         self.status = TaskStatus::Cancelled;
         self.ended.get_or_insert(self.updated.max(self.started));
-        self.events.push(Event::Log { line: "interrupted: the fermi window running this was closed".into() });
+        self.push_at(Event::Log { line: "interrupted: the fermi window running this was closed".into() }, now_ms());
     }
 }
 
@@ -336,15 +400,21 @@ pub struct Recorder {
     dir: PathBuf,
     rec: TaskRec,
     last_save: Instant,
+    redactor: Arc<crate::redact::Redactor>,
 }
 
 impl Recorder {
-    pub fn start(home: &Path, task: &Task, via: &str) -> Self {
-        let dir = history_dir(home);
+    /// Gives `task` its id and records it (and, for replay, what it runs).
+    pub fn start(engine: &Engine, task: &mut Task, via: &str) -> Self {
+        let dir = history_dir(&engine.home);
         let _ = std::fs::create_dir_all(&dir);
         let mut rec = TaskRec::new(new_task_id(&dir), task, via);
+        rec.redact(&engine.redactor);
+        task.id = Some(rec.id);
+        task.attempt = 1;
+        crate::trace::save_task(engine, task);
         write_rec(&dir, &mut rec);
-        Recorder { dir, rec, last_save: Instant::now() }
+        Recorder { dir, rec, last_save: Instant::now(), redactor: engine.redactor.clone() }
     }
 
     pub fn id(&self) -> u64 {
@@ -352,7 +422,7 @@ impl Recorder {
     }
 
     pub fn record(&mut self, ev: &Event) {
-        let finished = self.rec.apply(ev);
+        let finished = self.rec.apply(&self.redactor.event(ev));
         if finished || self.last_save.elapsed() >= SAVE_EVERY {
             self.save();
         }
@@ -481,7 +551,7 @@ pub fn transcript(engine: &Engine, t: &TaskRec) -> String {
                 flush(&mut tools, &mut msgs);
                 msgs.push(format!("Assistant: {}", clip(text, MESSAGE_MAX)));
             }
-            Event::Tool { name, detail } => tools.push(if detail.is_empty() { name.clone() } else { format!("{name} {detail}") }),
+            Event::Tool { name, detail, .. } => tools.push(if detail.is_empty() { name.clone() } else { format!("{name} {detail}") }),
             Event::Artifact { path } => tools.push(format!("created {path}")),
             Event::Blocked { tool, detail, .. } => tools.push(format!("{tool} {detail} (blocked: needed approval)")),
             Event::Done { ok: false, summary } => {
@@ -541,6 +611,8 @@ pub fn transcript(engine: &Engine, t: &TaskRec) -> String {
 /// (so a session that began with one can be recognized later).
 pub const HANDOFF_START: &str = "[You're taking over a conversation";
 pub const HANDOFF_MARK: &str = "The user's new message:";
+/// What a resumed agent is told.
+pub const RESUME_PROMPT: &str = "You were interrupted. Continue the task from where you left off.";
 
 // ── the hub ─────────────────────────────────────────────────────────────────
 
@@ -633,7 +705,9 @@ impl Hub {
 
     pub fn submit(self: &Arc<Self>, mut task: Task) -> u64 {
         let id = new_task_id(&self.dir);
-        let rec = TaskRec::new(id, &task, &self.via);
+        let mut rec = TaskRec::new(id, &task, &self.via);
+        rec.redact(&self.engine().redactor);
+        task.attempt = 1;
         let note = self.with_memory(&mut task);
         self.publish(json!({ "kind": "task_new", "task": rec.summary() }));
         self.tasks.lock().unwrap().push(rec);
@@ -669,8 +743,27 @@ impl Hub {
     /// different provider, or when there's no session to resume (an imported
     /// or failed task), the conversation so far is passed on as context.
     pub fn follow_up(self: &Arc<Self>, id: u64, prompt: &str, opts: FollowUp) -> Result<()> {
+        self.continue_task(id, prompt, opts, None)
+    }
+
+    /// Resumes an interrupted (or failed) task in its provider session: a new
+    /// attempt of the same task, whose events continue the same trace.
+    pub fn resume(self: &Arc<Self>, id: u64) -> Result<()> {
+        let t = self.get(id).ok_or_else(|| anyhow::anyhow!("no such task"))?;
+        if !matches!(t.status, TaskStatus::Cancelled | TaskStatus::Failed) {
+            bail!("only an interrupted or failed task can be resumed");
+        }
+        if t.session.is_none() || t.ran_on.is_none() {
+            bail!("this task never reached a provider, so there's no session to resume; send it again instead");
+        }
+        let checkpoint = t.stamps().last().map_or(0, |s| s.seq);
+        let note = format!("resumed as attempt {} after event #{checkpoint}, in the same provider session", t.attempt + 1);
+        self.continue_task(id, RESUME_PROMPT, FollowUp::default(), Some(note))
+    }
+
+    fn continue_task(self: &Arc<Self>, id: u64, prompt: &str, opts: FollowUp, note: Option<String>) -> Result<()> {
         let engine = self.engine();
-        let task = {
+        let mut task = {
             let tasks = self.tasks.lock().unwrap();
             let Some(t) = tasks.iter().find(|t| t.id == id) else { bail!("no such task") };
             if t.status == TaskStatus::Running {
@@ -690,13 +783,19 @@ impl Hub {
             t.effort = task.effort.clone();
             t.permission = task.permission.clone();
             t.allowed = task.allowed.clone();
-            t.status = TaskStatus::Running;
-            t.ended = None;
             t.via = Some(self.via.clone());
-            t.events.push(Event::User { text: prompt.to_string() });
+            t.reopen(t.attempt + 1, &engine.redactor.text(prompt), now_ms());
+            task.attempt = t.attempt;
+            if let Some(line) = &note {
+                t.push_at(Event::Log { line: line.clone() }, now_ms());
+            }
         }
         let summary = self.get(id).map(|t| t.summary());
-        self.publish(json!({ "kind": "task_event", "id": id, "event": Event::User { text: prompt.to_string() }, "task": summary }));
+        let user = Event::User { text: engine.redactor.text(prompt).into_owned() };
+        self.publish(json!({ "kind": "task_event", "id": id, "event": user, "task": summary }));
+        if let Some(line) = note {
+            self.publish(json!({ "kind": "task_event", "id": id, "event": Event::Log { line }, "task": summary }));
+        }
         self.launch(id, task);
         self.save(id);
         Ok(())
@@ -738,6 +837,7 @@ impl Hub {
             None => 0,
         };
         let mut rec = crate::sessions::to_rec(&engine, found, id)?;
+        rec.redact(&engine.redactor);
         if id == 0 {
             // Keep the history in date order.
             rec.id = id_at(&self.dir, rec.started * 1000);
@@ -765,6 +865,7 @@ impl Hub {
         task.id = Some(id); // usage and budget entries name the task
         let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
         let engine = self.engine();
+        crate::trace::save_task(&engine, &task);
         let runner = tokio::spawn(async move {
             match task.verify.clone() {
                 Some(v) => crate::verify::run_task(&engine, task, &v, &tx).await,
@@ -786,6 +887,8 @@ impl Hub {
     }
 
     fn record(&self, id: u64, ev: Event) {
+        // Secrets never reach the history, the tapes or the clients.
+        let ev = self.engine().redactor.event(&ev);
         let finished = {
             let mut tasks = self.tasks.lock().unwrap();
             let Some(t) = tasks.iter_mut().find(|t| t.id == id) else { return };
@@ -900,6 +1003,7 @@ impl Hub {
             }
         }
         let _ = std::fs::remove_file(self.dir.join(format!("{id}.json")));
+        let _ = std::fs::remove_dir_all(crate::trace::tapes_dir(&self.engine().home, id));
         self.publish(json!({ "kind": "task_deleted", "id": id }));
         Ok(())
     }
@@ -943,11 +1047,12 @@ mod tests {
         let dir = history_dir(&home);
         std::fs::create_dir_all(&dir).unwrap();
         let mut scanner = Scanner::new(&dir);
+        let engine = Engine::new(Default::default(), home.clone(), 0);
 
         // Another program starts and finishes a task.
-        let task = Task::new("hello", &home);
+        let mut task = Task::new("hello", &home);
         {
-            let mut rec = Recorder::start(&home, &task, "cli");
+            let mut rec = Recorder::start(&engine, &mut task, "cli");
             rec.record(&Event::Text { text: "hi".into() });
             rec.record(&Event::Done { ok: true, summary: "ok".into() });
         }
@@ -976,7 +1081,8 @@ mod tests {
     fn dropped_recorder_marks_cancelled() {
         let home = tmp_dir("drop");
         let id = {
-            let rec = Recorder::start(&home, &Task::new("x", &home), "tui");
+            let engine = Engine::new(Default::default(), home.clone(), 0);
+            let rec = Recorder::start(&engine, &mut Task::new("x", &home), "tui");
             rec.id()
         };
         assert_eq!(read_task(&history_dir(&home), id).unwrap().status, TaskStatus::Cancelled);
@@ -1012,7 +1118,7 @@ mod tests {
                 why: String::new(),
             },
             Event::Session { id: "s1".into() },
-            Event::Tool { name: "Bash".into(), detail: "cargo test".into() },
+            Event::tool("Bash", "cargo test"),
             Event::Text { text: "Fixed it.".into() },
             Event::Done { ok: true, summary: String::new() },
         ] {

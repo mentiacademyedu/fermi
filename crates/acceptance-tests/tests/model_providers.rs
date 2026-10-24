@@ -18,6 +18,8 @@ fn kinds(events: &[Event]) -> Vec<&'static str> {
             Event::Delta { .. } => "delta",
             Event::Text { .. } => "text",
             Event::Tool { .. } => "tool",
+            Event::ToolResult { .. } => "tool_result",
+            Event::Call { .. } => "call",
             Event::Limit { .. } => "limit",
             Event::Failover { .. } => "failover",
             Event::Blocked { .. } => "blocked",
@@ -30,6 +32,18 @@ fn kinds(events: &[Event]) -> Vec<&'static str> {
             Event::Repair { .. } => "repair",
             Event::Done { .. } => "done",
         })
+        .collect()
+}
+
+/// Event kinds without the optional ones (see AI-01).
+fn lifecycle(kinds: &Value) -> Vec<String> {
+    kinds
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|k| k.as_str())
+        .filter(|k| !matches!(*k, "delta" | "call"))
+        .map(String::from)
         .collect()
 }
 
@@ -79,12 +93,15 @@ async fn ai_01_adapter_normalization() {
         c.check(&format!("normalized:{}", n["account"].as_str().unwrap()), same, format!("{n}"));
     }
     // `delta` is optional progressive output (some CLIs stream it, others don't);
-    // the finished `text` replaces it. The lifecycle must match without it.
-    let lifecycle = |n: &Value| -> Vec<String> {
-        n["eventKinds"].as_array().unwrap().iter().filter_map(|k| k.as_str()).filter(|k| *k != "delta").map(String::from).collect()
-    };
-    let cycles: Vec<Vec<String>> = normalized.iter().map(lifecycle).collect();
-    c.check("sameLifecycle", cycles.iter().all(|l| *l == cycles[0]), format!("{cycles:?} (optional delta events excluded)"));
+    // the finished `text` replaces it. `call` carries each provider's own usage
+    // at its own granularity (Claude per model call, Codex per turn, Gemini per
+    // run). The lifecycle must match without them.
+    let cycles: Vec<Vec<String>> = normalized.iter().map(|n| lifecycle(&n["eventKinds"])).collect();
+    c.check(
+        "sameLifecycle",
+        cycles.iter().all(|l| *l == cycles[0]),
+        format!("{cycles:?} (optional delta and per-provider call events excluded)"),
+    );
     for (acct, flavor) in [("cl", "claude"), ("cx", "codex"), ("gm", "gemini")] {
         let calls = f.calls(acct);
         c.check(
@@ -136,11 +153,8 @@ async fn ai_02_common_task_interface() {
         );
         c.check(&format!("completed:{m}"), r["status"] == "Done", r["status"].to_string());
     }
-    c.check(
-        "sameLifecycle",
-        runs[0]["eventKinds"] == runs[1]["eventKinds"],
-        format!("{} / {}", runs[0]["eventKinds"], runs[1]["eventKinds"]),
-    );
+    let (a, b) = (lifecycle(&runs[0]["eventKinds"]), lifecycle(&runs[1]["eventKinds"]));
+    c.check("sameLifecycle", a == b, format!("{a:?} / {b:?} (per-provider call events excluded)"));
     c.finish();
 }
 
