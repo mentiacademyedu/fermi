@@ -14,7 +14,9 @@
 //! `touch` / `wait_for` (barrier files, relative to the account folder),
 //! `delay_ms`, `child` (spawn a long-lived child process and record its pid),
 //! `crash` (exit with code 101 after partial output), `exit` (exit code),
-//! `done_touch` (a file written with the time when the step finishes).
+//! `done_touch` (a file written with the time when the step finishes),
+//! `read` (an absolute path the agent reads: its content joins the reply,
+//! unless a `--disallowedTools "Read(//…)"` rule denies it, as Claude Code does).
 
 use serde_json::{json, Value};
 use std::io::{Read, Write};
@@ -106,6 +108,28 @@ fn with_lock<T>(dir: &Path, f: impl FnOnce() -> T) -> T {
     r
 }
 
+/// The `Read(//…)` patterns given with `--disallowedTools`.
+fn read_rules() -> Vec<String> {
+    let args: Vec<String> = std::env::args().collect();
+    let Some(i) = args.iter().position(|a| a == "--disallowedTools") else { return vec![] };
+    args[i + 1..]
+        .iter()
+        .take_while(|a| !a.starts_with("--"))
+        .filter_map(|r| r.strip_prefix("Read(//")?.strip_suffix(')').map(|p| format!("/{p}")))
+        .collect()
+}
+
+/// Claude's matching, as far as the tests need it: paths in POSIX form
+/// (`C:\x` is `/c/x`); a trailing `/**` covers everything below.
+fn rule_matches(rule: &str, path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    let p = if p.len() > 2 && p.as_bytes()[1] == b':' { format!("/{}{}", p[..1].to_ascii_lowercase(), &p[2..]) } else { p };
+    match rule.strip_suffix("/**") {
+        Some(dir) => p.to_lowercase().starts_with(&format!("{}/", dir.to_lowercase())),
+        None => p.eq_ignore_ascii_case(rule),
+    }
+}
+
 fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
     if let Some(t) = step["touch"].as_str() {
         let _ = std::fs::write(home.join(t), std::process::id().to_string());
@@ -143,7 +167,15 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
             let _ = std::fs::write(path, c);
         }
     }
-    let text = step["text"].as_str().unwrap_or("").to_string();
+    let mut text = step["text"].as_str().unwrap_or("").to_string();
+    let mut read_denied: Option<String> = None;
+    if let Some(path) = step["read"].as_str() {
+        if read_rules().iter().any(|r| rule_matches(r, path)) {
+            read_denied = Some(path.to_string());
+        } else {
+            text += &std::fs::read_to_string(path).unwrap_or_default();
+        }
+    }
     let tools: Vec<Value> = step["tools"].as_array().cloned().unwrap_or_default();
     let usage = &step["usage"];
     let (input, output) = (usage["input"].as_u64().unwrap_or(10), usage["output"].as_u64().unwrap_or(5));
@@ -186,13 +218,16 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
                     json!({ "type": "assistant", "parent_tool_use_id": null, "message": { "content": [{ "type": "text", "text": text }] } }),
                 );
             }
-            let denials: Vec<Value> = step["denials"]
+            let mut denials: Vec<Value> = step["denials"]
                 .as_array()
                 .into_iter()
                 .flatten()
                 .enumerate()
                 .map(|(i, d)| json!({ "tool_name": d["tool"], "tool_use_id": format!("toolu_{i}"), "tool_input": d["input"] }))
                 .collect();
+            if let Some(p) = &read_denied {
+                denials.push(json!({ "tool_name": "Read", "tool_use_id": "toolu_read", "tool_input": { "file_path": p } }));
+            }
             let mut result = json!({ "type": "result", "subtype": "success", "is_error": false, "result": text, "session_id": session,
                 "usage": { "input_tokens": input, "cache_read_input_tokens": cached, "output_tokens": output }, "permission_denials": denials });
             if let Some(c) = cost {

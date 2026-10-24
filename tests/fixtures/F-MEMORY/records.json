@@ -1,0 +1,27 @@
+{
+  "about": "F-MEMORY: synthetic project decisions with sources, paraphrase queries with the expected record (by title) in the top five, and two contradictory notes. Sources are F-CODE paths.",
+  "decisions": [
+    { "key": "db", "kind": "decision", "topic": "storage", "title": "Use PostgreSQL as the primary datastore", "body": "Chosen over MongoDB for transactions and mature tooling. SQLite stays for local tests.", "sources": ["util/src/lib.rs:2"] },
+    { "key": "cache", "kind": "decision", "topic": "caching", "title": "Cache rendered pages in Redis for ten minutes", "body": "Invalidate on publish. In-process memoization was too small for three servers.", "sources": ["engine/src/lib.rs"] },
+    { "key": "auth", "kind": "decision", "topic": "authentication", "title": "Sign users in with OAuth through the company SSO", "body": "No local passwords; sessions expire after eight hours.", "sources": ["app/src/main.rs"] },
+    { "key": "queue", "kind": "decision", "topic": "background jobs", "title": "Run background jobs from a RabbitMQ queue", "body": "Workers acknowledge after success; failed jobs go to a dead-letter queue.", "sources": ["engine/src/lib.rs"] },
+    { "key": "logs", "kind": "decision", "topic": "observability", "title": "Emit structured JSON logs with request ids", "body": "Shipped to the central log store; traces sampled at 10%.", "sources": ["app/src/main.rs"] },
+    { "key": "deploy", "kind": "decision", "topic": "release", "title": "Deploy with blue-green rollouts on Fridays only after noon", "body": "Rollback is a traffic switch.", "sources": ["README.md"] },
+    { "key": "errors", "kind": "note", "topic": "errors", "title": "Wrap every handler failure in an ApiError with a code", "body": "Codes are listed in the API reference.", "sources": ["engine/src/lib.rs"] },
+    { "key": "config", "kind": "fact", "topic": "configuration", "title": "Settings load from config.toml, then environment variables override them", "body": "", "sources": ["notes.json"] },
+    { "key": "perf", "kind": "decision", "topic": "performance", "title": "Keep p95 latency under 200 ms for page loads", "body": "Measured at the load balancer.", "sources": ["README.md"] },
+    { "key": "tests", "kind": "decision", "topic": "testing", "title": "Every bug fix ships with a regression test", "body": "", "sources": ["engine/src/lib.rs"] }
+  ],
+  "paraphrases": [
+    { "query": "which database do we persist data in?", "expect": "db" },
+    { "query": "how is caching of pages handled", "expect": "cache" },
+    { "query": "what login method do users have", "expect": "auth" },
+    { "query": "message broker for async work", "expect": "queue" },
+    { "query": "tracing and logging format", "expect": "logs" },
+    { "query": "when can we ship a release", "expect": "deploy" }
+  ],
+  "contradiction": [
+    { "kind": "note", "topic": "api versioning", "title": "Version the API in the URL path (/v1/...)", "body": "Simple to route and cache.", "sources": ["README.md"] },
+    { "kind": "note", "topic": "api versioning", "title": "Version the API with an Accept header, never in the path", "body": "Keeps URLs stable.", "sources": ["notes.json"] }
+  ]
+}

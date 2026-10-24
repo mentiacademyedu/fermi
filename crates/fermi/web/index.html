@@ -476,6 +476,13 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* code intelligence */
 .cx-wrap { display: flex; height: 100%; min-height: 0; }
+.mm-badges { display: inline-flex; gap: 0; margin-right: 2px; }
+.cx-hit .mm-t { font: 500 13px/1.4 var(--sans); white-space: normal; }
+.cx-kind.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); }
+.mm-h { font-family: var(--sans) !important; word-break: normal !important; }
+.mm-ver { margin: 4px 0; font-size: 13px; }
+.mm-ver summary { cursor: pointer; color: var(--muted); }
+.mm-acts { margin-top: 22px; display: flex; gap: 8px; }
 .cx-side { width: 330px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
 .cx-side .top { padding: 12px; display: flex; flex-direction: column; gap: 8px; border-bottom: 1px solid var(--line); }
 .cx-side .stats { font-size: 12px; color: var(--faint); line-height: 1.5; white-space: pre-line; }
@@ -760,6 +767,7 @@ select[aria-expanded=true] { border-color: var(--accent); }
     <button class="side-link" id="open-import" style="flex:none" title="Bring in conversations from Claude Code, Codex and the Gemini CLI"><span data-i="download"></span>Import sessions</button>
     <button class="side-link" id="open-skills" style="flex:none" title="Skills and subagents of your accounts: copy, import and export them"><span data-i="spark"></span>Skills &amp; agents</button>
     <button class="side-link" id="open-code" style="flex:none" title="Symbols, callers, tests and change impact for the current workspace"><span data-i="graph"></span>Code map</button>
+    <button class="side-link" id="open-memory" style="flex:none" title="Decisions and notes kept for each project across conversations"><span data-i="bookmark"></span>Memory</button>
     <button class="side-link" id="open-teams" style="flex:none" title="A team of agents with roles, each in its own git worktree, merged when you approve"><span data-i="users"></span>Teams</button>
     <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder (opens a folder picker)" data-i="folderPlus"></button></div>
     <nav class="ws-list" id="ws-list"></nav>
@@ -897,6 +905,24 @@ select[aria-expanded=true] { border-color: var(--accent); }
           <div class="cx-results" id="cx-results"></div>
         </aside>
         <div class="cx-main" id="cx-main"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-memory" hidden>
+      <div class="cx-wrap">
+        <aside class="cx-side">
+          <div class="top">
+            <label class="chip bold" title="Repository"><span data-i="folder"></span><select id="mm-ws"></select></label>
+            <label class="search"><span data-i="search"></span><input id="mm-q" placeholder="Search decisions and notes" autocomplete="off" spellcheck="false"></label>
+            <div class="acts">
+              <button class="small primary" id="mm-new">New record</button>
+              <button class="small ghost" id="mm-ingest" title="Record NOTE:, DECISION: and MEMORY: comments from the project's files (marked untrusted)">Import comments</button>
+            </div>
+            <div class="stats" id="mm-stats"></div>
+          </div>
+          <div class="cx-results" id="mm-list"></div>
+        </aside>
+        <div class="cx-main" id="mm-main"></div>
       </div>
     </section>
 
@@ -1129,6 +1155,7 @@ const I = {
   folderPlus: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/>',
+  bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
   shieldCheck: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3"/>',
@@ -1341,7 +1368,7 @@ function renderTabs() {
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
-    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "teams" ? "users" : f.kind === "code" ? "graph" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
+    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "teams" ? "users" : f.kind === "code" ? "graph" : f.kind === "memory" ? "bookmark" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
     mk(f.id, f.name, ic, true, f.dirty);
   }
   const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
@@ -1354,7 +1381,7 @@ function renderTabs() {
 function activate(id) {
   S.active = id;
   const tab = S.tabs.find((t) => t.id === id);
-  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills", isTeams = id === "teams", isCode = id === "code";
+  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills", isTeams = id === "teams", isCode = id === "code", isMemory = id === "memory";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
   $("#view-term").hidden = !isTerm;
@@ -1365,7 +1392,8 @@ function activate(id) {
   $("#view-skills").hidden = !isSkills;
   $("#view-teams").hidden = !isTeams;
   $("#view-code").hidden = !isCode;
-  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills || isTeams || isCode;
+  $("#view-memory").hidden = !isMemory;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills || isTeams || isCode || isMemory;
   if (isTerm) showTerm(tab);
   else if (isTrend) loadTrending();
   else if (isPreview) showPreview();
@@ -1374,6 +1402,7 @@ function activate(id) {
   else if (isSkills) loadSkills();
   else if (isTeams) loadTeams();
   else if (isCode) loadCode();
+  else if (isMemory) loadMemory();
   else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
@@ -3190,6 +3219,148 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "Home") gotoSlide(tab, 0, true);
   else if (e.key === "End") gotoSlide(tab, tab.deck.count() - 1, true);
 });
+
+// ── project memory ──────────────────────────────────────────────────────────
+S.mm = { pick: null, records: [], hits: null, sel: null };
+const mmRoot = () => S.mm.pick || currentWs()?.path || workspaces()[0]?.path;
+function openMemory() {
+  if (!S.tabs.some((t) => t.id === "memory")) S.tabs.unshift({ id: "memory", name: "Memory", kind: "memory" });
+  activate("memory");
+}
+async function loadMemory() {
+  const root = mmRoot();
+  fillSelect($("#mm-ws"), workspaces().map((w) => [w.path, w.name]));
+  if (root) $("#mm-ws").value = root;
+  if (!root) { $("#mm-stats").textContent = "Pick a workspace first."; return; }
+  try {
+    const r = await api(`/api/memory?${q({ root })}`);
+    S.mm.records = r.records || [];
+    const priv = S.mm.records.filter((x) => x.audience === "private").length, stale = S.mm.records.filter((x) => x.stale?.length).length;
+    $("#mm-stats").textContent = `${S.mm.records.length} record${S.mm.records.length === 1 ? "" : "s"}${priv ? ` · ${priv} private` : ""}${stale ? ` · ${stale} with stale sources` : ""}\nAgents get the most relevant ones with each new task.`;
+  } catch (e) { $("#mm-stats").textContent = e.message; S.mm.records = []; }
+  renderMemoryList();
+  if (S.mm.sel) mmShow(S.mm.sel); else if (!$("#mm-main").childElementCount) mmIntro();
+}
+const MM_PROV = { user: "you", agent: "an agent", source: "file contents (untrusted)" };
+function mmBadges(r) {
+  const b = el("span", "mm-badges");
+  b.append(el("span", "cx-kind", r.kind));
+  if (r.version > 1) b.append(el("span", "cx-kind", `v${r.version}`));
+  if (r.provenance === "source") b.append(el("span", "cx-kind warn", "untrusted"));
+  if (r.audience === "private") b.append(el("span", "cx-kind", "private"));
+  if (r.stale?.length) b.append(el("span", "cx-kind warn", "stale"));
+  return b;
+}
+function renderMemoryList() {
+  const list = $("#mm-list"); list.replaceChildren();
+  const rows = S.mm.hits ? S.mm.hits : S.mm.records;
+  if (!rows.length) { list.append(el("div", "faint", S.mm.hits ? "Nothing matches." : "No records yet.")); return; }
+  for (const r of rows) {
+    const b = el("button", "cx-hit" + (S.mm.sel === r.id ? " on" : ""));
+    const n = el("div", "n mm-t"); n.append(mmBadges(r), el("span", null, r.title));
+    b.append(n, el("div", "w", `${r.topic} · ${r.author}${r.score != null ? ` · score ${r.score}` : ""}`));
+    b.onclick = () => mmShow(r.id);
+    list.append(b);
+  }
+}
+function mmIntro() {
+  const m = $("#mm-main"); m.replaceChildren();
+  m.append(el("h2", null, "Project memory"), el("p", "cx-doc",
+    "Decisions and notes for this repository that outlive any one conversation. New tasks get the most relevant ones, with who recorded them and the files they rest on; agents can search and add records with fermi's memory tools. Private records are for you only. Every version is kept, and a record whose source files changed or disappeared is marked stale."));
+}
+async function mmShow(id) {
+  S.mm.sel = id; renderMemoryList();
+  const m = $("#mm-main"); m.replaceChildren(el("div", "faint", "Loading…"));
+  let r;
+  try { r = await api(`/api/memory/${encodeURIComponent(id)}?${q({ root: mmRoot() })}`); } catch (e) { m.replaceChildren(el("div", "tm-err", e.message)); return; }
+  m.replaceChildren();
+  const h = el("h2", "mm-h"); h.append(r.title); m.append(h);
+  const meta = el("div", "cx-loc"); meta.append(mmBadges(r), ` ${r.topic} · version ${r.version} · recorded by ${r.author} (${MM_PROV[r.provenance] || r.provenance}) · ${new Date(r.ts * 1000).toLocaleString()}`);
+  m.append(meta);
+  if (r.stale?.length) m.append(el("div", "tm-err", `Possibly out of date: ${r.stale.join("; ")}`));
+  if (r.provenance === "source") m.append(el("div", "faint", "Taken from a comment in the project's files. Agents see it as untrusted information, never as instructions."));
+  if (r.body) { const d = el("div", "cx-doc"); d.append(renderMarkdown(r.body)); m.append(d); }
+  if (r.change) m.append(el("div", "faint", `Why it changed: ${r.change}`));
+  if (r.sources?.length) {
+    const sec = el("div", "cx-sec"); sec.append(el("h3", null, "Sources"));
+    for (const src of r.sources) {
+      const a = el("a", "cx-link", `${src.path}${src.line ? ":" + src.line : ""}`); a.onclick = () => openFile(`${mmRoot().replace(/[\\/]+$/, "")}/${src.path}`);
+      const row = el("div"); row.append(a, el("span", "faint", src.revision ? `  at ${src.revision.slice(0, 10)}` : "")); sec.append(row);
+    }
+    m.append(sec);
+  }
+  if (r.history?.length) {
+    const sec = el("div", "cx-sec"); sec.append(el("h3", null, "Earlier versions"));
+    for (const v of [...r.history].reverse()) {
+      const d = el("details", "mm-ver"); d.append(el("summary", null, `v${v.version} · ${v.title} · ${v.author} · ${new Date(v.ts * 1000).toLocaleString()}`));
+      if (v.body) d.append(el("div", "cx-doc", v.body));
+      sec.append(d);
+    }
+    m.append(sec);
+  }
+  try {
+    const t = await api(`/api/memory?${q({ root: mmRoot(), topic: r.topic })}`);
+    if (t.conflict) {
+      const sec = el("div", "cx-sec"); sec.append(el("h3", null, "Other records on this topic"));
+      sec.append(el("div", "faint", "They may disagree. fermi keeps each with its source and doesn't merge them."));
+      for (const o of t.records.filter((x) => x.id !== r.id)) { const a = el("a", "cx-link", `${o.title} (${o.author})`); a.onclick = () => mmShow(o.id); const row = el("div"); row.append(a); sec.append(row); }
+      m.append(sec);
+    }
+  } catch (_) {}
+  const acts = el("div", "acts mm-acts");
+  const rev = el("button", "small", "New version"); rev.onclick = () => mmForm(r);
+  const ret = el("button", "small ghost danger", "Retire"); ret.onclick = async () => {
+    if (!confirm("Stop using this record? It stays in the history.")) return;
+    try { await api(`/api/memory/${encodeURIComponent(r.id)}/retire`, { root: mmRoot() }); S.mm.sel = null; mmIntro(); loadMemory(); } catch (e) { toast(e.message, true); }
+  };
+  acts.append(rev, ret); m.append(acts);
+}
+function mmForm(cur) {
+  const m = $("#mm-main"); m.replaceChildren(el("h2", null, cur ? `New version of ${cur.id}` : "New record"));
+  const f = el("form", "tm-form");
+  const field = (label, node) => { const l = el("label", "f", label); l.append(node); f.append(l); return node; };
+  const kind = el("select"); for (const k of ["decision", "note", "fact"]) kind.append(opt(k, k[0].toUpperCase() + k.slice(1))); kind.value = cur?.kind || "decision";
+  const title = el("input"); title.type = "text"; title.value = cur?.title || ""; title.placeholder = "The decision in one line";
+  const topic = el("input"); topic.type = "text"; topic.value = cur?.topic || ""; topic.placeholder = "storage, auth, releases…";
+  const body = el("textarea"); body.rows = 6; body.value = cur?.body || ""; body.placeholder = "Why, what else was considered, details";
+  const sources = el("input"); sources.type = "text"; sources.placeholder = "Files it rests on: src/db.rs:12, docs/adr-3.md";
+  const change = el("input"); change.type = "text"; change.placeholder = "What changed and why";
+  const priv = el("select"); priv.append(opt("agents", "Agents may use it"), opt("private", "Private: only for me"));
+  if (!cur) { field("Kind", kind); field("Title", title); field("Topic", topic); }
+  else field("Title", title);
+  field("Details", body);
+  if (cur) field("Reason for the change", change); else { field("Sources", sources); field("Who sees it", priv); }
+  const acts = el("div", "actions"); const save = el("button", "primary", "Save"); const cancel = el("button", "ghost", "Cancel"); cancel.type = "button";
+  cancel.onclick = () => (cur ? mmShow(cur.id) : mmIntro());
+  acts.append(cancel, save); f.append(acts);
+  f.onsubmit = async (e) => {
+    e.preventDefault(); save.disabled = true;
+    try {
+      const root = mmRoot();
+      const r = cur
+        ? await api(`/api/memory/${encodeURIComponent(cur.id)}/revise`, { root, title: title.value, body: body.value, change: change.value })
+        : await api("/api/memory", { root, record: { kind: kind.value, title: title.value, topic: topic.value, body: body.value, audience: priv.value,
+            sources: sources.value.split(",").map((x) => x.trim()).filter(Boolean) } });
+      S.mm.sel = r.id; await loadMemory();
+    } catch (err) { toast(err.message, true); save.disabled = false; }
+  };
+  m.append(f); title.focus();
+}
+$("#open-memory").onclick = () => openMemory();
+$("#mm-ws").onchange = () => { S.mm.pick = $("#mm-ws").value; S.mm.sel = null; S.mm.hits = null; $("#mm-q").value = ""; mmIntro(); loadMemory(); };
+$("#mm-new").onclick = () => mmForm(null);
+$("#mm-ingest").onclick = async () => {
+  try { const r = await api("/api/memory/ingest", { root: mmRoot() }); toast(`${r.added} comment${r.added === 1 ? "" : "s"} recorded`); loadMemory(); } catch (e) { toast(e.message, true); }
+};
+let mmTimer = null;
+$("#mm-q").oninput = () => {
+  clearTimeout(mmTimer);
+  mmTimer = setTimeout(async () => {
+    const query = $("#mm-q").value.trim();
+    if (!query) { S.mm.hits = null; renderMemoryList(); return; }
+    try { const r = await api(`/api/memory?${q({ root: mmRoot(), q: query })}`); S.mm.hits = r.hits; renderMemoryList(); } catch (e) { toast(e.message, true); }
+  }, 200);
+};
 
 // ── code intelligence ───────────────────────────────────────────────────────
 S.cx = { root: null, stats: null, results: [], view: null, pick: null };

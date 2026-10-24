@@ -184,6 +184,10 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/fs/search", get(fs_search))
         .route("/api/code/{query}", get(code_query))
         .route("/api/checks", get(checks_list).post(checks_run))
+        .route("/api/memory", get(memory_list).post(memory_record))
+        .route("/api/memory/ingest", post(memory_ingest))
+        .route("/api/memory/{id}", get(memory_get))
+        .route("/api/memory/{id}/{action}", post(memory_action))
         .route("/api/teams", get(teams_list).post(team_create))
         .route("/api/teams/{id}", get(team_get))
         .route("/api/teams/{id}/diff", get(team_diff))
@@ -779,6 +783,114 @@ struct CodeQuery {
 }
 
 /// Index queries for a workspace: stats, search, symbol, file, impact, deps.
+// ── project memory ──────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct MemoryQuery {
+    root: String,
+    #[serde(default)]
+    q: Option<String>,
+    #[serde(default)]
+    topic: Option<String>,
+}
+
+fn memory_for(s: &Srv, root: &str) -> Result<fermi_core::memory::Memory, Box<Response>> {
+    let dir = files::check(&s.workspaces(), root).map_err(|e| Box::new(fs_err(e)))?;
+    fermi_core::memory::Memory::open(&s.hub.engine().home, &dir).map_err(|e| Box::new(err(StatusCode::BAD_REQUEST, format!("{e:#}"))))
+}
+
+/// The project's records (the user sees private ones too), a search or a topic.
+async fn memory_list(State(s): S, Query(q): Query<MemoryQuery>) -> Response {
+    use fermi_core::memory::{Caller, RETRIEVAL_VERSION};
+    let mem = match memory_for(&s, &q.root) {
+        Ok(m) => m,
+        Err(r) => return *r,
+    };
+    if let Some(t) = q.topic.filter(|t| !t.trim().is_empty()) {
+        return Json(mem.topic(Caller::User, &t)).into_response();
+    }
+    match q.q.filter(|x| !x.trim().is_empty()) {
+        Some(query) => {
+            Json(json!({ "query": query, "retrieval": RETRIEVAL_VERSION, "hits": mem.search(Caller::User, &query, 20) })).into_response()
+        }
+        None => Json(json!({ "project": mem.key, "root": mem.root, "records": mem.list(Caller::User) })).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct MemoryNew {
+    root: String,
+    record: fermi_core::memory::NewRecord,
+}
+
+async fn memory_record(State(s): S, Json(b): Json<MemoryNew>) -> Response {
+    let mem = match memory_for(&s, &b.root) {
+        Ok(m) => m,
+        Err(r) => return *r,
+    };
+    match mem.record(b.record, "user", fermi_core::memory::Provenance::User) {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct MemoryRoot {
+    root: String,
+}
+
+async fn memory_get(State(s): S, Path(id): Path<String>, Query(q): Query<MemoryRoot>) -> Response {
+    let mem = match memory_for(&s, &q.root) {
+        Ok(m) => m,
+        Err(r) => return *r,
+    };
+    match mem.get(fermi_core::memory::Caller::User, &id) {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => err(StatusCode::NOT_FOUND, format!("{e:#}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct MemoryEdit {
+    root: String,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    change: String,
+}
+
+async fn memory_action(State(s): S, Path((id, action)): Path<(String, String)>, Json(b): Json<MemoryEdit>) -> Response {
+    use fermi_core::memory::Caller;
+    let mem = match memory_for(&s, &b.root) {
+        Ok(m) => m,
+        Err(r) => return *r,
+    };
+    let res = match action.as_str() {
+        "revise" => mem.revise(Caller::User, &id, b.title, b.body, &b.change, "user").map(|v| json!(v)),
+        "retire" => mem.retire(Caller::User, &id, "user").map(|_| json!({ "ok": true })),
+        other => Err(anyhow::anyhow!("unknown action {other}")),
+    };
+    match res {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+async fn memory_ingest(State(s): S, Json(b): Json<MemoryRoot>) -> Response {
+    let mem = match memory_for(&s, &b.root) {
+        Ok(m) => m,
+        Err(r) => return *r,
+    };
+    let deny = s.hub.engine().cfg.security.deny_read.clone();
+    match tokio::task::spawn_blocking(move || mem.ingest_comments(&deny)).await {
+        Ok(Ok(n)) => Json(json!({ "added": n })).into_response(),
+        Ok(Err(e)) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+        Err(e) => err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+    }
+}
+
 #[derive(Deserialize)]
 struct ChecksQuery {
     root: String,

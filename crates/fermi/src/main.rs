@@ -87,6 +87,9 @@ enum Cmd {
         #[arg(short = 'C', long)]
         dir: Option<PathBuf>,
     },
+    /// This project's memory: decisions and notes kept across sessions
+    #[command(subcommand)]
+    Memory(MemoryCmd),
     /// Budgets: spent, reserved by running calls, and what's left
     Budget {
         /// The full state as JSON
@@ -144,6 +147,46 @@ enum CodeCmd {
     },
     /// External dependencies and where they're used
     Deps,
+}
+
+#[derive(Subcommand)]
+enum MemoryCmd {
+    /// Current records (private ones included)
+    List,
+    /// Find records by wording
+    Search { query: Vec<String> },
+    /// One record with its versions and stale sources
+    Show { id: String },
+    /// Everything on a topic, with disagreements shown side by side
+    Topic { topic: Vec<String> },
+    /// Record a decision or note
+    Add {
+        title: String,
+        #[arg(long, default_value = "")]
+        body: String,
+        /// decision | note | fact
+        #[arg(long, default_value = "decision")]
+        kind: String,
+        #[arg(long, default_value = "")]
+        topic: String,
+        /// Files it rests on: path or path:line (repeat for several)
+        #[arg(long)]
+        source: Vec<String>,
+        /// Keep it from agents
+        #[arg(long)]
+        private: bool,
+    },
+    /// A new version of a record (the old one stays in its history)
+    Revise {
+        id: String,
+        body: String,
+        #[arg(long, default_value = "")]
+        change: String,
+    },
+    /// Stop using a record (it stays in the log)
+    Retire { id: String },
+    /// Record NOTE:/DECISION:/MEMORY: comments from the project's files (untrusted)
+    Ingest,
 }
 
 #[derive(Subcommand)]
@@ -215,6 +258,7 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Code(cmd) => code_cmd(cmd)?,
         Cmd::Verify { check, json, dir } => return verify_cmd(check, json, dir).await,
         Cmd::Budget { json } => budget_cmd(json)?,
+        Cmd::Memory(cmd) => memory_cmd(cmd)?,
         Cmd::Usage { by, days, json } => usage_cmd(&by, days, json)?,
         Cmd::Tui { profile } => {
             if !fermi_core::Config::path().exists() {
@@ -250,6 +294,57 @@ fn task_from(t: Target) -> Result<Task> {
     task.effort = t.effort;
     task.verify = t.verify.map(|max_repairs| fermi_core::verify::VerifyOpts { max_repairs, checks: vec![] });
     Ok(task)
+}
+
+fn memory_cmd(cmd: MemoryCmd) -> Result<()> {
+    use fermi_core::memory::{Audience, Caller, Kind, Memory, NewRecord, Provenance};
+    let home = fermi_core::Config::home();
+    let mem = Memory::open(&home, &std::env::current_dir()?)?;
+    let pretty = |v: &serde_json::Value| serde_json::to_string_pretty(v).unwrap_or_default();
+    let line = |v: &fermi_core::memory::View| {
+        let r = &v.record;
+        format!(
+            "{}  v{}  {:?}  [{}]  {}{}{}",
+            r.id,
+            r.version,
+            r.kind,
+            r.topic,
+            r.title,
+            if r.audience == Audience::Private { "  (private)" } else { "" },
+            if v.stale.is_empty() { String::new() } else { format!("  ⚠ {}", v.stale.join("; ")) }
+        )
+    };
+    match cmd {
+        MemoryCmd::List => {
+            for v in mem.list(Caller::User) {
+                println!("{}", line(&v));
+            }
+        }
+        MemoryCmd::Search { query } => {
+            for h in mem.search(Caller::User, &query.join(" "), 10) {
+                println!("{:>6.2}  {}", h.score, line(&h.view));
+            }
+        }
+        MemoryCmd::Show { id } => println!("{}", pretty(&serde_json::to_value(mem.get(Caller::User, &id)?)?)),
+        MemoryCmd::Topic { topic } => println!("{}", mem.topic(Caller::User, &topic.join(" "))["summary"].as_str().unwrap_or("")),
+        MemoryCmd::Add { title, body, kind, topic, source, private } => {
+            let kind = match kind.as_str() {
+                "note" => Kind::Note,
+                "fact" => Kind::Fact,
+                _ => Kind::Decision,
+            };
+            let audience = if private { Audience::Private } else { Audience::Agents };
+            let v = mem.record(NewRecord { kind, topic, title, body, audience, sources: source }, "user", Provenance::User)?;
+            println!("{}", line(&v));
+        }
+        MemoryCmd::Revise { id, body, change } => println!("{}", line(&mem.revise(Caller::User, &id, None, body, &change, "user")?)),
+        MemoryCmd::Retire { id } => mem.retire(Caller::User, &id, "user")?,
+        MemoryCmd::Ingest => {
+            let deny = fermi_core::Config::load().map(|c| c.security.deny_read).unwrap_or_default();
+            println!("{} comment(s) recorded", mem.ingest_comments(&deny)?);
+        }
+    }
+    Ok(())
 }
 
 fn budget_cmd(as_json: bool) -> Result<()> {

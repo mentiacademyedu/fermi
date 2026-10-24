@@ -41,6 +41,11 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         args.push("--allowedTools".into());
         args.extend(allowed);
     }
+    let denied = crate::policy::claude_read_rules(&e.cfg.security.deny_read);
+    if !denied.is_empty() {
+        args.push("--disallowedTools".into());
+        args.extend(denied);
+    }
     args.extend(ctx.profile.claude_args.iter().cloned());
 
     let mut envs = vec![("FERMI_DEPTH".to_string(), (e.depth + 1).to_string())];

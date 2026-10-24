@@ -631,14 +631,37 @@ impl Hub {
         self.handles.lock().unwrap().contains_key(&id)
     }
 
-    pub fn submit(self: &Arc<Self>, task: Task) -> u64 {
+    pub fn submit(self: &Arc<Self>, mut task: Task) -> u64 {
         let id = new_task_id(&self.dir);
         let rec = TaskRec::new(id, &task, &self.via);
+        let note = self.with_memory(&mut task);
         self.publish(json!({ "kind": "task_new", "task": rec.summary() }));
         self.tasks.lock().unwrap().push(rec);
+        if let Some(line) = note {
+            self.record(id, Event::Log { line });
+        }
         self.launch(id, task);
         self.save(id);
         id
+    }
+
+    /// Puts the project's most relevant memory ahead of a new task's prompt
+    /// (records for agents only, framed as information). Returns what was included.
+    fn with_memory(&self, task: &mut Task) -> Option<String> {
+        let engine = self.engine();
+        if engine.cfg.memory.auto_context == Some(false) || task.resume.is_some() {
+            return None;
+        }
+        let mem = crate::memory::Memory::existing(&engine.home, &task.cwd)?;
+        let hits = mem.search(crate::memory::Caller::Agent, &task.prompt, engine.cfg.memory.brief_size.unwrap_or(5));
+        let brief = mem.brief(&task.prompt, engine.cfg.memory.brief_size.unwrap_or(5))?;
+        task.context = Some(match task.context.take() {
+            Some(c) => format!("{brief}\n{c}"),
+            None => brief,
+        });
+        let ids: Vec<String> =
+            hits.iter().map(|h| format!("{} ({})", h.view.record.id, h.view.record.title.chars().take(60).collect::<String>())).collect();
+        Some(format!("project memory given to the agent: {}", ids.join(", ")))
     }
 
     /// Continues a finished conversation. On the model it ran on (or another

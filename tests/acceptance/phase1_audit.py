@@ -85,8 +85,15 @@ a("CI-06", "missing", f"{core}/code.rs", "tree-sitter parses error-tolerantly; s
 a("CI-07", "implemented", f"{core}/code.rs (impact)", "Transitive callers and importers with visited sets (cycles terminate), tests to run, and a declared scope of what isn't covered.", "code::tests::rust_project_graph")
 a("CI-08", "implemented", f"{core}/code.rs (find, resolution)", "Duplicate names resolve per importing file; lookup by Type::name, module path (util::text::helper, added 2026-10-23) or path:line.")
 # System 4
-for i in range(1, 9):
-    a(f"PM-0{i}", "missing", "", "fermi has no project memory store (only conversation history in ~/.fermi/history).")
+m = f"{core}/memory.rs"
+a("PM-01", "implemented", m, "Records live in a per-project append-only log with stable ids, authors and sources; they survive restarts and a write cut short by a crash. Added 2026-10-24.")
+a("PM-02", "implemented", f"{m}, hub.rs (with_memory), mcp.rs", "New tasks get the most relevant records for agents, with author and sources; private records never reach agents. Agents also get memory_search/get/record tools. Added 2026-10-24.")
+a("PM-03", "implemented", m, "Revisions add versions under the same id with the reason; current retrieval uses the latest and history keeps every version. Added 2026-10-24.")
+a("PM-04", "implemented", m, "Sources keep the git revision and a content hash; a deleted or changed source marks the record stale wherever it's shown, including agent context. Added 2026-10-24.")
+a("PM-05", "implemented", m, "Deterministic retrieval (fermi-lexical-v1): stemming, a pinned synonym table and BM25. It finds paraphrases that share vocabulary or listed synonyms; it is not an embedding model. Added 2026-10-24.")
+a("PM-06", "implemented", m, "Topic summaries list every current record with its author and source and flag a possible conflict; nothing is merged. Added 2026-10-24.")
+a("PM-07", "implemented", f"{m}, policy.rs, providers/claude_cli.rs", "Comments become provenance=source records framed as untrusted data in agent context; deny_read paths go to Claude as --disallowedTools Read rules. Enforcement inside the CLI is Claude's and was emulated in the test. Added 2026-10-24.")
+a("PM-08", "implemented", f"{m}, crates/fermi/src/server.rs", "One store per project; the API only opens the dashboard's workspaces; a record of another project and a missing id get the same answer. Added 2026-10-24.")
 # System 5
 a("VE-01", "implemented", f"{core}/verify.rs (run, parse_output)", "fermi runs the project's checks (.fermi/checks.toml or detected from manifests) and parses diagnostics from cargo JSON and common text formats (rustc, gcc, go, tsc, eslint, ruff, Python) with file, line and column. Added 2026-10-23.")
 a("VE-02", "implemented", f"{core}/verify.rs, mcp.rs (run_checks)", "Agents call the run_checks tool and get each failing test with its output and the exit code; verified tasks record a Verify event. Added 2026-10-23.")
@@ -127,7 +134,7 @@ a("CO-06", "implemented", f"{core}/billing.rs (price_at)", "Each call records th
 a("CO-07", "implemented", f"{core}/billing.rs (estimate), engine.rs", "Documented estimator (4 bytes per token); warnings from a configurable share of the context window; over-window requests aren't sent. Added 2026-10-24.")
 a("CO-08", "implemented", f"{core}/billing.rs (report), state.rs", "Usage records carry task, delegating task, team run, agent and attempt; reports group by any of them and reconcile, showing failed attempts and unallocated calls. Added 2026-10-24.")
 # System 10
-a("SE-01", "missing", "", "fermi enforces no file boundary; it relies on each CLI (Codex sandbox, Claude permission modes).")
+a("SE-01", "partial", f"{core}/policy.rs", "deny_read globs reach Claude agents as --disallowedTools Read rules and fermi's own tools refuse them; no OS-level boundary, and Codex/Gemini agents aren't covered.")
 a("SE-02", "missing", "", "Child processes inherit the full environment.")
 a("SE-03", "partial", f"{core}/providers/claude_cli.rs (permission_denials), hub.rs (allow)", "Claude in acceptEdits/default modes blocks commands that need approval; fermi surfaces them and continues only after the user allows them.")
 a("SE-04", "missing", "", "No network policy.")

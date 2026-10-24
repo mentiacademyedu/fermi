@@ -296,6 +296,44 @@ routing = "economy"    # auto | economy | quality
   `/api/usage/report`) totals calls, tokens and cost, with failed attempts and
   unattributed calls shown.
 
+## Project memory
+
+Decisions and notes that outlive a conversation, kept per repository (the
+dashboard's *Memory* page, or `fermi memory`):
+
+- **Records**: a decision, note or fact with a topic, its author and the files
+  it rests on (with the commit and a hash of each). Every new version keeps the
+  old ones; nothing is overwritten. Retiring a record keeps it in the history.
+- **For agents**: new tasks get the most relevant records ahead of the prompt,
+  each with its author and sources, framed as information and never as
+  instructions. Agents can also search, read and record (`memory_search`,
+  `memory_get`, `memory_record`). *Private* records are only for you.
+- **Stale sources**: a record whose source file changed or disappeared is
+  marked stale, for you and for agents.
+- **Disagreements**: several records on one topic are shown side by side as a
+  possible conflict, not merged.
+- **Comments**: *Import comments* (`fermi memory ingest`) records `NOTE:`,
+  `DECISION:` and `MEMORY:` comments as untrusted records.
+- **Search** is deterministic: stemming, a pinned table of related terms
+  (database ~ storage ~ postgres…) and BM25 ranking. It matches paraphrases
+  that share words or listed synonyms; it isn't an embedding model.
+
+Memory lives in `~/.fermi/memory/<project>/log.jsonl`, one folder per
+repository; a project can't read another's.
+
+### Files agents may not read
+
+```toml
+[security]
+deny_read = ["~/.ssh/**", "**/.env", "C:/work/secrets/**"]
+```
+
+Claude agents get these as `--disallowedTools "Read(//…)"` rules, which Claude
+Code enforces for its file tools and the file commands it recognizes, in every
+permission mode; programs an agent runs aren't covered (that needs an OS
+sandbox). fermi's own tools refuse the paths too. Codex and Gemini have no
+equivalent switch.
+
 ## Skills & agents
 
 Every fermi account keeps its own config folder, so skills you installed in

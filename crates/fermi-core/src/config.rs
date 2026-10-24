@@ -199,6 +199,29 @@ pub struct Config {
     pub budgets: Vec<crate::billing::BudgetCfg>,
     #[serde(default)]
     pub billing: BillingCfg,
+    #[serde(default)]
+    pub security: SecurityCfg,
+    #[serde(default)]
+    pub memory: MemoryCfg,
+}
+
+/// What agents may not touch (see `policy`).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct SecurityCfg {
+    /// Globs agents must not read: absolute, `~/…` or `**/…`.
+    #[serde(default)]
+    pub deny_read: Vec<String>,
+}
+
+/// Project memory (see `memory`).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct MemoryCfg {
+    /// Give new tasks the project's most relevant memory (default on).
+    #[serde(default)]
+    pub auto_context: Option<bool>,
+    /// How many records at most (default 5).
+    #[serde(default)]
+    pub brief_size: Option<usize>,
 }
 
 impl Config {
@@ -223,6 +246,7 @@ impl Config {
         let cfg: Config = toml::from_str(text)?;
         cfg.validate()?;
         crate::billing::validate(&cfg)?;
+        crate::policy::validate(&cfg.security.deny_read)?;
         Ok(cfg)
     }
 
