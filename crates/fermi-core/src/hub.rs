@@ -436,6 +436,10 @@ impl Recorder {
     }
 
     fn save(&mut self) {
+        // Resumed elsewhere since: leave the newer attempt alone.
+        if read_task(&self.dir, self.rec.id).is_some_and(|disk| disk.attempt > self.rec.attempt) {
+            return;
+        }
         write_rec(&self.dir, &mut self.rec);
         self.last_save = Instant::now();
     }
@@ -1010,6 +1014,11 @@ impl Hub {
 
     fn save(&self, id: u64) {
         let Some(mut t) = self.get(id) else { return };
+        // Another window may have resumed this task since (a later attempt):
+        // a late save from here must not put the older run back.
+        if read_task(&self.dir, id).is_some_and(|disk| disk.attempt > t.attempt) {
+            return;
+        }
         if let Some(mtime) = write_rec(&self.dir, &mut t) {
             self.scanner.lock().unwrap().note(id, mtime);
         }
@@ -1074,6 +1083,25 @@ mod tests {
         // Deleting a file is reported.
         std::fs::remove_file(dir.join(format!("{}.json", abandoned.id))).unwrap();
         assert_eq!(scanner.scan(&dir).1, vec![abandoned.id]);
+        let _ = std::fs::remove_dir_all(&home);
+    }
+
+    #[test]
+    fn late_save_keeps_a_resumed_attempt() {
+        let home = tmp_dir("late");
+        let engine = Engine::new(Default::default(), home.clone(), 0);
+        let rec = Recorder::start(&engine, &mut Task::new("x", &home), "tui");
+        let id = rec.id();
+        // Another window resumes the task and finishes the second attempt…
+        let dir = history_dir(&home);
+        let mut newer = read_task(&dir, id).unwrap();
+        newer.reopen(2, "continue", now_ms());
+        newer.apply(&Event::Done { ok: true, summary: "done".into() });
+        write_rec(&dir, &mut newer);
+        // …then this window closes, cancelling and saving its stale copy.
+        drop(rec);
+        let disk = read_task(&dir, id).unwrap();
+        assert_eq!((disk.attempt, disk.status), (2, TaskStatus::Done), "the resumed attempt survives");
         let _ = std::fs::remove_dir_all(&home);
     }
 

@@ -107,6 +107,9 @@ enum Cmd {
     /// Plugins: install, enable, disable, run their commands, add MCP servers
     #[command(subcommand)]
     Plugin(PluginCmd),
+    /// Evaluations: score a configuration on a dataset of tasks, compare runs, gate improvements
+    #[command(subcommand)]
+    Eval(EvalCmd),
     /// Budgets: spent, reserved by running calls, and what's left
     Budget {
         /// The full state as JSON
@@ -164,6 +167,90 @@ enum CodeCmd {
     },
     /// External dependencies and where they're used
     Deps,
+}
+
+/// How to run tasks, for an evaluation.
+#[derive(clap::Args)]
+struct EvalCfgArgs {
+    /// A name for this configuration
+    #[arg(long)]
+    name: String,
+    #[arg(long)]
+    profile: Option<String>,
+    #[arg(long)]
+    model: Option<String>,
+    #[arg(long)]
+    effort: Option<String>,
+    #[arg(long)]
+    permission: Option<String>,
+    /// Run the project's checks after the agent and send failures back
+    #[arg(long)]
+    verify: bool,
+    #[arg(long)]
+    max_repairs: Option<u32>,
+}
+
+impl EvalCfgArgs {
+    fn config(self) -> fermi_core::eval::EvalConfig {
+        fermi_core::eval::EvalConfig {
+            name: self.name,
+            profile: self.profile,
+            model: self.model,
+            effort: self.effort,
+            permission: self.permission,
+            verify: self.verify,
+            max_repairs: self.max_repairs,
+        }
+    }
+}
+
+#[derive(Subcommand)]
+enum EvalCmd {
+    /// Run a configuration through every task of a dataset (a folder with a dataset.toml)
+    Run {
+        dataset: PathBuf,
+        #[command(flatten)]
+        cfg: EvalCfgArgs,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Past runs, and the datasets they ran on
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// One run's report
+    Show { run: String },
+    /// Two runs of the same dataset version side by side
+    Compare {
+        a: String,
+        b: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Every version of a dataset, with its runs
+    History { dataset: String },
+    /// Ask an agent for a configuration change, from the failures in these runs
+    Propose {
+        runs: Vec<String>,
+        #[arg(long)]
+        profile: Option<String>,
+    },
+    /// Evaluate a proposal against the active configuration on its dataset
+    Evaluate { proposal: String, dataset: PathBuf },
+    /// Make an evaluated proposal the active configuration (you approve it, by name)
+    Adopt {
+        proposal: String,
+        #[arg(long)]
+        reviewer: String,
+    },
+    /// Set the first active configuration (later changes go through proposals)
+    Activate {
+        #[command(flatten)]
+        cfg: EvalCfgArgs,
+        #[arg(long)]
+        by: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -322,6 +409,7 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Budget { json } => budget_cmd(json)?,
         Cmd::Memory(cmd) => memory_cmd(cmd)?,
         Cmd::Plugin(cmd) => plugin_cmd(cmd).await?,
+        Cmd::Eval(cmd) => eval_cmd(cmd).await?,
         Cmd::Usage { by, days, json } => usage_cmd(&by, days, json)?,
         Cmd::Tui { profile } => {
             if !fermi_core::Config::path().exists() {
@@ -405,6 +493,123 @@ fn memory_cmd(cmd: MemoryCmd) -> Result<()> {
         MemoryCmd::Ingest => {
             let deny = fermi_core::Config::load().map(|c| c.security.deny_read).unwrap_or_default();
             println!("{} comment(s) recorded", mem.ingest_comments(&deny)?);
+        }
+    }
+    Ok(())
+}
+
+fn print_report(r: &fermi_core::eval::Report) {
+    use fermi_core::billing::fmt_usd;
+    println!(
+        "run {} · {} {} ({}) · config {} ({}) · {}",
+        r.id,
+        r.dataset.name,
+        r.dataset.version,
+        &r.dataset.hash[..12],
+        r.config.name,
+        r.fingerprint,
+        r.evaluator
+    );
+    for t in &r.tasks {
+        let cost = t.cost_micros.map(fmt_usd).unwrap_or_else(|| "cost unknown".into());
+        println!("  {:<14} {:<11} {}/{}  {} ms  {cost}  {}", t.id, t.status, t.score, t.max_score, t.latency_ms, t.note);
+    }
+    let s = &r.summary;
+    let cost = s.cost_micros.map(fmt_usd).unwrap_or_else(|| "unknown".into());
+    println!("  total {}/{}, {} of {} passed, {} ms, cost {cost}", s.score, s.max_score, s.passed, s.tasks, s.latency_ms);
+    for m in &s.missing {
+        println!("  missing: {m}");
+    }
+}
+
+async fn eval_cmd(cmd: EvalCmd) -> Result<()> {
+    use fermi_core::eval::{self, Dataset};
+    let engine = Engine::load()?;
+    let home = engine.home.clone();
+    match cmd {
+        EvalCmd::Run { dataset, cfg, json } => {
+            let ds = Dataset::load(&dataset)?;
+            let r = eval::run(&engine, &ds, &cfg.config()).await?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&r)?);
+            } else {
+                print_report(&r);
+            }
+        }
+        EvalCmd::List { json } => {
+            let runs = eval::reports(&home);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&serde_json::json!({ "runs": runs, "datasets": eval::datasets(&home) }))?);
+                return Ok(());
+            }
+            if runs.is_empty() {
+                println!("No evaluation runs yet: `fermi eval run <dataset folder> --name <config> [--model …]`.");
+            }
+            for r in &runs {
+                println!(
+                    "{}  {} {}  {:<16} {}/{}  {} of {} passed",
+                    r.id,
+                    r.dataset.name,
+                    r.dataset.version,
+                    r.config.name,
+                    r.summary.score,
+                    r.summary.max_score,
+                    r.summary.passed,
+                    r.summary.tasks
+                );
+            }
+        }
+        EvalCmd::Show { run } => print_report(&eval::load_report(&home, &run)?),
+        EvalCmd::Compare { a, b, json } => {
+            let v = eval::compare(&eval::load_report(&home, &a)?, &eval::load_report(&home, &b)?)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&v)?);
+                return Ok(());
+            }
+            let st = |x: &serde_json::Value| x.as_str().unwrap_or_default().to_string();
+            println!(
+                "{} {} · A {} · B {}",
+                st(&v["dataset"]["name"]),
+                st(&v["dataset"]["version"]),
+                st(&v["a"]["config"]["name"]),
+                st(&v["b"]["config"]["name"])
+            );
+            for row in v["tasks"].as_array().into_iter().flatten() {
+                println!(
+                    "  {:<14} A {} {}  B {} {}  Δ {}",
+                    row["task"].as_str().unwrap_or(""),
+                    row["a"]["status"].as_str().unwrap_or(""),
+                    row["a"]["score"],
+                    row["b"]["status"].as_str().unwrap_or("-"),
+                    row["b"]["score"],
+                    row["score_delta"]
+                );
+            }
+            let cost = v["differences"]["cost_micros"].as_i64().map(fermi_core::billing::fmt_usd).unwrap_or_else(|| "unknown".into());
+            println!("  score Δ {}, latency Δ {} ms, cost Δ {cost}", v["differences"]["score"], v["differences"]["latency_ms"]);
+            for m in v["missing"].as_array().into_iter().flatten() {
+                println!("  missing: {}", m.as_str().unwrap_or(""));
+            }
+            println!("  {}", v["note"].as_str().unwrap_or(""));
+        }
+        EvalCmd::History { dataset } => println!("{}", serde_json::to_string_pretty(&eval::history(&home, &dataset))?),
+        EvalCmd::Propose { runs, profile } => {
+            let p = eval::propose(&engine, &runs, profile.as_deref()).await?;
+            println!("{}", serde_json::to_string_pretty(&p)?);
+            println!();
+            println!("Nothing changes until it's evaluated (fermi eval evaluate {} <dataset>) and you adopt it.", p.id);
+        }
+        EvalCmd::Evaluate { proposal, dataset } => {
+            let p = eval::evaluate(&engine, &proposal, &Dataset::load(&dataset)?).await?;
+            println!("{} {}", p.status, p.evaluation.unwrap_or_default());
+        }
+        EvalCmd::Adopt { proposal, reviewer } => {
+            let a = eval::adopt(&home, &proposal, &reviewer)?;
+            println!("active: {} ({}), approved by {}", a.config.name, a.fingerprint, a.approved_by);
+        }
+        EvalCmd::Activate { cfg, by } => {
+            let a = eval::init_active(&home, &cfg.config(), &by)?;
+            println!("active: {} ({})", a.config.name, a.fingerprint);
         }
     }
     Ok(())

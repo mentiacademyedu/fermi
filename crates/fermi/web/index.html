@@ -477,6 +477,14 @@ button:disabled { opacity: .45; cursor: default; }
 
 /* code intelligence */
 .cx-wrap { display: flex; height: 100%; min-height: 0; }
+.ev-row { display: flex; align-items: center; gap: 4px; padding-left: 4px; }
+.ev-row .cx-hit { flex: 1; min-width: 0; }
+.ev-scroll { overflow-x: auto; margin: 14px 0; }
+.ev-table { border-collapse: collapse; font-size: 13px; width: 100%; }
+.ev-table th, .ev-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ev-table th { color: var(--muted); font-weight: 500; font-size: 12px; }
+.ev-table td:last-child { white-space: normal; color: var(--muted); }
+#ev-main h3 { margin: 18px 0 6px; font-size: 14px; }
 .pg-cap { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 10px 0; display: grid; gap: 6px; }
 .pg-run { display: flex; gap: 8px; align-items: flex-start; }
 .pg-run textarea { flex: 1; min-width: 0; font: 12.5px var(--mono); }
@@ -792,6 +800,7 @@ select[aria-expanded=true] { border-color: var(--accent); }
     <button class="side-link" id="open-code" style="flex:none" title="Symbols, callers, tests and change impact for the current workspace"><span data-i="graph"></span>Code map</button>
     <button class="side-link" id="open-memory" style="flex:none" title="Decisions and notes kept for each project across conversations"><span data-i="bookmark"></span>Memory</button>
     <button class="side-link" id="open-plugins" style="flex:none" title="Plugins and MCP servers: tools for agents, commands for you, model adapters"><span data-i="puzzle"></span>Plugins</button>
+    <button class="side-link" id="open-evals" style="flex:none" title="Score configurations on the same tasks and compare them"><span data-i="gauge"></span>Evaluations</button>
     <button class="side-link" id="open-teams" style="flex:none" title="A team of agents with roles, each in its own git worktree, merged when you approve"><span data-i="users"></span>Teams</button>
     <div class="side-head"><span>Workspaces</span><button class="icon-btn" id="add-ws" title="Add a folder (opens a folder picker)" data-i="folderPlus"></button></div>
     <nav class="ws-list" id="ws-list"></nav>
@@ -966,6 +975,19 @@ select[aria-expanded=true] { border-color: var(--accent); }
           <div class="cx-results" id="pg-list"></div>
         </aside>
         <div class="cx-main" id="pg-main"></div>
+      </div>
+    </section>
+
+    <section class="view" id="view-evals" hidden>
+      <div class="cx-wrap">
+        <aside class="cx-side">
+          <div class="top">
+            <div class="acts"><button class="small primary" id="ev-compare" disabled>Compare the two checked runs</button></div>
+            <div class="stats" id="ev-stats"></div>
+          </div>
+          <div class="cx-results" id="ev-list"></div>
+        </aside>
+        <div class="cx-main" id="ev-main"></div>
       </div>
     </section>
 
@@ -1207,6 +1229,7 @@ const I = {
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   shield: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/>',
   bookmark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+  gauge: '<path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/><circle cx="12" cy="18" r="1.3"/>',
   puzzle: '<path d="M10 4a2 2 0 1 1 4 0v2h4v4h-2a2 2 0 1 0 0 4h2v4h-4v-2a2 2 0 1 0-4 0v2H6v-4h2a2 2 0 1 0 0-4H6V6h4z"/>',
   shieldCheck: '<path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>',
@@ -1420,7 +1443,7 @@ function renderTabs() {
   mk("chat", chatLabel.length > 40 ? chatLabel.slice(0, 40) + "…" : chatLabel, "chat", false);
   if (S.tabs.some((t) => t.id === "settings")) mk("settings", "Settings", "gear", true);
   for (const f of S.tabs.filter((t) => t.id !== "settings")) {
-    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "teams" ? "users" : f.kind === "code" ? "graph" : f.kind === "memory" ? "bookmark" : f.kind === "plugins" ? "puzzle" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
+    const ic = f.kind === "preview" ? "globe" : f.kind === "trending" ? "trend" : f.kind === "import" ? "download" : f.kind === "slides" ? "slides" : f.kind === "skills" ? "spark" : f.kind === "teams" ? "users" : f.kind === "code" ? "graph" : f.kind === "memory" ? "bookmark" : f.kind === "plugins" ? "puzzle" : f.kind === "evals" ? "gauge" : f.kind === "term" ? "terminal" : f.kind === "diff" ? "branch" : IMG.test(f.name) ? "image" : "code";
     mk(f.id, f.name, ic, true, f.dirty);
   }
   const add = el("button", "icon-btn tab-add"); add.innerHTML = svg("terminal"); add.title = "New terminal (Ctrl+`)"; add.onclick = () => newTerm();
@@ -1433,7 +1456,7 @@ function renderTabs() {
 function activate(id) {
   S.active = id;
   const tab = S.tabs.find((t) => t.id === id);
-  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills", isTeams = id === "teams", isCode = id === "code", isMemory = id === "memory", isPlugins = id === "plugins";
+  const isTerm = tab?.kind === "term", isTrend = id === "trending", isPreview = id === "preview", isImport = id === "import", isSlides = tab?.kind === "slides", isSkills = id === "skills", isTeams = id === "teams", isCode = id === "code", isMemory = id === "memory", isPlugins = id === "plugins", isEvals = id === "evals";
   $("#view-chat").hidden = id !== "chat";
   $("#view-settings").hidden = id !== "settings";
   $("#view-term").hidden = !isTerm;
@@ -1446,7 +1469,8 @@ function activate(id) {
   $("#view-code").hidden = !isCode;
   $("#view-memory").hidden = !isMemory;
   $("#view-plugins").hidden = !isPlugins;
-  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills || isTeams || isCode || isMemory || isPlugins;
+  $("#view-evals").hidden = !isEvals;
+  $("#view-file").hidden = id === "chat" || id === "settings" || isTerm || isTrend || isPreview || isImport || isSlides || isSkills || isTeams || isCode || isMemory || isPlugins || isEvals;
   if (isTerm) showTerm(tab);
   else if (isTrend) loadTrending();
   else if (isPreview) showPreview();
@@ -1457,6 +1481,7 @@ function activate(id) {
   else if (isCode) loadCode();
   else if (isMemory) loadMemory();
   else if (isPlugins) loadPlugins();
+  else if (isEvals) loadEvals();
   else if (id !== "chat" && id !== "settings") showFile(tab);
   if (id === "settings") renderSettings();
   schedule("tabs", "side");
@@ -3338,6 +3363,115 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "Home") gotoSlide(tab, 0, true);
   else if (e.key === "End") gotoSlide(tab, tab.deck.count() - 1, true);
 });
+
+// ── evaluations ─────────────────────────────────────────────────────────────
+S.ev = { data: null, sel: null, picked: [] };
+function openEvals() {
+  if (!S.tabs.some((t) => t.id === "evals")) S.tabs.unshift({ id: "evals", name: "Evaluations", kind: "evals" });
+  activate("evals");
+}
+const evCost = (m) => (m == null ? "unknown" : usdText(m));
+const evMs = (ms) => (ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
+async function loadEvals() {
+  try { S.ev.data = await api("/api/evals"); } catch (e) { $("#ev-stats").textContent = e.message; return; }
+  const d = S.ev.data, runs = [...(d.runs || [])].reverse();
+  $("#ev-stats").textContent = runs.length
+    ? `${runs.length} run${runs.length === 1 ? "" : "s"} · ${(d.datasets || []).length} dataset version${(d.datasets || []).length === 1 ? "" : "s"}${d.active ? `\nActive configuration: ${d.active.config.name} (approved by ${d.active.approved_by})` : ""}`
+    : "No runs yet. Run one with: fermi eval run <dataset folder> --name <config> --model <model>";
+  const list = $("#ev-list"); list.replaceChildren();
+  for (const p of (d.proposals || []).filter((p) => p.status !== "adopted")) {
+    const b = el("button", "cx-hit" + (S.ev.sel === p.id ? " on" : ""));
+    const n = el("div", "n mm-t"); const bd = el("span", "mm-badges");
+    bd.append(el("span", "cx-kind" + (p.status === "evaluated" ? " test" : p.status === "rejected" ? " warn" : ""), p.status));
+    n.append(bd, el("span", null, `Proposal: ${p.proposed.name}`));
+    b.append(n, el("div", "w", `${p.cites.length} failure${p.cites.length === 1 ? "" : "s"} cited · ${p.author}`));
+    b.onclick = () => evProposal(p.id);
+    list.append(b);
+  }
+  for (const r of runs) {
+    const row = el("div", "ev-row");
+    const pick = el("input"); pick.type = "checkbox"; pick.checked = S.ev.picked.includes(r.id); pick.title = "Pick for comparison";
+    pick.onchange = () => {
+      S.ev.picked = pick.checked ? [...S.ev.picked, r.id].slice(-2) : S.ev.picked.filter((x) => x !== r.id);
+      $("#ev-compare").disabled = S.ev.picked.length !== 2; loadEvals();
+    };
+    const b = el("button", "cx-hit" + (S.ev.sel === r.id ? " on" : ""));
+    const n = el("div", "n mm-t"); const bd = el("span", "mm-badges");
+    bd.append(el("span", "cx-kind", `${r.dataset.name} v${r.dataset.version}`));
+    n.append(bd, el("span", null, r.config.name));
+    b.append(n, el("div", "w", `${r.summary.score}/${r.summary.max_score} · ${r.summary.passed} of ${r.summary.tasks} passed · ${evMs(r.summary.latency_ms)} · ${evCost(r.summary.cost_micros)}`));
+    b.onclick = () => evRun(r.id);
+    row.append(pick, b); list.append(row);
+  }
+  $("#ev-compare").disabled = S.ev.picked.length !== 2;
+  if (!S.ev.sel) evIntro();
+}
+function evIntro() {
+  const m = $("#ev-main"); m.replaceChildren();
+  m.append(el("h2", null, "Evaluations"), el("p", "cx-doc",
+    "Run a configuration (model, effort, verification) through every task of a dataset and score it: each task in a fresh copy, with the tests that decide the score hidden from the candidate and the visible ones protected. A failed run, no change, or a changed protected file earns nothing. Runs of the same dataset version can be compared; five tasks are a smoke test, so the comparison describes those runs and claims no statistical significance. An agent can propose a configuration change from the failures; it becomes active only after it was evaluated without regressions and you approved it."));
+}
+function evTable(head, rows) {
+  const t = el("table", "ev-table"), tr = el("tr");
+  for (const h of head) tr.append(el("th", null, h));
+  t.append(tr);
+  for (const r of rows) { const x = el("tr"); for (const c of r) { const td = el("td"); if (c instanceof Node) td.append(c); else td.textContent = c; x.append(td); } t.append(x); }
+  const w = el("div", "ev-scroll"); w.append(t);
+  return w;
+}
+const evStatus = (s) => el("span", "cx-kind" + (s === "passed" ? " test" : s === "failed" ? "" : " warn"), s);
+async function evRun(id) {
+  S.ev.sel = id; loadEvals();
+  const m = $("#ev-main"); m.replaceChildren(el("div", "faint", "Loading…"));
+  let r; try { r = await api(`/api/evals/runs/${encodeURIComponent(id)}`); } catch (e) { m.replaceChildren(el("div", "tm-err", e.message)); return; }
+  m.replaceChildren(el("h2", null, r.config.name),
+    el("div", "faint", `${r.dataset.name} v${r.dataset.version} (${r.dataset.hash.slice(0, 12)}) · config ${r.fingerprint} · ${r.evaluator} · run ${r.id}`));
+  m.append(evTable(["Task", "Status", "Score", "Latency", "Tokens", "Cost", "Note"], r.tasks.map((t) => [t.id, evStatus(t.status), `${t.score}/${t.max_score}`, evMs(t.latency_ms),
+    t.input_tokens == null ? "unknown" : `${t.input_tokens + (t.output_tokens || 0)}`, evCost(t.cost_micros), t.note || ""])));
+  const s = r.summary;
+  m.append(el("p", "cx-doc", `Total ${s.score}/${s.max_score}, ${s.passed} of ${s.tasks} passed, ${evMs(s.latency_ms)}, cost ${evCost(s.cost_micros)}.${s.missing.length ? " Missing: " + s.missing.join("; ") + "." : ""}`));
+}
+async function evCompare() {
+  const [a, b] = [...S.ev.picked].sort(); S.ev.sel = null; // the older run is A
+  const m = $("#ev-main"); m.replaceChildren(el("div", "faint", "Loading…"));
+  let v; try { v = await api(`/api/evals/compare?${q({ a, b })}`); } catch (e) { m.replaceChildren(el("h2", null, "Comparison"), el("div", "tm-err", e.message)); return; }
+  m.replaceChildren(el("h2", null, `${v.a.config.name}  vs  ${v.b.config.name}`), el("div", "faint", `${v.dataset.name} v${v.dataset.version} · ${v.evaluator} · ${v.sample_size} tasks`));
+  const sign = (x) => (x == null ? "unknown" : x > 0 ? `+${x}` : `${x}`);
+  m.append(evTable(["Task", "A", "B", "Δ score", "A latency", "B latency", "A cost", "B cost"], v.tasks.map((t) => [t.task,
+    el("span", null, `${t.a.status} ${t.a.score}/${t.a.max}`), el("span", null, t.b ? `${t.b.status} ${t.b.score}/${t.b.max}` : "missing"), sign(t.score_delta),
+    evMs(t.a.latency_ms), t.b ? evMs(t.b.latency_ms) : "missing", evCost(t.a.cost_micros), t.b ? evCost(t.b.cost_micros) : "missing"])));
+  const sa = v.a.summary, sb = v.b.summary, dd = v.differences;
+  m.append(evTable(["", "A", "B", "Difference (B − A)"], [
+    ["Score", `${sa.score}/${sa.max_score}`, `${sb.score}/${sb.max_score}`, sign(dd.score)],
+    ["Tasks passed", `${sa.passed}`, `${sb.passed}`, sign(dd.passed)],
+    ["Latency", evMs(sa.latency_ms), evMs(sb.latency_ms), `${sign(dd.latency_ms)} ms`],
+    ["Cost", evCost(sa.cost_micros), evCost(sb.cost_micros), dd.cost_micros == null ? "unknown" : usdText(dd.cost_micros)],
+  ]));
+  if (v.missing.length) m.append(el("div", "tm-err", `Missing measurements: ${v.missing.join("; ")}`));
+  m.append(el("p", "cx-doc", v.note));
+}
+async function evProposal(id) {
+  S.ev.sel = id;
+  const p = (S.ev.data.proposals || []).find((x) => x.id === id); if (!p) return;
+  const m = $("#ev-main"); m.replaceChildren();
+  m.append(el("h2", null, `Proposal: ${p.proposed.name}`), el("div", "faint", `${p.status} · by ${p.author} · ${p.id}`), el("p", "cx-doc", p.rationale || "(no rationale given)"));
+  m.append(el("h3", null, "Proposed configuration"), el("pre", "pg-out", JSON.stringify(p.proposed, null, 2)));
+  m.append(el("h3", null, "Failures it cites"), evTable(["Run", "Task", "Status", "Failing checks"], p.cites.map((c) => [c.run, c.task, c.status, (c.failing_checks || []).join(", ")])));
+  m.append(el("h3", null, "How it's judged"), el("p", "cx-doc", p.plan.rule));
+  if (p.evaluation) m.append(el("p", "cx-doc", `Evaluation: ${p.evaluation.verdict} — baseline ${p.evaluation.baseline_score}, candidate ${p.evaluation.candidate_score} of ${p.evaluation.max}${p.evaluation.regressions.length ? `, regressions: ${p.evaluation.regressions.join(", ")}` : ""}.`));
+  else m.append(el("div", "tm-err", `Not evaluated yet: fermi eval evaluate ${p.id} <dataset folder>`));
+  if (p.status === "evaluated") {
+    const who = el("input"); who.placeholder = "Your name";
+    const go = el("button", "small primary", "Approve and make active");
+    go.onclick = async () => {
+      try { await api(`/api/evals/proposals/${encodeURIComponent(p.id)}/adopt`, { reviewer: who.value }); toast("Adopted"); S.ev.sel = null; loadEvals(); }
+      catch (e) { toast(e.message, true); }
+    };
+    const row = el("div", "pg-run"); row.append(who, go); m.append(row);
+  }
+}
+$("#open-evals").onclick = () => openEvals();
+$("#ev-compare").onclick = () => evCompare();
 
 // ── plugins ─────────────────────────────────────────────────────────────────
 S.pg = { data: null, sel: null };

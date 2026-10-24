@@ -189,6 +189,10 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/memory", get(memory_list).post(memory_record))
         .route("/api/approvals", get(approvals_list).post(approvals_decide))
         .route("/api/memory/ingest", post(memory_ingest))
+        .route("/api/evals", get(evals_list))
+        .route("/api/evals/compare", get(evals_compare))
+        .route("/api/evals/runs/{id}", get(evals_run))
+        .route("/api/evals/proposals/{id}/adopt", post(evals_adopt))
         .route("/api/plugins", get(plugins_list))
         .route("/api/plugins/run", post(plugins_run))
         .route("/api/plugins/install", post(plugins_install))
@@ -872,6 +876,59 @@ struct MemoryQuery {
 fn memory_for(s: &Srv, root: &str) -> Result<fermi_core::memory::Memory, Box<Response>> {
     let dir = files::check(&s.workspaces(), root).map_err(|e| Box::new(fs_err(e)))?;
     fermi_core::memory::Memory::open(&s.hub.engine().home, &dir).map_err(|e| Box::new(err(StatusCode::BAD_REQUEST, format!("{e:#}"))))
+}
+
+// ── evaluations ─────────────────────────────────────────────────────────────
+
+/// Runs (summaries), datasets with their versions, proposals and the active configuration.
+async fn evals_list(State(s): S) -> Json<Value> {
+    use fermi_core::eval;
+    let home = s.hub.engine().home.clone();
+    let runs: Vec<Value> = eval::reports(&home)
+        .into_iter()
+        .map(|r| {
+            json!({ "id": r.id, "dataset": r.dataset, "config": r.config, "fingerprint": r.fingerprint, "evaluator": r.evaluator,
+            "started": r.started, "summary": r.summary })
+        })
+        .collect();
+    Json(json!({ "runs": runs, "datasets": eval::datasets(&home), "proposals": eval::proposals(&home), "active": eval::active(&home) }))
+}
+
+async fn evals_run(State(s): S, Path(id): Path<String>) -> Response {
+    match fermi_core::eval::load_report(&s.hub.engine().home, &id) {
+        Ok(r) => Json(json!(r)).into_response(),
+        Err(e) => err(StatusCode::NOT_FOUND, format!("{e:#}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct ComparePair {
+    a: String,
+    b: String,
+}
+
+/// Two runs of the same dataset version side by side (refused across versions).
+async fn evals_compare(State(s): S, Query(q): Query<ComparePair>) -> Response {
+    use fermi_core::eval;
+    let home = s.hub.engine().home.clone();
+    let r = eval::load_report(&home, &q.a).and_then(|a| eval::load_report(&home, &q.b).and_then(|b| eval::compare(&a, &b)));
+    match r {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct Adopt {
+    reviewer: String,
+}
+
+/// A person approves an evaluated proposal; refused unless it passed its evaluation.
+async fn evals_adopt(State(s): S, Path(id): Path<String>, Json(b): Json<Adopt>) -> Response {
+    match fermi_core::eval::adopt(&s.hub.engine().home, &id, &b.reviewer) {
+        Ok(a) => Json(json!(a)).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
 }
 
 // ── plugins ─────────────────────────────────────────────────────────────────

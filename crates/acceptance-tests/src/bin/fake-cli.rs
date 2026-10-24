@@ -27,7 +27,9 @@
 //! rules, the permission mode, then the `--permission-prompt-tool` over MCP,
 //! starting the server from `--mcp-config`; without one, the action just runs,
 //! like a program the agent started. `do`: `read`, `rm`, `write`+`content`,
-//! `env`, `read_parent_env`, `connect`+`send`, `http`).
+//! `env`, `read_parent_env`, `connect`+`send`, `http`, `replace`+`content` (write
+//! a new file and rename it over the path), `unlock` (make a read-only file and its folder
+//! writable again, as their owner can)).
 
 use serde_json::{json, Value};
 use std::io::{Read, Write};
@@ -599,6 +601,34 @@ fn perform(d: &Value) -> String {
             Ok(()) => format!("wrote {p}\n"),
             Err(e) => format!("write {p} failed: {e}\n"),
         };
+    }
+    if let Some(p) = d["replace"].as_str() {
+        // Write a new file next to it, then rename it over the original.
+        let tmp = format!("{p}.new");
+        return match std::fs::write(&tmp, d["content"].as_str().unwrap_or("")).and_then(|_| std::fs::rename(&tmp, p)) {
+            Ok(()) => format!("replaced {p}\n"),
+            Err(e) => format!("replace {p} failed: {e}\n"),
+        };
+    }
+    if let Some(p) = d["unlock"].as_str() {
+        // Make a read-only file (and its folder) writable again, as its owner can.
+        let path = Path::new(p);
+        let mut done = vec![];
+        for q in [path.parent().filter(|d| !d.as_os_str().is_empty()), Some(path)].into_iter().flatten() {
+            if let Ok(m) = std::fs::metadata(q) {
+                let mut perm = m.permissions();
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    perm.set_mode(if m.is_dir() { 0o755 } else { 0o644 });
+                }
+                #[cfg(not(unix))]
+                #[allow(clippy::permissions_set_readonly_false)]
+                perm.set_readonly(false);
+                done.push(std::fs::set_permissions(q, perm).is_ok());
+            }
+        }
+        return format!("unlock {p}: {}\n", if done.iter().all(|x| *x) { "ok" } else { "failed" });
     }
     if d["env"] == true {
         let mut vars: Vec<String> = std::env::vars().map(|(k, v)| format!("{k}={v}")).collect();

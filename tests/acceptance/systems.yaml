@@ -1603,8 +1603,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No evaluation harness, datasets or scoring."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/evaluation.rs
+    testName: ev_01_five_task_smoke_evaluation
     executionState: not_run
     status: not_implemented
   - id: EV-02
@@ -1621,8 +1621,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No evaluation harness, datasets or scoring."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/evaluation.rs
+    testName: ev_02_cross_model_reports
     executionState: not_run
     status: not_implemented
   - id: EV-03
@@ -1639,8 +1639,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No evaluation harness, datasets or scoring."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/evaluation.rs
+    testName: ev_03_known_failure_detection
     executionState: not_run
     status: not_implemented
   - id: EV-04
@@ -1657,8 +1657,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No evaluation harness, datasets or scoring."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/evaluation.rs
+    testName: ev_04_configuration_comparison
     executionState: not_run
     status: not_implemented
   - id: EV-05
@@ -1675,8 +1675,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No evaluation harness, datasets or scoring."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/evaluation.rs
+    testName: ev_05_reproducible_evaluation_setup
     executionState: not_run
     status: not_implemented
   - id: EV-06
@@ -1693,8 +1693,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No evaluation harness, datasets or scoring."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/evaluation.rs
+    testName: ev_06_protected_evaluation_assets
     executionState: not_run
     status: not_implemented
   - id: EV-07
@@ -1711,8 +1711,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No evaluation harness, datasets or scoring."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/evaluation.rs
+    testName: ev_07_dataset_history
     executionState: not_run
     status: not_implemented
   - id: EV-08
@@ -1729,8 +1729,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No evaluation harness, datasets or scoring."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/evaluation.rs
+    testName: ev_08_evaluated_improvement_proposals
     executionState: not_run
     status: not_implemented
   - id: E2E-01
