@@ -104,6 +104,9 @@ enum Cmd {
     /// This project's memory: decisions and notes kept across sessions
     #[command(subcommand)]
     Memory(MemoryCmd),
+    /// Plugins: install, enable, disable, run their commands, add MCP servers
+    #[command(subcommand)]
+    Plugin(PluginCmd),
     /// Budgets: spent, reserved by running calls, and what's left
     Budget {
         /// The full state as JSON
@@ -161,6 +164,49 @@ enum CodeCmd {
     },
     /// External dependencies and where they're used
     Deps,
+}
+
+#[derive(Subcommand)]
+enum PluginCmd {
+    /// Installed plugins, their capabilities and any name collisions
+    List {
+        #[arg(long)]
+        json: bool,
+    },
+    /// Install (and enable) the plugin in a folder with a plugin.toml
+    Install {
+        path: PathBuf,
+    },
+    Enable {
+        name: String,
+    },
+    Disable {
+        name: String,
+    },
+    Remove {
+        name: String,
+    },
+    /// Run a plugin command (or tool): `<name>` or `<plugin>.<name>`, with JSON arguments
+    Run {
+        capability: String,
+        #[arg(default_value = "{}")]
+        args: String,
+    },
+    /// Add an MCP server as a plugin: fermi plugin add-mcp <name> -- <command> [args…]
+    AddMcp {
+        name: String,
+        /// An environment variable it gets (repeat for several)
+        #[arg(long)]
+        env: Vec<String>,
+        /// A host it may reach (repeat for several)
+        #[arg(long)]
+        net: Vec<String>,
+        /// A folder it may write, such as a package cache (repeat for several)
+        #[arg(long)]
+        write: Vec<String>,
+        #[arg(last = true, required = true)]
+        command: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -275,6 +321,7 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Verify { check, json, dir } => return verify_cmd(check, json, dir).await,
         Cmd::Budget { json } => budget_cmd(json)?,
         Cmd::Memory(cmd) => memory_cmd(cmd)?,
+        Cmd::Plugin(cmd) => plugin_cmd(cmd).await?,
         Cmd::Usage { by, days, json } => usage_cmd(&by, days, json)?,
         Cmd::Tui { profile } => {
             if !fermi_core::Config::path().exists() {
@@ -358,6 +405,65 @@ fn memory_cmd(cmd: MemoryCmd) -> Result<()> {
         MemoryCmd::Ingest => {
             let deny = fermi_core::Config::load().map(|c| c.security.deny_read).unwrap_or_default();
             println!("{} comment(s) recorded", mem.ingest_comments(&deny)?);
+        }
+    }
+    Ok(())
+}
+
+async fn plugin_cmd(cmd: PluginCmd) -> Result<()> {
+    use fermi_core::plugins::{self, Kind};
+    let engine = Engine::load()?;
+    let show = |entries: &[plugins::Entry]| {
+        for e in entries {
+            println!("  {} {}  {}", e.kind.as_str(), e.id, e.description);
+        }
+    };
+    match cmd {
+        PluginCmd::List { json } => {
+            let reg = plugins::registry(&engine);
+            let all = plugins::installed(&engine.home);
+            if json {
+                println!("{}", serde_json::to_string_pretty(&serde_json::json!({ "installed": all, "registry": reg }))?);
+                return Ok(());
+            }
+            if all.is_empty() {
+                println!("No plugins. Install one with `fermi plugin install <folder>` or add an MCP server with `fermi plugin add-mcp`.");
+            }
+            for (name, p) in &all {
+                let state = match (&p.error, p.enabled) {
+                    (Some(e), _) => format!("failed: {e}"),
+                    (None, true) => "enabled".into(),
+                    (None, false) => "disabled".into(),
+                };
+                println!("{name} {} · {state}", p.version);
+                show(&reg.entries.iter().filter(|e| &e.plugin == name).cloned().collect::<Vec<_>>());
+            }
+            for c in &reg.collisions {
+                println!("! {} `{}`: {}", c.kind.as_str(), c.name, c.outcome);
+            }
+        }
+        PluginCmd::Install { path } => {
+            let entries = plugins::install(&engine, &path).await?;
+            println!("installed and enabled; registered:");
+            show(&entries);
+        }
+        PluginCmd::Enable { name } => show(&plugins::enable(&engine, &name).await?),
+        PluginCmd::Disable { name } => plugins::disable(&engine, &name)?,
+        PluginCmd::Remove { name } => plugins::remove(&engine, &name)?,
+        PluginCmd::Run { capability, args } => {
+            let args: serde_json::Value = serde_json::from_str(&args).map_err(|e| anyhow::anyhow!("arguments must be JSON: {e}"))?;
+            let reg = plugins::registry(&engine);
+            let kind = if reg.resolve(Kind::Command, &capability).is_ok() { Kind::Command } else { Kind::Tool };
+            let out = plugins::call(&engine, kind, &capability, &args, &std::env::current_dir()?).await?;
+            println!("{}", out.text);
+            if !out.ok {
+                anyhow::bail!("{} reported an error", out.capability);
+            }
+        }
+        PluginCmd::AddMcp { name, env, net, write, command } => {
+            let entries = plugins::add_mcp(&engine, &name, command, plugins::Access { env, net, write }).await?;
+            println!("added; registered:");
+            show(&entries);
         }
     }
     Ok(())

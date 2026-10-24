@@ -1,0 +1,8 @@
+name = "alpha"
+version = "1.0.0"
+api = 1
+command = ["{FAKE_PLUGIN}", "--label", "alpha", "--tools", "greet"]
+
+[[capabilities]]
+kind = "command"
+name = "greet"

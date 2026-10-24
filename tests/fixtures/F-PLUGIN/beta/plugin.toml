@@ -1,0 +1,8 @@
+name = "beta"
+version = "1.0.0"
+api = 1
+command = ["{FAKE_PLUGIN}", "--label", "beta", "--tools", "greet"]
+
+[[capabilities]]
+kind = "command"
+name = "greet"

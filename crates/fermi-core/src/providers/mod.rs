@@ -154,6 +154,9 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     if ctx.engine.replay.is_some() && ctx.account.auth == Auth::Api && ctx.account.provider != Provider::Gemini {
         anyhow::bail!("replays cover CLI accounts; `{}` calls an HTTP API, which isn't recorded", ctx.account.id);
     }
+    if let Some(spec) = &ctx.account.adapter {
+        return crate::plugins::run_adapter(ctx, spec).await;
+    }
     if ctx.model.image_only() {
         return image::run(ctx).await;
     }

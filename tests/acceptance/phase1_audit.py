@@ -107,14 +107,14 @@ a("VE-08", "implemented", f"{core}/verify.rs, team.rs (merge), hub.rs", "A verif
 for i in range(1, 9):
     a(f"BA-0{i}", "missing", "crates/fermi/src/preview.rs (user-facing only)", "The Preview tab is a browser for the user; agents have no browser automation tools in fermi.")
 # System 7
-a("PL-01", "missing", "", "No plugin manager or manifest format.")
-a("PL-02", "missing", "", "No plugin manager.")
-a("PL-03", "missing", "", "No command registry.")
-a("PL-04", "missing", "", "No plugin host.")
-a("PL-05", "partial", f"{core}/mcp.rs", "fermi is itself an MCP server (bridge tools); connecting fermi to an external MCP server is left to the CLIs' own configs.")
-a("PL-06", "partial", f"{core}/providers/mod.rs, config.rs ([[models]], bins)", "Models and CLI binaries can be overridden in config; no pluggable adapter interface.")
-a("PL-07", "missing", "", "No plugin sandbox.")
-a("PL-08", "missing", "", "No plugin API versioning.")
+a("PL-01", "implemented", f"{core}/plugins.rs (install, enable, registry)", "A plugin folder with a plugin.toml (name, version, plugin API, command, declared capabilities: tool, command or adapter) is installed and enabled; only declared capabilities register, each attributed to the plugin version.")
+a("PL-02", "implemented", f"{core}/plugins.rs (disable)", "Disabling removes a plugin's capabilities from the registry and the agents' bridge; other plugins keep working.")
+a("PL-03", "implemented", f"{core}/plugins.rs (build, Registry::resolve), config.rs ([plugins] collisions)", "Plugins are registered in name order; a shared name is namespaced (<plugin>.<name>, the bare name ambiguous) or rejected for all claimants, by policy, independent of install order.")
+a("PL-04", "implemented", f"{core}/plugins.rs (Client)", "Every call runs the plugin in its own process with a timeout; crashes, hangs and protocol errors fail that call only and are logged against the plugin.")
+a("PL-05", "implemented", f"{core}/plugins.rs (Client, validate, add_mcp)", "An MCP client for current servers (server/discover, per-request metadata) and older ones (initialize); tool schemas are kept as discovered and arguments are validated against them before a call.")
+a("PL-06", "implemented", f"{core}/plugins.rs (run_adapter), providers/mod.rs", "An account can name a plugin adapter; its runs go through the normal engine path and come back as the usual events, usage records and classified errors (limits fail over).")
+a("PL-07", "implemented", f"{core}/plugins.rs (scope), sandbox.rs", "Plugins run sandboxed (environment allowlist and egress proxy everywhere; Landlock files on Linux); path arguments outside the call's folder and the plugin's own, or under deny_read, are refused before the call, also when an agent calls through the bridge.")
+a("PL-08", "implemented", f"{core}/plugins.rs (Manifest::check)", "A manifest needing an unsupported plugin API version is refused with the required and supported versions before anything is copied, registered or started.")
 # System 8
 a("OB-01", "implemented", f"{core}/trace.rs (Ops, export), providers/*_cli.rs", "Every model call (Claude per message id, Codex per turn, Gemini per run) and tool invocation is an operation with its id, parent call, attempt, try (failover) and sequence number; exported by `fermi trace` and /api/tasks/<id>/trace.")
 a("OB-02", "implemented", f"{core}/events.rs (Tool, ToolResult), trace.rs", "Tool inputs, redacted and shortened outputs, status, error code and a duration measured on fermi's monotonic clock.")

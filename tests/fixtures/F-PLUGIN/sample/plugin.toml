@@ -1,0 +1,15 @@
+name = "sample"
+version = "1.2.0"
+api = 1
+description = "A sample plugin with a tool and a command"
+command = ["{FAKE_PLUGIN}", "--label", "sample", "--tools", "echo,greet,add", "--marker", "{MARKER}"]
+read_write = ["{PROBE}"]   # where the tests collect what the plugin records
+
+[[capabilities]]
+kind = "tool"
+name = "echo"
+description = "Repeats the text it gets"
+
+[[capabilities]]
+kind = "command"
+name = "greet"

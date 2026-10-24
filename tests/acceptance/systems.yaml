@@ -883,8 +883,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No plugin manager or manifest format."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/plugins.rs
+    testName: pl_01_plugin_registration
     executionState: not_run
     status: not_implemented
   - id: PL-02
@@ -901,8 +901,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No plugin manager."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/plugins.rs
+    testName: pl_02_plugin_disabling
     executionState: not_run
     status: not_implemented
   - id: PL-03
@@ -919,8 +919,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No command registry."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/plugins.rs
+    testName: pl_03_command_collisions
     executionState: not_run
     status: not_implemented
   - id: PL-04
@@ -937,8 +937,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No plugin host."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/plugins.rs
+    testName: pl_04_plugin_fault_isolation
     executionState: not_run
     status: not_implemented
   - id: PL-05
@@ -955,8 +955,8 @@ cases:
     capability: partial
     implementation: "crates/fermi-core/src/mcp.rs"
     auditNote: "fermi is itself an MCP server (bridge tools); connecting fermi to an external MCP server is left to the CLIs' own configs."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/plugins.rs
+    testName: pl_05_mcp_interoperability
     executionState: not_run
     status: not_implemented
   - id: PL-06
@@ -973,8 +973,8 @@ cases:
     capability: partial
     implementation: "crates/fermi-core/src/providers/mod.rs, config.rs ([[models]], bins)"
     auditNote: "Models and CLI binaries can be overridden in config; no pluggable adapter interface."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/plugins.rs
+    testName: pl_06_adapter_substitution
     executionState: not_run
     status: not_implemented
   - id: PL-07
@@ -991,8 +991,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No plugin sandbox."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/plugins.rs
+    testName: pl_07_plugin_boundary_enforcement
     executionState: not_run
     status: not_implemented
   - id: PL-08
@@ -1009,8 +1009,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No plugin API versioning."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/plugins.rs
+    testName: pl_08_api_incompatibility
     executionState: not_run
     status: not_implemented
   - id: OB-01

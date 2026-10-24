@@ -189,6 +189,11 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/memory", get(memory_list).post(memory_record))
         .route("/api/approvals", get(approvals_list).post(approvals_decide))
         .route("/api/memory/ingest", post(memory_ingest))
+        .route("/api/plugins", get(plugins_list))
+        .route("/api/plugins/run", post(plugins_run))
+        .route("/api/plugins/install", post(plugins_install))
+        .route("/api/plugins/add-mcp", post(plugins_add_mcp))
+        .route("/api/plugins/{name}/{action}", post(plugins_action))
         .route("/api/memory/{id}", get(memory_get))
         .route("/api/memory/{id}/{action}", post(memory_action))
         .route("/api/teams", get(teams_list).post(team_create))
@@ -867,6 +872,82 @@ struct MemoryQuery {
 fn memory_for(s: &Srv, root: &str) -> Result<fermi_core::memory::Memory, Box<Response>> {
     let dir = files::check(&s.workspaces(), root).map_err(|e| Box::new(fs_err(e)))?;
     fermi_core::memory::Memory::open(&s.hub.engine().home, &dir).map_err(|e| Box::new(err(StatusCode::BAD_REQUEST, format!("{e:#}"))))
+}
+
+// ── plugins ─────────────────────────────────────────────────────────────────
+
+/// Installed plugins, the registry and its collisions.
+async fn plugins_list(State(s): S) -> Json<Value> {
+    let e = s.hub.engine();
+    Json(json!({ "installed": fermi_core::plugins::installed(&e.home), "registry": fermi_core::plugins::registry(&e) }))
+}
+
+async fn plugins_action(State(s): S, Path((name, action)): Path<(String, String)>) -> Response {
+    use fermi_core::plugins;
+    let e = s.hub.engine();
+    let r = match action.as_str() {
+        "enable" => plugins::enable(&e, &name).await.map(|_| ()),
+        "disable" => plugins::disable(&e, &name),
+        "remove" => plugins::remove(&e, &name),
+        _ => return err(StatusCode::NOT_FOUND, "unknown action"),
+    };
+    match r {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(x) => err(StatusCode::BAD_REQUEST, format!("{x:#}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct PluginInstall {
+    path: std::path::PathBuf,
+}
+
+async fn plugins_install(State(s): S, Json(b): Json<PluginInstall>) -> Response {
+    match fermi_core::plugins::install(&s.hub.engine(), &b.path).await {
+        Ok(entries) => Json(json!({ "ok": true, "registered": entries })).into_response(),
+        Err(x) => err(StatusCode::BAD_REQUEST, format!("{x:#}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct AddMcp {
+    name: String,
+    command: Vec<String>,
+    #[serde(flatten)]
+    access: fermi_core::plugins::Access,
+}
+
+async fn plugins_add_mcp(State(s): S, Json(b): Json<AddMcp>) -> Response {
+    if b.command.is_empty() {
+        return err(StatusCode::BAD_REQUEST, "give the command that starts the server");
+    }
+    match fermi_core::plugins::add_mcp(&s.hub.engine(), &b.name, b.command, b.access).await {
+        Ok(entries) => Json(json!({ "ok": true, "registered": entries })).into_response(),
+        Err(x) => err(StatusCode::BAD_REQUEST, format!("{x:#}")),
+    }
+}
+
+#[derive(Deserialize)]
+struct PluginRun {
+    capability: String,
+    #[serde(default)]
+    arguments: Value,
+    /// The folder it runs in (default: the first workspace, else home).
+    cwd: Option<std::path::PathBuf>,
+}
+
+/// Runs a plugin command (or tool) for the user.
+async fn plugins_run(State(s): S, Json(b): Json<PluginRun>) -> Response {
+    use fermi_core::plugins::{self, Kind};
+    let e = s.hub.engine();
+    let reg = plugins::registry(&e);
+    let kind = if reg.resolve(Kind::Command, &b.capability).is_ok() { Kind::Command } else { Kind::Tool };
+    let cwd = b.cwd.or_else(|| s.hub.cwds().into_iter().next()).or_else(dirs::home_dir).unwrap_or_default();
+    let args = if b.arguments.is_null() { json!({}) } else { b.arguments };
+    match plugins::call(&e, kind, &b.capability, &args, &cwd).await {
+        Ok(o) => Json(json!(o)).into_response(),
+        Err(x) => err(StatusCode::BAD_REQUEST, format!("{x:#}")),
+    }
 }
 
 /// The project's records (the user sees private ones too), a search or a topic.

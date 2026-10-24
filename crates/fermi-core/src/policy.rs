@@ -105,7 +105,7 @@ fn command_paths(command: &str, cwd: &Path) -> Vec<std::path::PathBuf> {
 
 /// A path as written by an agent, made absolute and with `..` resolved
 /// lexically, so traversal can't hide where it points.
-fn resolve(t: &str, cwd: &Path) -> std::path::PathBuf {
+pub(crate) fn resolve(t: &str, cwd: &Path) -> std::path::PathBuf {
     let p = if let Some(rest) = t.strip_prefix("~/").or_else(|| t.strip_prefix("~\\")) {
         dirs::home_dir().unwrap_or_default().join(rest)
     } else if is_abs(t) {

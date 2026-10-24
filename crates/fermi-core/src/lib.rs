@@ -15,6 +15,7 @@ pub mod hub;
 pub mod mcp;
 pub mod memory;
 pub mod models;
+pub mod plugins;
 pub mod policy;
 pub mod providers;
 pub mod redact;

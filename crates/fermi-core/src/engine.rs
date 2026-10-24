@@ -126,8 +126,9 @@ pub struct Engine {
     pub depth: u32,
     /// Budget reservations (see `billing`).
     pub ledger: crate::billing::Ledger,
-    /// The egress proxy for sandboxed agents, started on first use.
-    egress: tokio::sync::OnceCell<Option<u16>>,
+    /// The egress proxy for sandboxed agents, started on first use and kept
+    /// for the engine's life (dropping it stops it).
+    egress: tokio::sync::OnceCell<Option<crate::sandbox::Proxy>>,
     /// Removes secrets before anything about a task is saved (see `redact`).
     pub redactor: Arc<crate::redact::Redactor>,
     /// Set for a replay: recorded responses stand in for the CLIs (see `trace::replay`).
@@ -162,14 +163,15 @@ impl Engine {
 
     /// The egress proxy's port for sandboxed agents (None if it couldn't start).
     pub async fn egress_port(&self) -> Option<u16> {
-        *self
-            .egress
+        self.egress
             .get_or_init(|| async {
                 let mut allow: Vec<String> = crate::sandbox::PROVIDER_HOSTS.iter().map(|s| s.to_string()).collect();
                 allow.extend(self.cfg.security.net_allow.iter().cloned());
-                crate::sandbox::Proxy::start(allow, self.home.join("egress.jsonl")).await.ok().map(|p| p.port)
+                crate::sandbox::Proxy::start(allow, self.home.join("egress.jsonl")).await.ok()
             })
             .await
+            .as_ref()
+            .map(|p| p.port)
     }
 
     pub fn plan(&self, task: &Task) -> Result<Plan> {
