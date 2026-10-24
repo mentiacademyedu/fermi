@@ -71,6 +71,8 @@ pub async fn anthropic(ctx: &RunCtx<'_>) -> Result<RunResult> {
     let n = |k: &str| u[k].as_u64().unwrap_or(0);
     let usage = Usage {
         input: n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens"),
+        cached_input: n("cache_read_input_tokens"),
+        cache_write: n("cache_creation_input_tokens"),
         output: n("output_tokens"),
         cost_usd: None,
     };
@@ -99,6 +101,11 @@ pub async fn openai(ctx: &RunCtx<'_>) -> Result<RunResult> {
         .join("\n");
     emit(ctx.tx, Event::Text { text: text.clone() });
     let u = &v["usage"];
-    let usage = Usage { input: u["input_tokens"].as_u64().unwrap_or(0), output: u["output_tokens"].as_u64().unwrap_or(0), cost_usd: None };
+    let usage = Usage {
+        input: u["input_tokens"].as_u64().unwrap_or(0),
+        cached_input: u["input_tokens_details"]["cached_tokens"].as_u64().unwrap_or(0),
+        output: u["output_tokens"].as_u64().unwrap_or(0),
+        ..Default::default()
+    };
     Ok(RunResult::ok(text, usage))
 }

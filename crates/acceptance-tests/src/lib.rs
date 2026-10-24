@@ -11,7 +11,6 @@ use anyhow::{bail, Context, Result};
 use fermi_core::config::Config;
 use fermi_core::engine::{Engine, Task};
 use fermi_core::hub::{Hub, TaskRec, TaskStatus};
-use fermi_core::state::Store;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
@@ -359,7 +358,7 @@ impl Fermi {
         cfg += &format!("[[profiles]]\nname = \"p\"\naccounts = [{}]\nmode = \"auto\"\n{extra_profile}\n", ids.join(", "));
         std::fs::write(home.join("config.toml"), &cfg)?;
         let cfg = Config::parse(&cfg)?;
-        let engine = Arc::new(Engine { catalog: cfg.catalog(), store: Store::open(&home), cfg, home: home.clone(), depth: 0 });
+        let engine = Arc::new(Engine::new(cfg, home.clone(), 0));
         Ok(Fermi { home, engine })
     }
 

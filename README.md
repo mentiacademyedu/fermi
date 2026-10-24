@@ -253,6 +253,49 @@ default) must all pass.
   whole definition and refuses edits that don't parse.
 - `fermi verify [--check NAME] [--json]` runs them in the terminal.
 
+## Costs and budgets
+
+fermi prices every call from versioned tables you put in `config.toml` (USD
+per million tokens) and can hold a profile to a spending allowance:
+
+```toml
+[[prices]]
+version = "2026-10"
+effective = "2026-10-01"
+[prices.models."claude:sonnet"]
+input = 3.0            # uncached input
+cached_input = 0.3     # input read from the prompt cache (no discount without it)
+output = 15.0
+context = 200000       # warn near the context window, refuse over it
+quality = 80           # declared rank for routing = "quality"
+
+[[budgets]]
+name = "work"
+limit = 50             # USD
+period = "month"       # total | day | month
+
+[[profiles]]
+name = "work"
+budget = "work"
+routing = "economy"    # auto | economy | quality
+```
+
+- **Cost**: each call records its tokens (cached ones apart), the price
+  version in effect and the exact cost; a new price version never changes past
+  records. Costs are exact to the micro-dollar (rounded half up per call).
+- **Budgets**: before a call, fermi reserves its estimate in a shared ledger
+  (`~/.fermi/ledger.jsonl`) and refuses the call if it doesn't fit what's left
+  after spent and running calls. When the call ends, its actual cost settles
+  the reservation. A long agent run can cost more than its estimate, so a
+  budget stops new calls; it is not a hard cap on an invoice. The status bar
+  and `fermi budget` show where each budget stands.
+- **Routing**: `economy` picks the cheapest model that has the capability the
+  task needs and fits the budget; `quality` the highest declared rank. The
+  decision, with every candidate and why, is in the conversation.
+- **Usage**: `fermi usage --by task|run|agent|provider|model|account` (or
+  `/api/usage/report`) totals calls, tokens and cost, with failed attempts and
+  unattributed calls shown.
+
 ## Skills & agents
 
 Every fermi account keeps its own config folder, so skills you installed in

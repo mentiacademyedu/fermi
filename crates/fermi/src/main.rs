@@ -87,6 +87,22 @@ enum Cmd {
         #[arg(short = 'C', long)]
         dir: Option<PathBuf>,
     },
+    /// Budgets: spent, reserved by running calls, and what's left
+    Budget {
+        /// The full state as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Usage and cost grouped by task, run (team run), agent, provider, model or account
+    Usage {
+        #[arg(long, default_value = "provider")]
+        by: String,
+        /// Only the last N days
+        #[arg(long)]
+        days: Option<u64>,
+        #[arg(long)]
+        json: bool,
+    },
     /// Code intelligence for this repository: symbols, callers, tests, change impact
     #[command(subcommand)]
     Code(CodeCmd),
@@ -198,6 +214,8 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Skills(cmd) => skills_cmd(cmd)?,
         Cmd::Code(cmd) => code_cmd(cmd)?,
         Cmd::Verify { check, json, dir } => return verify_cmd(check, json, dir).await,
+        Cmd::Budget { json } => budget_cmd(json)?,
+        Cmd::Usage { by, days, json } => usage_cmd(&by, days, json)?,
         Cmd::Tui { profile } => {
             if !fermi_core::Config::path().exists() {
                 setup::init(false)?;
@@ -232,6 +250,68 @@ fn task_from(t: Target) -> Result<Task> {
     task.effort = t.effort;
     task.verify = t.verify.map(|max_repairs| fermi_core::verify::VerifyOpts { max_repairs, checks: vec![] });
     Ok(task)
+}
+
+fn budget_cmd(as_json: bool) -> Result<()> {
+    use fermi_core::billing::fmt_usd;
+    let engine = Engine::load()?;
+    let states: Vec<_> = engine.cfg.budgets.iter().map(|b| engine.ledger.state(b, fermi_core::util::now())).collect();
+    if as_json {
+        println!("{}", serde_json::to_string_pretty(&states)?);
+        return Ok(());
+    }
+    if states.is_empty() {
+        println!("No budgets. Add [[budgets]] to {} and `budget = \"name\"` to a profile.", fermi_core::Config::path().display());
+    }
+    for s in &states {
+        let users: Vec<&str> =
+            engine.cfg.profiles.iter().filter(|p| p.budget.as_deref() == Some(s.name.as_str())).map(|p| p.name.as_str()).collect();
+        println!(
+            "{:<12} {} of {} left ({:?}) · {} spent · {} reserved by {} running call(s){}{} · profiles: {}",
+            s.name,
+            fmt_usd(s.remaining),
+            fmt_usd(s.limit),
+            s.period,
+            fmt_usd(s.spent),
+            fmt_usd(s.reserved),
+            s.open,
+            if s.overrun > 0 { format!(" · {} over estimates", fmt_usd(s.overrun)) } else { String::new() },
+            if s.denied > 0 { format!(" · {} refused", s.denied) } else { String::new() },
+            if users.is_empty() { "none".to_string() } else { users.join(", ") }
+        );
+    }
+    Ok(())
+}
+
+fn usage_cmd(by: &str, days: Option<u64>, as_json: bool) -> Result<()> {
+    use fermi_core::billing::fmt_usd;
+    let since = days.map(|d| fermi_core::util::now().saturating_sub(d * 86_400)).unwrap_or(0);
+    let r = fermi_core::billing::report(&fermi_core::Config::home(), by, since)?;
+    if as_json {
+        println!("{}", serde_json::to_string_pretty(&r)?);
+        return Ok(());
+    }
+    println!("{:<28} {:>6} {:>7} {:>12} {:>12} {:>12}", by, "calls", "failed", "input", "output", "cost");
+    let line = |name: &str, g: &serde_json::Value| {
+        let n = |k: &str| g[k].as_i64().unwrap_or(0);
+        let unpriced = if n("unpriced_calls") > 0 { format!(" (+{} unpriced)", n("unpriced_calls")) } else { String::new() };
+        println!(
+            "{name:<28} {:>6} {:>7} {:>12} {:>12} {:>12}{unpriced}",
+            n("calls"),
+            n("failed_calls"),
+            n("input_tokens"),
+            n("output_tokens"),
+            fmt_usd(n("cost_micros"))
+        );
+    };
+    for (k, g) in r["groups"].as_object().into_iter().flatten() {
+        line(k, g);
+    }
+    line("total", &r["total"]);
+    if r["reconciled"] != true {
+        eprintln!("warning: the groups don't add up to the total");
+    }
+    Ok(())
 }
 
 async fn verify_cmd(only: Vec<String>, as_json: bool, dir: Option<PathBuf>) -> Result<ExitCode> {
@@ -334,6 +414,31 @@ async fn run(t: Target) -> Result<ExitCode> {
             Event::Blocked { tool, detail, .. } => eprintln!("{}", paint("33", format!("  ⚠ needed approval: {tool} {detail}"))),
             Event::Artifact { path } => eprintln!("{}", paint("35", format!("  ⇒ {path}"))),
             Event::Log { line } => eprintln!("{}", paint("2", format!("  {line}"))),
+            Event::Estimate { estimate } => {
+                if let Some(w) = estimate["warning"].as_str() {
+                    eprintln!("{}", paint("33", format!("  ! {w}")));
+                } else if let Some(m) = estimate["micros"].as_i64() {
+                    let (i, o) = (estimate["input_tokens"].as_u64().unwrap_or(0), estimate["output_tokens"].as_u64().unwrap_or(0));
+                    eprintln!("{}", paint("2", format!("  ≈ {i} in / {o} out tokens, about {}", fermi_core::billing::fmt_usd(m))));
+                }
+            }
+            Event::Budget { action, note, .. } => {
+                eprintln!("{}", paint(if action == "denied" { "31" } else { "2" }, format!("  $ {note}")))
+            }
+            Event::Decision { decision } => {
+                eprintln!(
+                    "{}",
+                    paint(
+                        "33",
+                        format!(
+                            "▸ {} policy picked {} ({})",
+                            decision["policy"].as_str().unwrap_or(""),
+                            decision["selected"].as_str().unwrap_or(""),
+                            decision["rule"].as_str().unwrap_or("")
+                        )
+                    )
+                )
+            }
             Event::Verify { passed, report, .. } => {
                 let summary = serde_json::from_value::<fermi_core::verify::Report>(report).map(|r| r.summary()).unwrap_or_default();
                 eprintln!("{}", paint(if passed { "32" } else { "31" }, format!("  {} {summary}", if passed { "✓" } else { "✗" })));

@@ -43,6 +43,9 @@ pub struct Task {
     /// Run the project's checks after the agent and send failures back to it
     /// (see `verify::run_task`). The hub honors it; `Engine::run` ignores it.
     pub verify: Option<crate::verify::VerifyOpts>,
+    /// The hub task this run belongs to, and the task that delegated it (usage attribution).
+    pub id: Option<u64>,
+    pub parent: Option<u64>,
 }
 
 /// Which team run and plan task an agent's conversation belongs to.
@@ -72,6 +75,8 @@ impl Task {
             allowed: vec![],
             team: None,
             verify: None,
+            id: None,
+            parent: None,
         }
     }
 
@@ -103,6 +108,8 @@ pub struct Plan {
     pub profile: Profile,
     pub need: Need,
     pub models: Vec<ModelSpec>,
+    /// Set when an economy or quality policy ordered the models.
+    pub decision: Option<router::Decision>,
 }
 
 pub struct Engine {
@@ -113,6 +120,8 @@ pub struct Engine {
     /// Nesting level: 0 for a user task, 1 inside the MCP bridge. The bridge
     /// is only attached at depth 0 so delegation can't recurse.
     pub depth: u32,
+    /// Budget reservations (see `billing`).
+    pub ledger: crate::billing::Ledger,
 }
 
 impl Engine {
@@ -120,7 +129,11 @@ impl Engine {
         let cfg = Config::load()?;
         let home = Config::home();
         let depth = std::env::var("FERMI_DEPTH").ok().and_then(|d| d.parse().ok()).unwrap_or(0);
-        Ok(Arc::new(Engine { catalog: cfg.catalog(), store: Store::open(&home), cfg, home, depth }))
+        Ok(Arc::new(Engine::new(cfg, home, depth)))
+    }
+
+    pub fn new(cfg: Config, home: PathBuf, depth: u32) -> Engine {
+        Engine { catalog: cfg.catalog(), store: Store::open(&home), ledger: crate::billing::Ledger::open(&home), cfg, home, depth }
     }
 
     pub fn plan(&self, task: &Task) -> Result<Plan> {
@@ -142,8 +155,23 @@ impl Engine {
             },
             None => self.cfg.profile_accounts(&profile).collect(),
         };
-        let models = router::candidates(&self.catalog, &profile, &accounts, &need, task.model.as_deref())?;
-        Ok(Plan { profile, need, models })
+        let mut models = router::candidates(&self.catalog, &profile, &accounts, &need, task.model.as_deref())?;
+        let mut decision = None;
+        if profile.routing != crate::config::Routing::Auto && task.model.is_none() && profile.mode != crate::config::Mode::Single {
+            let at = now();
+            let remaining = match &profile.budget {
+                Some(b) => Some(self.ledger.state(crate::billing::budget(&self.cfg, b)?, at).remaining),
+                None => None,
+            };
+            let info = |m: &ModelSpec| {
+                let est = crate::billing::estimate(&self.cfg, m, task, at).micros;
+                (est, crate::billing::price_at(&self.cfg.prices, &m.id, at).and_then(|(_, p)| p.quality))
+            };
+            let (ordered, d) = router::policy(profile.routing, models, &need, &info, remaining)?;
+            models = ordered;
+            decision = Some(d);
+        }
+        Ok(Plan { profile, need, models, decision })
     }
 
     /// Next account to try for `provider`. Priority order unless the profile
@@ -200,11 +228,68 @@ impl Engine {
         let profile = &plan.profile;
         let mut tried = HashSet::new();
         let mut last_err: Option<String> = None;
+        if let Some(d) = &plan.decision {
+            emit(tx, Event::Decision { decision: serde_json::to_value(d).unwrap_or_default() });
+        }
+        let budget = match &profile.budget {
+            Some(b) => Some(crate::billing::budget(&self.cfg, b)?),
+            None => None,
+        };
+        let who = crate::billing::Attribution::of(task);
+        let mut attempt = 0u32;
 
         for model in &plan.models {
             let Some(provider) = model.provider() else { continue };
-            while let Some(acct) = self.pick_account(profile, provider, task.account.as_deref(), &tried) {
+            'accounts: while let Some(acct) = self.pick_account(profile, provider, task.account.as_deref(), &tried) {
                 tried.insert(acct.id.clone());
+                attempt += 1;
+                // Before sending: the estimate, the context window, the budget.
+                let at = now();
+                let est = crate::billing::estimate(&self.cfg, model, task, at);
+                emit(tx, Event::Estimate { estimate: serde_json::to_value(&est).unwrap_or_default() });
+                if est.over_context && !self.cfg.billing.allow_over_context {
+                    let why = est.warning.clone().unwrap_or_default();
+                    emit(tx, Event::Log { line: format!("not sent to {}: {why}", model.name()) });
+                    last_err = Some(why);
+                    break 'accounts; // try a model with a larger window
+                }
+                let reservation = match budget {
+                    Some(b) => {
+                        let need = est.micros.or(b.reserve).ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "{} has no price, so budget `{}` can't be checked: add it to [[prices]] or give the budget a `reserve` amount",
+                                model.id,
+                                b.name
+                            )
+                        })?;
+                        match self.ledger.reserve(b, need, &model.id, &acct.id, &who)? {
+                            Ok(r) => {
+                                let state = self.ledger.state(b, now());
+                                emit(
+                                    tx,
+                                    Event::Budget {
+                                        action: "reserved".into(),
+                                        state: serde_json::to_value(&state).unwrap_or_default(),
+                                        note: format!("reserved {} for this call", crate::billing::fmt_usd(need)),
+                                    },
+                                );
+                                Some(r)
+                            }
+                            Err(denied) => {
+                                emit(
+                                    tx,
+                                    Event::Budget {
+                                        action: "denied".into(),
+                                        state: serde_json::to_value(&denied.state).unwrap_or_default(),
+                                        note: denied.to_string(),
+                                    },
+                                );
+                                bail!("{denied}");
+                            }
+                        }
+                    }
+                    None => None,
+                };
                 emit(
                     tx,
                     Event::Routed {
@@ -233,6 +318,9 @@ impl Engine {
                     Status::Limited { .. } => "limited",
                     Status::Failed { .. } => "failed",
                 };
+                // The price in effect when the call was made, recorded with it.
+                let cost = crate::billing::price_at(&self.cfg.prices, &model.id, at)
+                    .map(|(v, p)| crate::billing::cost(v, &model.id, p, &res.usage));
                 self.store.record(&UsageRecord {
                     ts: now(),
                     profile: &profile.name,
@@ -240,10 +328,43 @@ impl Engine {
                     model: &model.id,
                     status,
                     input_tokens: res.usage.input,
+                    cached_input_tokens: res.usage.cached_input,
+                    cache_write_tokens: res.usage.cache_write,
                     output_tokens: res.usage.output,
                     cost_usd: res.usage.cost_usd,
+                    cost: cost.as_ref(),
+                    estimate_micros: est.micros,
+                    attempt,
+                    who: &who,
                     secs: started.elapsed().as_secs_f64(),
                 });
+                if let (Some(r), Some(b)) = (reservation, budget) {
+                    let (actual, source) = match (&cost, res.usage.cost_usd) {
+                        (Some(c), _) => (c.micros, "price"),
+                        (None, Some(usd)) => ((usd * 1e6).round() as crate::billing::Micros, "reported"),
+                        (None, None) => (r.micros, "estimate"),
+                    };
+                    let reserved = r.micros;
+                    r.settle(actual, source)?;
+                    let state = self.ledger.state(b, now());
+                    let note = if actual > reserved {
+                        format!(
+                            "this call cost {}, {} more than its estimate; {} of {} left",
+                            crate::billing::fmt_usd(actual),
+                            crate::billing::fmt_usd(actual - reserved),
+                            crate::billing::fmt_usd(state.remaining.max(0)),
+                            crate::billing::fmt_usd(state.limit)
+                        )
+                    } else {
+                        format!(
+                            "this call cost {} ({source}); {} of {} left",
+                            crate::billing::fmt_usd(actual),
+                            crate::billing::fmt_usd(state.remaining.max(0)),
+                            crate::billing::fmt_usd(state.limit)
+                        )
+                    };
+                    emit(tx, Event::Budget { action: "settled".into(), state: serde_json::to_value(&state).unwrap_or_default(), note });
+                }
 
                 match res.status {
                     Status::Ok => {

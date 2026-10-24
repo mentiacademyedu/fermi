@@ -58,7 +58,11 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
             let u = &v["usage"];
             RunResult::ok(
                 format!("Saved image to {}", out.display()),
-                Usage { input: u["input_tokens"].as_u64().unwrap_or(0), output: u["output_tokens"].as_u64().unwrap_or(0), cost_usd: None },
+                Usage {
+                    input: u["input_tokens"].as_u64().unwrap_or(0),
+                    output: u["output_tokens"].as_u64().unwrap_or(0),
+                    ..Default::default()
+                },
             )
         }
         Auth::Cli => {

@@ -104,6 +104,7 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>, sandbox: O
                 completed = true;
                 let u = &v["usage"];
                 usage.input += u["input_tokens"].as_u64().unwrap_or(0);
+                usage.cached_input += u["cached_input_tokens"].as_u64().unwrap_or(0);
                 usage.output += u["output_tokens"].as_u64().unwrap_or(0);
             }
             "turn.failed" => error = v["error"]["message"].as_str().map(str::to_string),

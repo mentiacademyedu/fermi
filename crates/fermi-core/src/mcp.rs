@@ -214,6 +214,7 @@ pub async fn call_tool(e: &Engine, profile: &Profile, cwd: &std::path::Path, nam
     }
     let mut task = Task::new(prompt, cwd);
     task.profile = Some(profile.name.clone());
+    task.parent = std::env::var("FERMI_TASK_ID").ok().and_then(|v| v.parse().ok());
     match name {
         "generate_image" => {
             task.model = image.first().map(|m| m.id.clone());

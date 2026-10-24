@@ -46,8 +46,14 @@ impl RunCtx<'_> {
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Usage {
+    /// Every input token, including the cached and cache-written ones.
     pub input: u64,
+    /// Input tokens read from the provider's prompt cache.
+    pub cached_input: u64,
+    /// Input tokens written to the prompt cache.
+    pub cache_write: u64,
     pub output: u64,
+    /// Cost the provider (CLI) reported, if any.
     pub cost_usd: Option<f64>,
 }
 

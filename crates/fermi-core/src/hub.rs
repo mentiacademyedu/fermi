@@ -738,7 +738,8 @@ impl Hub {
         Ok(id)
     }
 
-    fn launch(self: &Arc<Self>, id: u64, task: Task) {
+    fn launch(self: &Arc<Self>, id: u64, mut task: Task) {
+        task.id = Some(id); // usage and budget entries name the task
         let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
         let engine = self.engine();
         let runner = tokio::spawn(async move {
@@ -976,7 +977,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        let engine = Engine { catalog: cfg.catalog(), store: crate::state::Store::open(&home), cfg, home: home.clone(), depth: 0 };
+        let engine = Engine::new(cfg, home.clone(), 0);
         let mut t = TaskRec::new(1, &Task::new("fix the bug", &home), "ui");
         for ev in [
             Event::Routed {
@@ -1019,7 +1020,7 @@ mod tests {
     fn long_transcripts_keep_the_start_and_the_end() {
         let home = tmp_dir("transcript");
         let cfg = crate::config::Config::parse("").unwrap();
-        let engine = Engine { catalog: cfg.catalog(), store: crate::state::Store::open(&home), cfg, home: home.clone(), depth: 0 };
+        let engine = Engine::new(cfg, home.clone(), 0);
         let mut t = TaskRec::new(1, &Task::new("the original task", &home), "ui");
         for i in 0..400 {
             t.events.push(Event::Text { text: format!("answer {i} {}", "x".repeat(1000)) });

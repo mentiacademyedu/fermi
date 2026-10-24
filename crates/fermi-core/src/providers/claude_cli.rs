@@ -44,6 +44,10 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
     args.extend(ctx.profile.claude_args.iter().cloned());
 
     let mut envs = vec![("FERMI_DEPTH".to_string(), (e.depth + 1).to_string())];
+    // Calls the agent delegates through fermi's bridge are attributed to this task.
+    if let Some(id) = ctx.task.id {
+        envs.push(("FERMI_TASK_ID".into(), id.to_string()));
+    }
     if let Some(home) = ctx.account.home_dir() {
         std::fs::create_dir_all(&home)?;
         envs.push(("CLAUDE_CONFIG_DIR".into(), home.display().to_string()));
@@ -98,6 +102,8 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
                 let n = |k: &str| u[k].as_u64().unwrap_or(0);
                 usage = Usage {
                     input: n("input_tokens") + n("cache_creation_input_tokens") + n("cache_read_input_tokens"),
+                    cached_input: n("cache_read_input_tokens"),
+                    cache_write: n("cache_creation_input_tokens"),
                     output: n("output_tokens"),
                     cost_usd: v["total_cost_usd"].as_f64(),
                 };

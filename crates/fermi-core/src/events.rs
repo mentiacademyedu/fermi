@@ -57,6 +57,22 @@ pub enum Event {
     Log {
         line: String,
     },
+    /// What a call is expected to use and cost, before it's sent (`billing::Estimate`).
+    Estimate {
+        estimate: serde_json::Value,
+    },
+    /// A budget after a reservation, a settlement or a refusal (`billing::BudgetState`).
+    Budget {
+        /// reserved | settled | denied
+        action: String,
+        state: serde_json::Value,
+        #[serde(default)]
+        note: String,
+    },
+    /// How the model was chosen under an economy or quality policy (`router::Decision`).
+    Decision {
+        decision: serde_json::Value,
+    },
     /// fermi ran the project's checks after the agent's turn (`verify::Report::compact`).
     Verify {
         attempt: u32,

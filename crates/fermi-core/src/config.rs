@@ -141,6 +141,36 @@ pub struct Profile {
     pub codex_args: Vec<String>,
     #[serde(default)]
     pub gemini_args: Vec<String>,
+    /// Spending allowance for this profile's calls (a `[[budgets]]` name).
+    #[serde(default)]
+    pub budget: Option<String>,
+    /// How auto mode orders models: by task fit (auto), cost (economy) or declared quality (quality).
+    #[serde(default)]
+    pub routing: Routing,
+}
+
+/// Model ordering policy for a profile (see `router::policy`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Routing {
+    /// Capability and tier fit (the classic rules).
+    #[default]
+    Auto,
+    /// The cheapest eligible model for the task.
+    Economy,
+    /// The highest declared quality among eligible models.
+    Quality,
+}
+
+/// Billing settings (see `billing`).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct BillingCfg {
+    /// Warn when the estimated input reaches this share of the context window (default 0.8).
+    #[serde(default)]
+    pub context_warn: Option<f64>,
+    /// Also send requests estimated over the context window (default: refuse them).
+    #[serde(default)]
+    pub allow_over_context: bool,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -162,6 +192,13 @@ pub struct Config {
     pub models: Vec<ModelSpec>,
     #[serde(default)]
     pub bins: Bins,
+    /// Versioned price tables (see `billing`).
+    #[serde(default)]
+    pub prices: Vec<crate::billing::PriceVersion>,
+    #[serde(default)]
+    pub budgets: Vec<crate::billing::BudgetCfg>,
+    #[serde(default)]
+    pub billing: BillingCfg,
 }
 
 impl Config {
@@ -185,6 +222,7 @@ impl Config {
     pub fn parse(text: &str) -> Result<Self> {
         let cfg: Config = toml::from_str(text)?;
         cfg.validate()?;
+        crate::billing::validate(&cfg)?;
         Ok(cfg)
     }
 
@@ -287,6 +325,8 @@ impl Config {
                 claude_args: vec![],
                 codex_args: vec![],
                 gemini_args: vec![],
+                budget: None,
+                routing: Routing::Auto,
             });
         }
         bail!("no profile matches {} and no default_profile is set (use -p <profile>)", cwd.display())

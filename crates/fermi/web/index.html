@@ -650,6 +650,14 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
 #toast.show { opacity: 1; transform: translateX(-50%); }
 #toast.bad { border-color: var(--bad); }
 
+/* Routing decisions and budgets */
+.ev.decision summary { cursor: pointer; }
+.dec-body { display: grid; gap: 2px; padding: 4px 0 6px 14px; font-size: 12px; }
+.dec-row { display: flex; gap: 8px; align-items: baseline; }
+.dec-row.out { opacity: .6; }
+.dec-m { color: var(--text); }
+#status .budget { cursor: help; }
+
 /* Verification results */
 .checks { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 6px 12px 4px; margin: 10px 0; font: 13px/1.45 var(--sans); white-space: normal; }
 .checks.ok { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
@@ -1640,6 +1648,22 @@ function checksNode(r, title) {
   }
   return box;
 }
+// Money arrives in micro-dollars (see billing.rs).
+const usdText = (m) => { const a = Math.abs(m || 0); return `${m < 0 ? "-" : ""}$${(a / 1e6).toFixed(a % 10000 === 0 ? 2 : 6)}`; };
+function decisionNode(d) {
+  const n = el("details", "ev meta decision");
+  n.append(el("summary", null, `${d.policy} routing picked ${d.selected}`));
+  const body = el("div", "dec-body");
+  body.append(el("div", "faint", `${d.rule} (policy v${d.version})${d.remaining != null ? ` · budget left ${usdText(d.remaining)}` : ""}`));
+  for (const c of d.candidates || []) {
+    const row = el("div", "dec-row" + (c.eligible ? "" : " out"));
+    row.append(el("span", null, c.eligible ? (c.model === d.selected ? "●" : "○") : "✕"), el("span", "dec-m", c.model),
+      el("span", "faint", [c.estimate != null ? `≈ ${usdText(c.estimate)}` : "no price", c.quality != null ? `quality ${c.quality}` : null, ...(c.notes || [])].filter(Boolean).join(" · ")));
+    body.append(row);
+  }
+  n.append(body);
+  return n;
+}
 function evNode(ev, cwd) {
   switch (ev.type) {
     case "user": return userNode(ev.text, cwd);
@@ -1655,6 +1679,13 @@ function evNode(ev, cwd) {
     case "artifact": { const n = el("div", "ev art", `⇒ ${ev.path}`); n.title = "Open"; n.onclick = () => openFile(ev.path); return n; }
     case "log": return el("div", "ev dim", ev.line);
     case "done": return el("div", "ev " + (ev.ok ? "ok" : "bad"), `${ev.ok ? "✓" : "✗"} ${ev.summary}`);
+    case "estimate": {
+      const e = ev.estimate || {};
+      if (e.warning) return el("div", "ev warn", `! ${e.warning}`);
+      return e.micros != null ? el("div", "ev dim", `≈ ${e.input_tokens} in / ${e.output_tokens} out tokens, about ${usdText(e.micros)} (prices ${e.version})`) : null;
+    }
+    case "budget": return el("div", "ev " + (ev.action === "denied" ? "bad" : "dim"), `$ ${ev.note}`);
+    case "decision": return decisionNode(ev.decision || {});
     case "verify": return checksNode(ev.report, ev.passed ? "✓ Checks passed" : `✗ Checks failed${ev.attempt ? ` after repair ${ev.attempt}` : ""}`);
     case "repair": {
       const n = el("details", "ev repair");
@@ -4506,6 +4537,16 @@ function renderStatus() {
     } else if (limited) s.append(el("span", null, `limited ${fmtDur(a.limited_until - nowS())}`));
     bar.append(s);
   }
+  for (const b of S.state.budgets || []) {
+    const used = b.spent + b.reserved, pct = b.limit > 0 ? Math.round((used / b.limit) * 100) : 100;
+    const s = el("span", "acc budget");
+    s.title = `Budget ${b.name} (${b.period}): ${usdText(b.spent)} spent, ${usdText(b.reserved)} reserved by running calls, ${usdText(b.remaining)} left of ${usdText(b.limit)}`
+      + (b.overrun > 0 ? `; calls cost ${usdText(b.overrun)} more than estimated` : "") + (b.denied ? `; ${b.denied} call(s) refused` : "")
+      + ". A budget stops new calls; a running call can still cost more than its estimate.";
+    const m = el("span", "mini"); const i = el("i", pct >= 100 ? "full" : pct >= 80 ? "hi" : ""); i.style.width = Math.min(100, pct) + "%"; m.append(i);
+    s.append(el("span", "sdot" + (b.remaining <= 0 ? " bad" : "")), el("span", null, `$ ${b.name}`), m, el("span", null, `${usdText(used)} / ${usdText(b.limit)}`));
+    bar.append(s);
+  }
   bar.append(el("span", "spacer"));
   const running = [...S.tasks.values()].filter((t) => t.status === "running").length;
   if (running) bar.append(el("span", null, `${running} running`));
@@ -4551,6 +4592,10 @@ function onMessage(m) {
       schedule("side", "status");
       if (m.id === S.sel) schedule("composer");
       if (m.event.type === "artifact") S.tree.clear(), schedule("files");
+      if (m.event.type === "budget" && S.state?.budgets) {
+        const i = S.state.budgets.findIndex((b) => b.name === m.event.state?.name);
+        if (i >= 0) S.state.budgets[i] = m.event.state;
+      }
       if (m.event.type === "done" && m.id === S.sel && log?.some((e) => e.type === "blocked")) renderChat();
       // A finished task may have changed files: refresh the tree and the changes.
       if (m.event.type === "done" && norm(m.task?.cwd) === norm(S.ws)) { S.tree.clear(); schedule("files"); }

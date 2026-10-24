@@ -231,6 +231,16 @@ fn push_event(t: &mut TaskView, ev: Event) {
         Event::Blocked { tool, detail, .. } => t.lines.push((Kind::Warn, format!("⚠ needed approval: {tool} {detail}"))),
         Event::Artifact { path } => t.lines.push((Kind::Good, format!("⇒ {path}"))),
         Event::Log { line } => t.lines.push((Kind::Dim, line)),
+        Event::Estimate { estimate } => {
+            if let Some(w) = estimate["warning"].as_str() {
+                t.lines.push((Kind::Warn, format!("! {w}")));
+            }
+        }
+        Event::Budget { action, note, .. } => t.lines.push((if action == "denied" { Kind::Bad } else { Kind::Dim }, format!("$ {note}"))),
+        Event::Decision { decision } => t.lines.push((
+            Kind::Meta,
+            format!("▸ {} policy picked {}", decision["policy"].as_str().unwrap_or(""), decision["selected"].as_str().unwrap_or("")),
+        )),
         Event::Verify { passed, report, .. } => {
             let summary = serde_json::from_value::<fermi_core::verify::Report>(report).map(|r| r.summary()).unwrap_or_default();
             t.lines.push((if passed { Kind::Good } else { Kind::Bad }, format!("{} {summary}", if passed { "✓" } else { "✗" })));
@@ -1307,7 +1317,6 @@ fn wrap(s: &str, width: usize) -> Vec<String> {
 mod tests {
     use super::*;
     use fermi_core::config::Config;
-    use fermi_core::state::Store;
     use ratatui::backend::TestBackend;
     use ratatui::crossterm::event::{KeyEventState, MouseEvent};
     use ratatui::Terminal;
@@ -1332,7 +1341,7 @@ mod tests {
     fn app() -> (App, EvTx) {
         let cfg = Config::parse(CFG).unwrap();
         let home = std::env::temp_dir().join(format!("fermi-tui-test-{}", std::process::id()));
-        let engine = Arc::new(Engine { catalog: cfg.catalog(), store: Store::open(&home), cfg, home, depth: 0 });
+        let engine = Arc::new(Engine::new(cfg, home, 0));
         let (probe_tx, _) = mpsc::unbounded_channel();
         let (ev_tx, _) = mpsc::unbounded_channel();
         let mut a = App::new(engine, None, PathBuf::from("/"), probe_tx);

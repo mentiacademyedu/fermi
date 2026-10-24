@@ -20,8 +20,8 @@ cases:
     auditNote: "Five adapters (Claude/Codex/Gemini CLIs, Anthropic and OpenAI APIs) normalize into one Event stream and RunResult. The acceptance test covers the three CLI adapters through the fake CLI; the two API adapters need an HTTP mock (not built yet), so the case stays partial."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_01_adapter_normalization
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: AI-02
     title: "Common task interface"
     system: model-agnostic-ai-engine
@@ -38,8 +38,8 @@ cases:
     auditNote: "Every provider runs through Task and Engine::run with the same lifecycle and Event schema. Unverified against a fixture oracle."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_02_common_task_interface
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: AI-03
     title: "Model switching with state"
     system: model-agnostic-ai-engine
@@ -56,8 +56,8 @@ cases:
     auditNote: "Model switch per reply; same provider resumes the session, other providers get the transcript; Routed events attribute each turn."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_03_model_switching_with_state
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: AI-04
     title: "Rate limit handling"
     system: model-agnostic-ai-engine
@@ -92,8 +92,8 @@ cases:
     auditNote: "Provider outages (HTTP 5xx from the APIs; 5xx, overloaded or unavailable from the CLIs) fail over to the profile's next account, then the next candidate model, recorded as Failover events; pinning the account and model disables it. Fixed 2026-10-23: CLI outages failed without fallback (D-004)."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_05_provider_outage_handling
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: AI-06
     title: "Capability validation"
     system: model-agnostic-ai-engine
@@ -123,11 +123,11 @@ cases:
     action: "Set a maximum API budget of $0.50"
     expected: "No new billable calls are dispatched after the estimated remaining allowance is exhausted"
     evidence: "Reservation ledger denied dispatch and estimate reconciliation."
-    capability: missing
-    implementation: ""
-    auditNote: "No budget or reservation ledger."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/billing.rs (Ledger), engine.rs"
+    auditNote: "Profiles with a budget reserve each call's estimate atomically in a shared ledger before dispatch; a call that doesn't fit is refused with the numbers behind it; actual costs settle later and overruns stay visible. Added 2026-10-24."
+    testFile: crates/acceptance-tests/tests/cost.rs
+    testName: ai_07_budget_exhaustion
     executionState: not_run
     status: not_implemented
   - id: AI-08
@@ -165,8 +165,8 @@ cases:
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_01_concurrent_workers
     repetitions: 20
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-02
     title: "Dependency ordering"
     system: multi-agent-orchestration
@@ -183,8 +183,8 @@ cases:
     auditNote: "Dependencies gate starts; failed or interrupted tasks block dependents (run goes to attention); cancel stops the run."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_02_dependency_ordering
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-03
     title: "Independent edits"
     system: multi-agent-orchestration
@@ -201,8 +201,8 @@ cases:
     auditNote: "Separate worktrees and branches merged with --no-ff into an integration branch; manually verified on a fixture (2 runs)."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_03_independent_edits
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-04
     title: "Conflicting edits"
     system: multi-agent-orchestration
@@ -219,8 +219,8 @@ cases:
     auditNote: "Conflicts are detected (unmerged paths) and logged with both branches kept, but resolution is delegated automatically to a debugger agent rather than escalated to the user. Manually verified once."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_04_conflicting_edits
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-05
     title: "Scoped delegation"
     system: multi-agent-orchestration
@@ -255,8 +255,8 @@ cases:
     auditNote: "A killed agent process marks only its task failed; concurrent tasks finish with their results. In team runs a failed task blocks its dependents (MA-02)."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_06_worker_crash_isolation
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-07
     title: "Parent cancellation"
     system: multi-agent-orchestration
@@ -273,8 +273,8 @@ cases:
     auditNote: "Cancel stops running agents and every process they started (process tree), and queued tasks never start. Fixed 2026-10-23: processes started by the CLI were orphaned (D-005)."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_07_parent_cancellation
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-08
     title: "Verified integration"
     system: multi-agent-orchestration
@@ -291,8 +291,8 @@ cases:
     auditNote: "The integrated branch must pass the project's mandatory checks before merging; a failing run gets bounded debugger fixes and re-checks, and merge refuses anything but the exact commit that passed. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_08_verified_integration
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-01
     title: "Repository indexing"
     system: semantic-codebase-intelligence
@@ -309,8 +309,8 @@ cases:
     auditNote: "Indexes Rust, Python, JS, TS/TSX, Go with .gitignore; lists unsupported files and the indexed git revision (added 2026-10-23, D-006)."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_01_repository_indexing
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-02
     title: "Exact symbol lookup"
     system: semantic-codebase-intelligence
@@ -327,8 +327,8 @@ cases:
     auditNote: "Exact and prefix lookup with file and line span."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_02_exact_symbol_lookup
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-03
     title: "Caller discovery"
     system: semantic-codebase-intelligence
@@ -345,8 +345,8 @@ cases:
     auditNote: "Static callers resolved same-file, then imported files; results declare the analysis scope (dynamic dispatch is not covered; added 2026-10-23, D-006)."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_03_caller_discovery
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-04
     title: "Scope-safe rename"
     system: semantic-codebase-intelligence
@@ -381,8 +381,8 @@ cases:
     auditNote: "Incremental re-parse by mtime and size on every query; no completion event."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_05_incremental_refresh
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-06
     title: "Invalid syntax handling"
     system: semantic-codebase-intelligence
@@ -417,8 +417,8 @@ cases:
     auditNote: "Transitive callers and importers with visited sets (cycles terminate), tests to run, and a declared scope of what isn't covered."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_07_dependency_impact
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-08
     title: "Symbol identity"
     system: semantic-codebase-intelligence
@@ -435,8 +435,8 @@ cases:
     auditNote: "Duplicate names resolve per importing file; lookup by Type::name, module path (util::text::helper, added 2026-10-23) or path:line."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_08_symbol_identity
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: PM-01
     title: "Durable decisions"
     system: persistent-project-memory
@@ -597,8 +597,8 @@ cases:
     auditNote: "fermi runs the project's checks (.fermi/checks.toml or detected from manifests) and parses diagnostics from cargo JSON and common text formats (rustc, gcc, go, tsc, eslint, ruff, Python) with file, line and column. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_01_compiler_diagnostics
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: VE-02
     title: "Failing test feedback"
     system: integrated-verification-engine
@@ -615,8 +615,8 @@ cases:
     auditNote: "Agents call the run_checks tool and get each failing test with its output and the exit code; verified tasks record a Verify event. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_02_failing_test_feedback
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: VE-03
     title: "Repair and rerun"
     system: integrated-verification-engine
@@ -633,8 +633,8 @@ cases:
     auditNote: "Verified tasks: after the agent, fermi runs the checks and sends failures back to the same session; protected files (protect globs) must stay unchanged. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_03_repair_and_rerun
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: VE-04
     title: "Lint enforcement"
     system: integrated-verification-engine
@@ -651,8 +651,8 @@ cases:
     auditNote: "Lint checks run like any other; clippy and text-format rule ids and locations are reported and a mandatory lint failure fails the task. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_04_lint_enforcement
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: VE-05
     title: "Dependency advisory detection"
     system: integrated-verification-engine
@@ -669,8 +669,8 @@ cases:
     auditNote: "Built-in scanner matches Cargo.lock, package-lock.json and requirements.txt against OSV records; records scanner version and dataset SHA-256; nothing is installed or run. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_05_dependency_advisory_detection
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: VE-06
     title: "Structured edit integrity"
     system: integrated-verification-engine
@@ -687,8 +687,8 @@ cases:
     auditNote: "Replaces one definition by its syntax-tree byte range, refuses ambiguous targets and edits that don't parse or drop the definition. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_06_structured_edit_integrity
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: VE-07
     title: "Bounded repair attempts"
     system: integrated-verification-engine
@@ -705,8 +705,8 @@ cases:
     auditNote: "Repair turns are bounded by max_repairs (task option, else the project's, else 3); the final failure is explicit. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_07_bounded_repair_attempts
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: VE-08
     title: "Completion enforcement"
     system: integrated-verification-engine
@@ -723,8 +723,8 @@ cases:
     auditNote: "A verified task ends done only if every mandatory check passed; a team run is mergeable only with passing checks on exactly the commit being merged (service and API). Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_08_completion_enforcement
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: BA-01
     title: "Local site launch"
     system: browser-and-application-control
@@ -1061,8 +1061,8 @@ cases:
     expected: "Recorded usage matches returned usage fields"
     evidence: "Provider metadata stored usage and reconciliation."
     capability: partial
-    implementation: "crates/fermi-core/src/state.rs (UsageRecord), providers/claude_cli.rs"
-    auditNote: "Input (incl. cache), output tokens and CLI-reported cost recorded per run; cached tokens are folded into input, unknown fields recorded as 0."
+    implementation: "crates/fermi-core/src/state.rs (UsageRecord), billing.rs"
+    auditNote: "Input, cached and cache-write tokens, output tokens, the CLI-reported cost and the price-table cost (with version and breakdown) are recorded per call; per-model-call detail inside a CLI run isn't visible."
     testFile: null
     testName: null
     executionState: not_run
@@ -1101,8 +1101,8 @@ cases:
     auditNote: "Every task's events persist in ~/.fermi/history/<id>.json and survive restarts."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_05_trace_persistence
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: OB-06
     title: "Resume correlation"
     system: agent-observability
@@ -1168,11 +1168,11 @@ cases:
     action: "Send a request with mock token usage"
     expected: "Correct cost computed from configured prices"
     evidence: "Usage fixture price version and expected versus actual cost."
-    capability: missing
-    implementation: ""
-    auditNote: "Cost comes from the CLI's own total_cost_usd; no price tables."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/billing.rs (cost)"
+    auditNote: "Versioned price tables in config; exact picodollar arithmetic rounded half up to USD 0.000001 per call. Added 2026-10-24."
+    testFile: crates/acceptance-tests/tests/cost.rs
+    testName: co_01_token_cost_arithmetic
     executionState: not_run
     status: not_implemented
   - id: CO-02
@@ -1186,11 +1186,11 @@ cases:
     action: "Apply a cached-input discount"
     expected: "Effective cost reflects eligible cached tokens"
     evidence: "Usage breakdown rates and cost calculation."
-    capability: missing
-    implementation: ""
-    auditNote: "No cached-input pricing."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/billing.rs (cost), providers"
+    auditNote: "Cached and cache-write input tokens are tracked separately; the cache rate applies only where the model's price declares one. Added 2026-10-24."
+    testFile: crates/acceptance-tests/tests/cost.rs
+    testName: co_02_cached_token_discounts
     executionState: not_run
     status: not_implemented
   - id: CO-03
@@ -1204,11 +1204,11 @@ cases:
     action: "Select economy routing for a simple task"
     expected: "Policy chooses an eligible lower-cost model"
     evidence: "Routing inputs policy version and selected model rationale."
-    capability: partial
-    implementation: "crates/fermi-core/src/router.rs"
-    auditNote: "Auto routing sends light work to tier 1 models; no explicit economy policy with costs."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/router.rs (policy)"
+    auditNote: "routing = \"economy\": the cheapest eligible model by estimate (capability required), declared tie-breakers, recorded decision. Added 2026-10-24."
+    testFile: crates/acceptance-tests/tests/cost.rs
+    testName: co_03_economy_routing
     executionState: not_run
     status: not_implemented
   - id: CO-04
@@ -1222,11 +1222,11 @@ cases:
     action: "Select quality routing for a difficult task"
     expected: "Policy follows declared quality and capability priorities"
     evidence: "Candidate scores eligibility decisions and selected model."
-    capability: partial
-    implementation: "crates/fermi-core/src/router.rs"
-    auditNote: "Heavy work goes to tier 3; no declared quality ranking policy."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/router.rs (policy)"
+    auditNote: "routing = \"quality\": the highest declared quality rank among models with the capability that fit the budget; recorded decision. Added 2026-10-24."
+    testFile: crates/acceptance-tests/tests/cost.rs
+    testName: co_04_quality_routing
     executionState: not_run
     status: not_implemented
   - id: CO-05
@@ -1240,11 +1240,11 @@ cases:
     action: "Add simultaneous agents under one budget"
     expected: "Shared reservations prevent unchecked overspending"
     evidence: "Concurrent reservation ledger dispatch count and reconciliation."
-    capability: missing
-    implementation: ""
-    auditNote: "No shared budget reservations."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/billing.rs (Ledger::reserve)"
+    auditNote: "Reservations are atomic across threads and fermi processes (lock file); refusals leave no charge; settlement reconciles actual cost. Added 2026-10-24."
+    testFile: crates/acceptance-tests/tests/cost.rs
+    testName: co_05_shared_budget_reservations
     executionState: not_run
     status: not_implemented
   - id: CO-06
@@ -1258,11 +1258,11 @@ cases:
     action: "Simulate a model price change"
     expected: "Updated future calculations use the new versioned price table"
     evidence: "Price versions effective timestamps and both usage records."
-    capability: missing
-    implementation: ""
-    auditNote: "No versioned price tables."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/billing.rs (price_at)"
+    auditNote: "Each call records the price version in effect and its calculation; new versions apply from their effective time without rewriting history. Added 2026-10-24."
+    testFile: crates/acceptance-tests/tests/cost.rs
+    testName: co_06_versioned_price_updates
     executionState: not_run
     status: not_implemented
   - id: CO-07
@@ -1276,11 +1276,11 @@ cases:
     action: "Trigger a large-context request"
     expected: "Estimated spend and token-limit warnings are generated"
     evidence: "Estimates threshold decisions warnings and dispatch log."
-    capability: missing
-    implementation: ""
-    auditNote: "No context-size estimation or warnings."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/billing.rs (estimate), engine.rs"
+    auditNote: "Documented estimator (4 bytes per token); warnings from a configurable share of the context window; over-window requests aren't sent. Added 2026-10-24."
+    testFile: crates/acceptance-tests/tests/cost.rs
+    testName: co_07_large_context_warnings
     executionState: not_run
     status: not_implemented
   - id: CO-08
@@ -1294,11 +1294,11 @@ cases:
     action: "Complete a multi-agent task"
     expected: "Total usage is attributable to tasks, agents, and providers"
     evidence: "Call ledger grouped totals and reconciliation report."
-    capability: partial
-    implementation: "crates/fermi-core/src/state.rs (usage.jsonl)"
-    auditNote: "Usage logged per run by profile, account and model; not grouped by team run, parent or child task."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/billing.rs (report), state.rs"
+    auditNote: "Usage records carry task, delegating task, team run, agent and attempt; reports group by any of them and reconcile, showing failed attempts and unallocated calls. Added 2026-10-24."
+    testFile: crates/acceptance-tests/tests/cost.rs
+    testName: co_08_usage_attribution
     executionState: not_run
     status: not_implemented
   - id: SE-01
@@ -1461,8 +1461,8 @@ cases:
     auditNote: "Tasks run locally and record changed files and artifacts."
     testFile: crates/acceptance-tests/tests/execution.rs
     testName: lr_01_local_execution
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: LR-02
     title: "Container equivalence"
     system: local-and-remote-execution
@@ -1870,11 +1870,11 @@ cases:
     action: "Agent completes task exceeding budget"
     expected: "New calls halted and budget status reported"
     evidence: "Ledger in-flight usage denied dispatch and budget display."
-    capability: missing
-    implementation: ""
-    auditNote: "Needs budgets (System 9)."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/billing.rs, engine.rs, crates/fermi/src/server.rs"
+    auditNote: "After an in-flight call settles over its estimate, new calls are refused; the overrun and remaining allowance show in the task and the dashboard. Added 2026-10-24."
+    testFile: crates/acceptance-tests/tests/cost.rs
+    testName: e2e_08_task_exceeding_budget
     executionState: not_run
     status: not_implemented
   - id: E2E-09

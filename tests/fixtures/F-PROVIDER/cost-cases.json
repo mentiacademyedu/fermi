@@ -1,0 +1,23 @@
+{
+  "about": "CO-01 oracle: a pinned price table and usage, with costs worked out by hand (USD per 1M tokens; cost = tokens x rate / 1e6, rounded half up to USD 0.000001 per call).",
+  "prices": {
+    "version": "F-PROVIDER-1",
+    "effective": "2026-01-01T00:00:00Z",
+    "currency": "USD",
+    "models": {
+      "claude:sonnet": { "input": 3.0, "output": 15.0 },
+      "half": { "input": 0.5, "output": 0.5 },
+      "fine": { "input": "0.499999", "output": "1.234567" }
+    }
+  },
+  "cases": [
+    { "name": "typical call", "model": "claude:sonnet", "input": 1234, "output": 567, "expected_usd": "0.012207", "work": "1234 x 3 = 3702 u$; 567 x 15 = 8505 u$" },
+    { "name": "zero tokens", "model": "claude:sonnet", "input": 0, "output": 0, "expected_usd": "0" },
+    { "name": "large call", "model": "claude:sonnet", "input": 1000000, "output": 1000000, "expected_usd": "18" },
+    { "name": "exactly half a micro-dollar rounds up", "model": "half", "input": 1, "output": 0, "expected_usd": "0.000001", "work": "1 x 0.5 = 0.5 u$" },
+    { "name": "one and a half rounds up", "model": "half", "input": 2, "output": 1, "expected_usd": "0.000002", "work": "3 x 0.5 = 1.5 u$" },
+    { "name": "just under half rounds down", "model": "fine", "input": 1, "output": 0, "expected_usd": "0", "work": "1 x 0.499999 = 0.499999 u$" },
+    { "name": "parts summed before rounding", "model": "fine", "input": 1, "output": 1, "expected_usd": "0.000002", "work": "0.499999 + 1.234567 = 1.734566 u$" },
+    { "name": "six-decimal rate at scale", "model": "fine", "input": 3, "output": 1000001, "expected_usd": "1.234570", "work": "3 x 0.499999 = 1.499997 u$; 1000001 x 1.234567 = 1234568.234567 u$; total 1234569.734564 u$" }
+  ]
+}

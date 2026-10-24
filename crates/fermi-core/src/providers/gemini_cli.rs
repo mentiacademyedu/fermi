@@ -93,6 +93,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
                 done = true;
                 let s = &v["stats"];
                 usage.input = s["input_tokens"].as_u64().unwrap_or(0);
+                usage.cached_input = s["cached"].as_u64().unwrap_or(0);
                 usage.output = s["output_tokens"].as_u64().unwrap_or(0);
                 if v["status"] == "error" {
                     error = v["error"]["message"].as_str().map(str::to_string).or(error);

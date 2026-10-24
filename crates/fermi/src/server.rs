@@ -200,6 +200,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/slides/save", post(pptx_save).layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)))
         .route("/api/attachments", post(attach).layer(axum::extract::DefaultBodyLimit::max(25 * 1024 * 1024)))
         .route("/api/usage", get(usage))
+        .route("/api/usage/report", get(usage_report))
         .route("/api/trending", get(trending))
         .route("/api/repos/clone", post(clone_repo))
         .route("/api/open-url", post(open_url))
@@ -332,7 +333,7 @@ impl Srv {
             .map(|p| {
                 json!({
                     "name": p.name, "mode": p.mode, "accounts": p.accounts, "models": p.models, "paths": p.paths,
-                    "effort": p.effort, "permission_mode": p.permission_mode,
+                    "effort": p.effort, "permission_mode": p.permission_mode, "budget": p.budget, "routing": p.routing,
                     "default": e.cfg.default_profile.as_deref() == Some(p.name.as_str()),
                 })
             })
@@ -363,6 +364,8 @@ impl Srv {
             "home": dirs_home(),
             "permissions": fermi_core::engine::PERMISSIONS,
             "efforts": fermi_core::models::EFFORTS,
+            // Where each budget stands (settled, reserved by running calls, left).
+            "budgets": e.cfg.budgets.iter().map(|b| e.ledger.state(b, now())).collect::<Vec<_>>(),
             "tasks": self.hub.list(),
             "now": now(),
         })
@@ -1391,6 +1394,22 @@ async fn usage(State(s): S, Query(q): Query<UsageQuery>) -> Response {
     .await
     .unwrap_or_default();
     Json(json!({ "since": since, "rows": rows })).into_response()
+}
+
+#[derive(Deserialize)]
+struct ReportQuery {
+    by: Option<String>,
+    days: Option<u64>,
+}
+
+/// Usage grouped by task, team run, agent, provider, model or account, reconciled.
+async fn usage_report(State(s): S, Query(q): Query<ReportQuery>) -> Response {
+    let since = q.days.map(|d| now().saturating_sub(d.clamp(1, 3650) * 86_400)).unwrap_or(0);
+    let by = q.by.unwrap_or_else(|| "provider".into());
+    match fermi_core::billing::report(&s.hub.engine().home, &by, since) {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    }
 }
 
 #[derive(Deserialize)]

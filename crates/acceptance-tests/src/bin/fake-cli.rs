@@ -8,7 +8,7 @@
 //!
 //! A step (all fields optional):
 //! `match` (choose this step when the prompt contains it), `text`, `tools`
-//! ([{name, input}]), `usage` ({input, output, cost}), `edits` ([{path,
+//! ([{name, input}]), `usage` ({input, cached, output, cost}), `edits` ([{path,
 //! content}] relative to the working folder), `denials` ([{tool, input}]),
 //! `error` (a provider error message), `limit` (a usage-limit rejection),
 //! `touch` / `wait_for` (barrier files, relative to the account folder),
@@ -147,6 +147,8 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
     let tools: Vec<Value> = step["tools"].as_array().cloned().unwrap_or_default();
     let usage = &step["usage"];
     let (input, output) = (usage["input"].as_u64().unwrap_or(10), usage["output"].as_u64().unwrap_or(5));
+    // Input read from the prompt cache, on top of `input`.
+    let cached = usage["cached"].as_u64().unwrap_or(0);
     let cost = usage["cost"].as_f64();
     let session = format!("fake-session-{n}");
 
@@ -192,7 +194,7 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
                 .map(|(i, d)| json!({ "tool_name": d["tool"], "tool_use_id": format!("toolu_{i}"), "tool_input": d["input"] }))
                 .collect();
             let mut result = json!({ "type": "result", "subtype": "success", "is_error": false, "result": text, "session_id": session,
-                "usage": { "input_tokens": input, "output_tokens": output }, "permission_denials": denials });
+                "usage": { "input_tokens": input, "cache_read_input_tokens": cached, "output_tokens": output }, "permission_denials": denials });
             if let Some(c) = cost {
                 result["total_cost_usd"] = json!(c);
             }
@@ -217,7 +219,9 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
             if !text.is_empty() {
                 out(json!({ "type": "item.completed", "item": { "type": "agent_message", "text": text } }));
             }
-            out(json!({ "type": "turn.completed", "usage": { "input_tokens": input, "output_tokens": output } }));
+            out(
+                json!({ "type": "turn.completed", "usage": { "input_tokens": input + cached, "cached_input_tokens": cached, "output_tokens": output } }),
+            );
         }
         Flavor::Gemini => {
             out(json!({ "type": "init", "session_id": session }));

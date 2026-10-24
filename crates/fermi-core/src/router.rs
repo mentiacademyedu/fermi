@@ -160,19 +160,141 @@ pub fn candidates(
         // otherwise a text model takes them (and can delegate over MCP).
         list.retain(|m| m.has(Cap::Image));
     }
-    if profile.mode == Mode::Auto {
+    // An economy or quality policy (see `policy`) judges every model itself.
+    let classic = profile.routing == crate::config::Routing::Auto;
+    if profile.mode == Mode::Auto && classic {
         let matching: Vec<_> = list.iter().filter(|m| m.has(need.cap)).cloned().collect();
         if !matching.is_empty() {
             list = matching;
         }
     }
-    if profile.mode != Mode::Single {
+    if profile.mode != Mode::Single && classic {
         list.sort_by_key(|m| score(m, need));
     }
     if list.is_empty() {
         bail!("profile `{}` has no account that can run any of its models", profile.name);
     }
     Ok(list)
+}
+
+/// Version of the policy rules below; recorded in every decision.
+pub const POLICY_VERSION: u32 = 1;
+
+/// A model's estimated cost for the task (micro-dollars) and declared quality, when known.
+pub type ModelInfo<'a> = dyn Fn(&ModelSpec) -> (Option<i64>, Option<u32>) + 'a;
+
+/// One model as a policy saw it.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Candidate {
+    pub model: String,
+    pub eligible: bool,
+    /// Why it's ineligible, or how it was ranked.
+    pub notes: Vec<String>,
+    /// Estimated cost of this task on it (micro-dollars), when it has a price.
+    pub estimate: Option<i64>,
+    /// Declared quality rank (price table), when set.
+    pub quality: Option<u32>,
+    pub tier: u8,
+}
+
+/// The record of an economy or quality routing decision.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Decision {
+    pub policy: String,
+    pub version: u32,
+    pub need: String,
+    pub rule: String,
+    /// The profile's remaining budget (micro-dollars), when it has one.
+    pub remaining: Option<i64>,
+    pub candidates: Vec<Candidate>,
+    /// Eligible models, best first.
+    pub order: Vec<String>,
+    pub selected: String,
+}
+
+/// Orders `list` by a cost or quality policy. A model is eligible when it has
+/// the task's capability (never traded for price or rank) and its estimate
+/// fits the remaining budget. Economy: lowest estimate, then higher declared
+/// quality, then id; models without a price come last. Quality: highest
+/// declared rank (from the price table, never what a model says about
+/// itself), then lower estimate, then id; models without a rank come last.
+pub fn policy(
+    routing: crate::config::Routing,
+    list: Vec<ModelSpec>,
+    need: &Need,
+    info: &ModelInfo<'_>,
+    remaining: Option<i64>,
+) -> Result<(Vec<ModelSpec>, Decision)> {
+    use crate::config::Routing;
+    let economy = routing == Routing::Economy;
+    let mut cands = vec![];
+    let mut ok: Vec<(ModelSpec, Option<i64>, Option<u32>)> = vec![];
+    for m in list {
+        let (est, quality) = info(&m);
+        let mut notes = vec![];
+        if !m.has(need.cap) {
+            notes.push(format!("lacks the {:?} capability this task needs", need.cap).to_lowercase());
+        }
+        if let (Some(r), Some(e)) = (remaining, est) {
+            if e > r {
+                notes.push(format!("estimate {} is over the remaining budget {}", crate::billing::fmt_usd(e), crate::billing::fmt_usd(r)));
+            }
+        }
+        let eligible = notes.is_empty();
+        if eligible {
+            if economy && est.is_none() {
+                notes.push("no price: ranked after priced models".into());
+            }
+            if !economy && quality.is_none() {
+                notes.push("no declared quality: ranked last".into());
+            }
+            ok.push((m.clone(), est, quality));
+        }
+        cands.push(Candidate { model: m.id.clone(), eligible, notes, estimate: est, quality, tier: m.tier });
+    }
+    if economy {
+        ok.sort_by(|a, b| {
+            (a.1.is_none(), a.1.unwrap_or(0), std::cmp::Reverse(a.2.unwrap_or(0)), &a.0.id).cmp(&(
+                b.1.is_none(),
+                b.1.unwrap_or(0),
+                std::cmp::Reverse(b.2.unwrap_or(0)),
+                &b.0.id,
+            ))
+        });
+    } else {
+        ok.sort_by(|a, b| {
+            (a.2.is_none(), std::cmp::Reverse(a.2.unwrap_or(0)), a.1.is_none(), a.1.unwrap_or(0), &a.0.id).cmp(&(
+                b.2.is_none(),
+                std::cmp::Reverse(b.2.unwrap_or(0)),
+                b.1.is_none(),
+                b.1.unwrap_or(0),
+                &b.0.id,
+            ))
+        });
+    }
+    let order: Vec<ModelSpec> = ok.into_iter().map(|x| x.0).collect();
+    let Some(first) = order.first() else {
+        bail!(
+            "no model fits this task under the {} policy: {}",
+            if economy { "economy" } else { "quality" },
+            cands.iter().map(|c| format!("{} ({})", c.model, c.notes.join("; "))).collect::<Vec<_>>().join(", ")
+        );
+    };
+    let decision = Decision {
+        policy: if economy { "economy".into() } else { "quality".into() },
+        version: POLICY_VERSION,
+        need: format!("{:?} — {}", need.cap, need.why).to_lowercase(),
+        rule: if economy {
+            "eligible = has the capability and fits the budget; lowest estimate, then higher declared quality, then id".into()
+        } else {
+            "eligible = has the capability and fits the budget; highest declared quality, then lower estimate, then id".into()
+        },
+        remaining,
+        selected: first.id.clone(),
+        order: order.iter().map(|m| m.id.clone()).collect(),
+        candidates: cands,
+    };
+    Ok((order, decision))
 }
 
 #[cfg(test)]

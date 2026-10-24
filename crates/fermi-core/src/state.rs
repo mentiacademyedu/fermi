@@ -35,16 +35,29 @@ impl AcctState {
     }
 }
 
+/// One call, as appended to `usage.jsonl`.
 #[derive(Debug, Serialize)]
 pub struct UsageRecord<'a> {
     pub ts: u64,
     pub profile: &'a str,
     pub account: &'a str,
     pub model: &'a str,
+    /// ok | limited | failed (failed attempts are retried on another account or model).
     pub status: &'a str,
+    /// Every input token, including cached ones.
     pub input_tokens: u64,
+    pub cached_input_tokens: u64,
+    pub cache_write_tokens: u64,
     pub output_tokens: u64,
+    /// Cost the provider reported.
     pub cost_usd: Option<f64>,
+    /// Cost from the price table in effect, with its version and breakdown.
+    pub cost: Option<&'a crate::billing::Cost>,
+    pub estimate_micros: Option<i64>,
+    /// Which try within the task's run (1 = first account and model).
+    pub attempt: u32,
+    #[serde(flatten)]
+    pub who: &'a crate::billing::Attribution,
     pub secs: f64,
 }
 

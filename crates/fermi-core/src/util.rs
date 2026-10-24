@@ -107,3 +107,15 @@ fn unwrap_cmd_shim(cmd: &Path) -> Option<PathBuf> {
         exe.is_file().then_some(exe)
     })
 }
+
+/// Day of the month (1-31, UTC) of a unix time.
+pub fn day_of_month(t: u64) -> u32 {
+    // Civil from days (Howard Hinnant's algorithm).
+    let z = (t / 86_400) as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    (doy - (153 * mp + 2) / 5 + 1) as u32
+}

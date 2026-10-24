@@ -4,6 +4,7 @@
 //! [`Engine`] and consumes the same [`Event`] stream.
 
 pub mod auth;
+pub mod billing;
 pub mod code;
 pub mod config;
 pub mod deck;
