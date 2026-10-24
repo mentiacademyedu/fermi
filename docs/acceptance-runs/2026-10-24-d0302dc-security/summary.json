@@ -1,0 +1,216 @@
+{
+  "cases": [
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 936,
+      "id": "MA-06",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2726,
+      "id": "MA-07",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1872,
+      "id": "PM-07",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1094,
+      "id": "PM-08",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 7283,
+      "id": "OB-06",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1057,
+      "id": "OB-07",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "the OS file sandbox needs Linux (Landlock); fermi's deny_read policy and the canary scan were verified on this platform",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 560,
+      "id": "SE-01",
+      "status": "blocked",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 592,
+      "id": "SE-02",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2192,
+      "id": "SE-03",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "blocking a connection that bypasses the proxy needs Linux (Landlock); the proxy allowlist was verified on this platform",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 556,
+      "id": "SE-04",
+      "status": "blocked",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "file isolation between tasks needs Linux (Landlock); on this platform each task has its own folder, temp and environment but no OS boundary",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 672,
+      "id": "SE-05",
+      "status": "blocked",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 864,
+      "id": "SE-06",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 562,
+      "id": "SE-07",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1384,
+      "id": "SE-08",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 696,
+      "id": "E2E-08",
+      "status": "passed",
+      "system": "end-to-end"
+    }
+  ],
+  "commitSha": "d0302dcabef27f3985f6fbeb4dd8e806c11ee8e4",
+  "dirtyTree": false,
+  "os": "windows",
+  "profile": "security",
+  "runId": "2026-10-24-d0302dc-security"
+}

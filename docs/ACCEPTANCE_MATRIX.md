@@ -2,7 +2,7 @@
 
 Phase 1 audit of fermi (called APEX in the spec) against `docs/FERMI_ADE_Verification_and_Acceptance_Testing`.
 
-Published run `2026-10-24-02130df` on revision `02130df9d80b`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-24-02130df/REPORT.md`.
+Published run `2026-10-24-d0302dc` on revision `d0302dcabef2`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-24-d0302dc/REPORT.md`.
 
 *Result* is the published acceptance outcome: `passed` or `failed` from an executed test with validated evidence; `not_implemented` when no test exists (usually because the capability is missing); `not_run` when a test exists but wasn't in the published run.
 *Capability* is an audit finding from reading the code; it is not verification.
@@ -20,13 +20,13 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | 5 Integrated verification engine | 8 | 8 | 0 | 0 | 8 / 8 |
 | 6 Browser and application control | 8 | 0 | 0 | 8 | 0 / 8 |
 | 7 Composable harness and plugin system | 8 | 0 | 2 | 6 | 0 / 8 |
-| 8 Agent observability | 8 | 1 | 5 | 2 | 1 / 8 |
+| 8 Agent observability | 8 | 8 | 0 | 0 | 8 / 8 |
 | 9 Cost and performance optimization | 8 | 8 | 0 | 0 | 8 / 8 |
 | 10 Security and isolation | 8 | 8 | 0 | 0 | 5 / 8 |
 | 11 Local and remote execution | 8 | 1 | 1 | 6 | 1 / 8 |
 | 12 Evaluation and self-improvement | 8 | 0 | 0 | 8 | 0 / 8 |
 | End-to-end workflows | 10 | 1 | 6 | 3 | 1 / 10 |
-| **Total** | **106** | **51** | **17** | **38** | **50 / 106** |
+| **Total** | **106** | **58** | **12** | **36** | **57 / 106** |
 
 ## 1 Model-agnostic AI engine
 
@@ -123,14 +123,14 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| OB-01 | Complete operation trace | T1 | **not_implemented** | — | partial | crates/fermi-core/src/hub.rs (TaskRec.events) | Tool calls and turns are traced; individual model calls inside a CLI run are not visible. |
-| OB-02 | Invocation detail | T1 | **not_implemented** | — | partial | crates/fermi-core/src/events.rs (Tool) | Tool name and a one-line input summary only; no outputs, duration or status. |
-| OB-03 | Usage fidelity | T0 T1 | **not_implemented** | — | partial | crates/fermi-core/src/state.rs (UsageRecord), billing.rs | Input, cached and cache-write tokens, output tokens, the CLI-reported cost and the price-table cost (with version and breakdown) are recorded per call; per-model-call detail inside a CLI run isn't visible. |
-| OB-04 | Failure diagnostics | T1 | **not_implemented** | — | partial | crates/fermi-core/src/events.rs (Done, Failover, Blocked) | Run failures and blocked approvals recorded; per-tool failures are not. |
-| OB-05 | Trace persistence | T1 | **passed** | ob_05_trace_persistence | implemented | crates/fermi-core/src/hub.rs (history files) | Every task's events persist in ~/.fermi/history/<id>.json and survive restarts. |
-| OB-06 | Resume correlation | T1 T3 | **not_implemented** | — | partial | crates/fermi-core/src/hub.rs (follow_up) | Follow-ups keep the task id; there is no attempt id or durable checkpoint resume. |
-| OB-07 | Secret redaction | T1 T3 | **not_implemented** | — | missing | — | No secret redaction before persistence. |
-| OB-08 | Deterministic replay | T1 | **not_implemented** | — | missing | — | No captured-response replay. |
+| OB-01 | Complete operation trace | T1 | **passed** | ob_01_complete_operation_trace | implemented | crates/fermi-core/src/trace.rs (Ops, export), providers/*_cli.rs | Every model call (Claude per message id, Codex per turn, Gemini per run) and tool invocation is an operation with its id, parent call, attempt, try (failover) and sequence number; exported by `fermi trace` and /api/tasks/<id>/trace. |
+| OB-02 | Invocation detail | T1 | **passed** | ob_02_invocation_detail | implemented | crates/fermi-core/src/events.rs (Tool, ToolResult), trace.rs | Tool inputs, redacted and shortened outputs, status, error code and a duration measured on fermi's monotonic clock. |
+| OB-03 | Usage fidelity | T0 T1 | **passed** | ob_03_usage_fidelity | implemented | crates/fermi-core/src/events.rs (Call), providers/mod.rs (Usage::reported), state.rs | Each model call keeps the provider's usage object field for field; the run's record marks counts the provider didn't report as null; Claude messages split across lines count once. |
+| OB-04 | Failure diagnostics | T1 | **passed** | ob_04_failure_diagnostics | implemented | crates/fermi-core/src/trace.rs (Ops::result, finish) | Failed tools keep status, error code (exit code or the CLI's error type) and redacted diagnostics, correlated to task, attempt and call; a tool that never reports back is no_result, never success. |
+| OB-05 | Trace persistence | T1 | **passed** | ob_05_trace_persistence | implemented | crates/fermi-core/src/hub.rs (history files, stamps) | Every task's events and their stamps persist in ~/.fermi/history/<id>.json and survive restarts. |
+| OB-06 | Resume correlation | T1 T3 | **passed** | ob_06_resume_correlation | implemented | crates/fermi-core/src/hub.rs (Hub::resume, TaskRec::reopen) | An interrupted task resumes in its provider session as the next attempt of the same task; stamps keep one gapless sequence across attempts. |
+| OB-07 | Secret redaction | T1 T3 | **passed** | ob_07_secret_redaction | implemented | crates/fermi-core/src/redact.rs | Credential formats, secret-looking environment values and [trace] redact patterns are removed from CLI output as it is read and from every event before history, tapes, exports or the live stream. |
+| OB-08 | Deterministic replay | T1 | **passed** | ob_08_deterministic_replay | implemented | crates/fermi-core/src/trace.rs (tapes, replay) | Each CLI's responses are recorded (redacted) with the task each attempt ran; `fermi replay` re-runs the task from them on a fixed clock with no CLI or network and compares normalized events and a state hash. |
 
 ## 9 Cost and performance optimization
 

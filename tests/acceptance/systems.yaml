@@ -1024,13 +1024,13 @@ cases:
     action: "Execute a task involving two model calls and three tools"
     expected: "All five operations appear in the trace"
     evidence: "Trace export operation ids and event count."
-    capability: partial
-    implementation: "crates/fermi-core/src/hub.rs (TaskRec.events)"
-    auditNote: "Tool calls and turns are traced; individual model calls inside a CLI run are not visible."
+    capability: implemented
+    implementation: "crates/fermi-core/src/trace.rs (Ops, export), providers/*_cli.rs"
+    auditNote: "Every model call (Claude per message id, Codex per turn, Gemini per run) and tool invocation is an operation with its id, parent call, attempt, try (failover) and sequence number; exported by `fermi trace` and /api/tasks/<id>/trace."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_01_complete_operation_trace
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: OB-02
     title: "Invocation detail"
     system: agent-observability
@@ -1042,13 +1042,13 @@ cases:
     action: "Inspect a tool invocation"
     expected: "Inputs, sanitized outputs, duration, and status are available"
     evidence: "Invocation record clock values and redaction assertion."
-    capability: partial
-    implementation: "crates/fermi-core/src/events.rs (Tool)"
-    auditNote: "Tool name and a one-line input summary only; no outputs, duration or status."
+    capability: implemented
+    implementation: "crates/fermi-core/src/events.rs (Tool, ToolResult), trace.rs"
+    auditNote: "Tool inputs, redacted and shortened outputs, status, error code and a duration measured on fermi's monotonic clock."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_02_invocation_detail
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: OB-03
     title: "Usage fidelity"
     system: agent-observability
@@ -1060,13 +1060,13 @@ cases:
     action: "Compare reported token usage with provider metadata"
     expected: "Recorded usage matches returned usage fields"
     evidence: "Provider metadata stored usage and reconciliation."
-    capability: partial
-    implementation: "crates/fermi-core/src/state.rs (UsageRecord), billing.rs"
-    auditNote: "Input, cached and cache-write tokens, output tokens, the CLI-reported cost and the price-table cost (with version and breakdown) are recorded per call; per-model-call detail inside a CLI run isn't visible."
+    capability: implemented
+    implementation: "crates/fermi-core/src/events.rs (Call), providers/mod.rs (Usage::reported), state.rs"
+    auditNote: "Each model call keeps the provider's usage object field for field; the run's record marks counts the provider didn't report as null; Claude messages split across lines count once."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_03_usage_fidelity
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: OB-04
     title: "Failure diagnostics"
     system: agent-observability
@@ -1078,13 +1078,13 @@ cases:
     action: "Cause a tool to fail"
     expected: "Failure and relevant diagnostic context appear in the trace"
     evidence: "Tool error parent trace and correlation ids."
-    capability: partial
-    implementation: "crates/fermi-core/src/events.rs (Done, Failover, Blocked)"
-    auditNote: "Run failures and blocked approvals recorded; per-tool failures are not."
+    capability: implemented
+    implementation: "crates/fermi-core/src/trace.rs (Ops::result, finish)"
+    auditNote: "Failed tools keep status, error code (exit code or the CLI's error type) and redacted diagnostics, correlated to task, attempt and call; a tool that never reports back is no_result, never success."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_04_failure_diagnostics
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: OB-05
     title: "Trace persistence"
     system: agent-observability
@@ -1097,8 +1097,8 @@ cases:
     expected: "Saved traces remain accessible"
     evidence: "Trace before and after restart and storage checks."
     capability: implemented
-    implementation: "crates/fermi-core/src/hub.rs (history files)"
-    auditNote: "Every task's events persist in ~/.fermi/history/<id>.json and survive restarts."
+    implementation: "crates/fermi-core/src/hub.rs (history files, stamps)"
+    auditNote: "Every task's events and their stamps persist in ~/.fermi/history/<id>.json and survive restarts."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_05_trace_persistence
     executionState: completed
@@ -1114,13 +1114,13 @@ cases:
     action: "Resume an interrupted task"
     expected: "Events remain correlated to the same task"
     evidence: "Checkpoint resume events and correlated trace."
-    capability: partial
-    implementation: "crates/fermi-core/src/hub.rs (follow_up)"
-    auditNote: "Follow-ups keep the task id; there is no attempt id or durable checkpoint resume."
+    capability: implemented
+    implementation: "crates/fermi-core/src/hub.rs (Hub::resume, TaskRec::reopen)"
+    auditNote: "An interrupted task resumes in its provider session as the next attempt of the same task; stamps keep one gapless sequence across attempts."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_06_resume_correlation
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: OB-07
     title: "Secret redaction"
     system: agent-observability
@@ -1132,13 +1132,13 @@ cases:
     action: "Insert a test secret into tool output"
     expected: "Redaction policy prevents secret exposure in persisted traces"
     evidence: "Sanitized trace export and canary scan results."
-    capability: missing
-    implementation: ""
-    auditNote: "No secret redaction before persistence."
+    capability: implemented
+    implementation: "crates/fermi-core/src/redact.rs"
+    auditNote: "Credential formats, secret-looking environment values and [trace] redact patterns are removed from CLI output as it is read and from every event before history, tapes, exports or the live stream."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_07_secret_redaction
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: OB-08
     title: "Deterministic replay"
     system: agent-observability
@@ -1150,13 +1150,13 @@ cases:
     action: "Replay a captured deterministic tool scenario"
     expected: "Reconstructed event sequence and stored state match the fixture"
     evidence: "Cassette hash event comparison and final state hash."
-    capability: missing
-    implementation: ""
-    auditNote: "No captured-response replay."
+    capability: implemented
+    implementation: "crates/fermi-core/src/trace.rs (tapes, replay)"
+    auditNote: "Each CLI's responses are recorded (redacted) with the task each attempt ran; `fermi replay` re-runs the task from them on a fixed clock with no CLI or network and compares normalized events and a state hash."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_08_deterministic_replay
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CO-01
     title: "Token cost arithmetic"
     system: cost-and-performance

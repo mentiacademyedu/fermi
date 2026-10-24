@@ -14,7 +14,7 @@ Status: **implemented** for the deterministic profile (T0–T2 without a browser
 ## Harness boundaries
 
 - **Every case gets its own fermi home** (`target/acceptance/<run>/<case>/<attempt>/home`), workspace copy and IDs. The engine is built from a generated `config.toml`; nothing touches the developer's real `~/.fermi` or real provider accounts.
-- **Deterministic providers without mocking the engine.** `crates/acceptance-tests/src/bin/fake-cli.rs` stands in for all three CLIs (and emulates Claude's `--disallowedTools "Read(//…)"` enforcement for scripted reads). Tests point fermi at it through the normal `[bins]` config, so process spawning, stream parsing, failover, approvals, history and team scheduling all run for real. It tells the CLIs apart by their arguments, emits each one's stream format, and plays the steps of a `scenario.json` placed in the account's config folder: text, tool calls, usage, file edits in the working folder, permission denials, provider errors, usage limits, barrier files, delays, child processes, crashes and exit codes. Every call is appended to `calls.jsonl` as evidence of what fermi sent (prompt, arguments, working folder).
+- **Deterministic providers without mocking the engine.** `crates/acceptance-tests/src/bin/fake-cli.rs` stands in for all three CLIs (and emulates Claude's `--disallowedTools "Read(//…)"` enforcement for scripted reads). Tests point fermi at it through the normal `[bins]` config, so process spawning, stream parsing, failover, approvals, history and team scheduling all run for real. It tells the CLIs apart by their arguments, emits each one's stream format, and plays the steps of a `scenario.json` placed in the account's config folder: text, tool calls, usage, file edits in the working folder, permission denials, provider errors, usage limits, barrier files, delays, child processes, crashes and exit codes; and model calls with message ids and per-call usage, each tool with its id, result, failure, exit code or error type and duration, in each CLI's own format (Claude streams one line per content block sharing the message id, as Claude Code does), plus a `hold` that keeps a run busy until it is interrupted. Every call is appended to `calls.jsonl` as evidence of what fermi sent (prompt, arguments, working folder).
 - **Real boundaries where the case is about them**: real git repositories and worktrees, real `cargo test` on the fixture, real process trees for crash and cancel.
 - **The candidate never writes the oracle**: fixtures and ground truth are read from `tests/fixtures`, copied into the case workspace, committed with a fixed identity and dates (`core.autocrlf=false`), and the source tree is hashed before and after.
 
@@ -43,7 +43,7 @@ crates/acceptance-tests/
   tests/memory.rs               # PM-01 … PM-08
   tests/security.rs             # SE-01 … SE-08
   tests/code_intelligence.rs    # CI-01 02 03 05 07 08
-  tests/observability.rs        # OB-05
+  tests/observability.rs        # OB-01 … OB-08
   tests/execution.rs            # LR-01
 xtask/src/main.rs               # acceptance runner
 tests/acceptance/systems.yaml   # registry of all 106 IDs, with test mappings and published status
@@ -100,4 +100,4 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 
 ## Next
 
-Build the missing systems in an agreed order, each with its eight cases. Done: project memory (System 4), the verification engine (System 5), cost and performance (System 9, with AI-07 and E2E-08) and security and isolation (System 10). Next suggested: agent observability (System 8), then the composable plugin system (System 7). The OS sandbox (SE-01/04/05) is Linux-only, so a Linux CI step runs the security profile; on Windows those three report blocked.
+Build the missing systems in an agreed order, each with its eight cases. Done: project memory (System 4), the verification engine (System 5), agent observability (System 8), cost and performance (System 9, with AI-07 and E2E-08) and security and isolation (System 10). Next suggested: the composable plugin system (System 7), then local and remote execution (System 11). The OS sandbox (SE-01/04/05) is Linux-only, so a Linux CI step runs the security profile; on Windows those three report blocked.

@@ -106,6 +106,16 @@ Found and fixed while writing the tests; listed so the history is complete.
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
 
+## Found while building System 8 (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Product gap, caught by OB-04 before release | redaction's `password=…` pattern needed a word boundary before the name, so `DATABASE_PASSWORD=…` (an underscore is a word character) kept its value | names with prefixes (`DATABASE_PASSWORD`, `aws_access_key`, `GITHUB_TOKEN`) are matched; the unit test covers it |
+| Design gap, caught in review before commit | events were redacted after the adapters built them, so a one-line preview cut at 120 characters could keep the start of a secret too short to match | each CLI line is redacted as it is read, before any parsing; events are redacted again before storage |
+| Documentation | five characters in the README's layout block were mojibake (`â†’` for `→`) since `0b14e07` | repaired |
+| Test implementation | AI-01/AI-02 compared every event kind across adapters, including the new per-call usage events, which each CLI reports at its own granularity (Claude per model call, Codex per turn, Gemini per run) | the lifecycle comparison leaves out `call`, as it already left out streamed chunks |
+| Test implementation | the first OB-07 expected `[REDACTED]` in every file under the tapes folder, including saved task files that hold no secret | the check looks at the recordings (`*.jsonl`) |
+
 ## Design gap caught before release
 
 While adding the merge gate, the first version told the user to fix failing checks "in a task's conversation", but a task branch already merged into the integration branch is never merged again, so such a fix could not reach what gets merged. Fixed before commit: failing checks on the integrated branch now start a debugger step in the integration worktree (bounded by `max_repairs`) and the checks run again; MA-08 covers it.
