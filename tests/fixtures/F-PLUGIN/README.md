@@ -5,6 +5,9 @@ a `plugin.toml` whose program is the harness's `fake-plugin` (an MCP server
 over stdio, `crates/acceptance-tests/src/bin/fake-plugin.rs`). The tests copy a
 folder and fill in `{FAKE_PLUGIN}` (that program's path) and the other
 `{PLACEHOLDERS}` (marker, log, sentinel and script files in the case's folder).
+Plugins run sandboxed, so the files a plugin writes or reads for a test live in
+`{PROBE}`, a folder its manifest grants with `read_write`; the PL-07 sentinel
+lives elsewhere, outside every grant.
 
 | Plugin | Used by | What it is |
 | --- | --- | --- |

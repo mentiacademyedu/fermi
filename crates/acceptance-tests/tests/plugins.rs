@@ -33,6 +33,13 @@ fn bridge_tools(f: &Fermi, cwd: &Path) -> String {
     fermi_core::mcp::bridge_for(&f.engine, &profile).unwrap().map(|b| b.allowed_tools).unwrap_or_default()
 }
 
+/// Where a test plugin may write what it records (its manifest's `read_write`).
+fn probe(c: &Case) -> PathBuf {
+    let p = c.work.join("probe");
+    std::fs::create_dir_all(&p).unwrap();
+    p
+}
+
 fn project(c: &Case) -> PathBuf {
     let p = c.work.join("project");
     std::fs::create_dir_all(&p).unwrap();
@@ -45,8 +52,9 @@ async fn pl_01_plugin_registration() {
     c.real(&["plugin manager (install, enable)", "MCP client over stdio", "sandboxed plugin process", "fermi's MCP bridge tool list"]);
     c.mocked(&["the plugin program (fake-plugin, a real MCP server)"]);
     let f = Fermi::new(&c, &[], "").unwrap();
-    let marker = c.work.join("sample-starts.txt");
-    let src = plugin_fixture("sample", &c.work.join("src/sample"), &[("MARKER", &marker)]).unwrap();
+    let pr = probe(&c);
+    let marker = pr.join("sample-starts.txt");
+    let src = plugin_fixture("sample", &c.work.join("src/sample"), &[("MARKER", &marker), ("PROBE", &pr)]).unwrap();
     let cwd = project(&c);
     let installed = plugins::install(&f.engine, &src).await;
     c.check("installed", installed.is_ok(), format!("{:?}", installed.as_ref().err()));
@@ -101,8 +109,11 @@ async fn pl_02_plugin_disabling() {
     c.mocked(&["the plugin programs (fake-plugin)"]);
     let f = Fermi::new(&c, &[], "").unwrap();
     let cwd = project(&c);
-    let m = c.work.join("m.txt");
-    plugins::install(&f.engine, &plugin_fixture("sample", &c.work.join("src/sample"), &[("MARKER", &m)]).unwrap()).await.unwrap();
+    let pr = probe(&c);
+    let m = pr.join("m.txt");
+    plugins::install(&f.engine, &plugin_fixture("sample", &c.work.join("src/sample"), &[("MARKER", &m), ("PROBE", &pr)]).unwrap())
+        .await
+        .unwrap();
     plugins::install(&f.engine, &plugin_fixture("other", &c.work.join("src/other"), &[]).unwrap()).await.unwrap();
     let before = snapshot(&f);
     c.json("registry-before.json", &before);
@@ -266,7 +277,7 @@ async fn pl_05_mcp_interoperability() {
     let exe = fake_plugin().display().to_string();
     let mut results = vec![];
     for (name, legacy) in [("modern-echo", false), ("legacy-echo", true)] {
-        let log = c.work.join(format!("{name}.log"));
+        let log = probe(&c).join(format!("{name}.log"));
         let mut cmd = vec![
             exe.clone(),
             "--label".into(),
@@ -279,7 +290,9 @@ async fn pl_05_mcp_interoperability() {
         if legacy {
             cmd.push("--legacy".into());
         }
-        let added = plugins::add_mcp(&f.engine, name, cmd, Default::default()).await;
+        let added =
+            plugins::add_mcp(&f.engine, name, cmd, plugins::Access { write: vec![probe(&c).display().to_string()], ..Default::default() })
+                .await;
         c.check(
             &format!("{name}Discovered"),
             added.as_ref().is_ok_and(|e| e.len() == 2),
@@ -336,13 +349,14 @@ async fn pl_06_adapter_substitution() {
     let mut c = Case::start("PL-06", "T1");
     c.real(&["fermi hub and engine (the standard task service)", "plugin adapter path", "failover", "usage log"]);
     c.mocked(&["the adapter plugin's replies (fake-plugin, scripted)", "the fallback account's CLI (fake-cli)"]);
-    let script = c.work.join("replies.json");
+    let pr = probe(&c);
+    let script = pr.join("replies.json");
     let reply = json!({ "text": "Added the test.", "session": "adapter-session-1",
         "usage": { "input_tokens": 120, "cache_read_input_tokens": 30, "output_tokens": 40 },
         "calls": [{ "id": "a-call-1", "model": "scripted-model", "usage": { "input_tokens": 120, "output_tokens": 40 } }],
         "tools": [{ "id": "a-tool-1", "name": "Edit", "input": { "file_path": "src/lib.rs" }, "output": "edited", "status": "ok" }] });
     std::fs::write(&script, serde_json::to_vec(&json!([reply, { "error": "Claude AI usage limit reached" }])).unwrap()).unwrap();
-    let log = c.work.join("adapter.log");
+    let log = pr.join("adapter.log");
     let fallback = json!({ "text": "Done by the fallback.", "tools": [{ "name": "Edit", "input": { "file_path": "src/lib.rs" } }] });
     let f = Fermi::new(
         &c,
@@ -351,9 +365,12 @@ async fn pl_06_adapter_substitution() {
     )
     .unwrap();
     let cwd = project(&c);
-    plugins::install(&f.engine, &plugin_fixture("adapter", &c.work.join("src/adapter"), &[("SCRIPT", &script), ("LOG", &log)]).unwrap())
-        .await
-        .unwrap();
+    plugins::install(
+        &f.engine,
+        &plugin_fixture("adapter", &c.work.join("src/adapter"), &[("SCRIPT", &script), ("LOG", &log), ("PROBE", &pr)]).unwrap(),
+    )
+    .await
+    .unwrap();
     let hub = f.hub();
     let a = hub.submit(f.task("Add a test for add().", &cwd));
     let ra = wait_task(&hub, a, T).await.unwrap();
@@ -444,10 +461,11 @@ async fn pl_07_plugin_boundary_enforcement() {
     std::fs::write(cwd.join(".env"), canary).unwrap();
     let deny = format!("[security]\ndeny_read = [\"{}/.env\"]\n", cwd.display().to_string().replace('\\', "/"));
     let f = Fermi::new(&c, &[], &deny).unwrap();
-    let log = c.work.join("adversarial.log");
+    let pr = probe(&c);
+    let log = pr.join("adversarial.log");
     plugins::install(
         &f.engine,
-        &plugin_fixture("adversarial", &c.work.join("src/adversarial"), &[("SENTINEL", &sentinel), ("LOG", &log)]).unwrap(),
+        &plugin_fixture("adversarial", &c.work.join("src/adversarial"), &[("SENTINEL", &sentinel), ("LOG", &log), ("PROBE", &pr)]).unwrap(),
     )
     .await
     .unwrap();

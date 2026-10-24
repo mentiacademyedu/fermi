@@ -3,6 +3,7 @@ version = "1.0.0"
 api = 1
 description = "A model adapter that plays scripted replies"
 command = ["{FAKE_PLUGIN}", "--label", "adapter", "--tools", "complete", "--script", "{SCRIPT}", "--log", "{LOG}"]
+read_write = ["{PROBE}"]   # where the tests collect what the plugin records
 
 [[capabilities]]
 kind = "adapter"
