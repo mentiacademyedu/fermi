@@ -657,6 +657,11 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
 #toast.show { opacity: 1; transform: translateX(-50%); }
 #toast.bad { border-color: var(--bad); }
 
+/* Held actions */
+.approve.held code { font: 12.5px var(--mono); overflow-wrap: anywhere; }
+.held-row { display: grid; gap: 4px; padding: 6px 0; border-top: 1px solid var(--line); }
+.held-row:first-of-type { border-top: 0; }
+
 /* Routing decisions and budgets */
 .ev.decision summary { cursor: pointer; }
 .dec-body { display: grid; gap: 2px; padding: 4px 0 6px 14px; font-size: 12px; }
@@ -1581,6 +1586,30 @@ async function selectTask(id) {
 // After a turn where the agent was blocked waiting for an approval (it runs
 // headless, so nobody could give it), offer to allow those calls and go on.
 const APPROVED = "You now have permission for what was blocked. Run it and continue the task.";
+// Actions fermi's policy held for your decision (confirm_commands): approve
+// exactly that command once, or deny it. Every decision is kept in the audit log.
+async function heldNode(t) {
+  let r;
+  try { r = await api(`/api/approvals?${q({ task: t.id })}`); } catch (_) { return null; }
+  if (!r.pending?.length) return null;
+  const box = el("div", "approve held");
+  box.append(el("div", "h", "fermi held these for your decision (the policy needs your approval):"));
+  for (const p of r.pending) {
+    const row = el("div", "held-row");
+    row.append(el("code", null, `${p.tool}: ${p.resource}`), el("div", "faint", p.reason));
+    const acts = el("div", "acts");
+    const ok = el("button", "small primary", "Approve once and continue"), no = el("button", "small", "Deny");
+    ok.title = "Allows exactly this command, one time, in this task";
+    const go = async (allow) => {
+      ok.disabled = no.disabled = true;
+      try { await api("/api/approvals", { task: t.id, tool: p.tool, resource: p.resource, allow, go: allow }); row.replaceChildren(el("div", "faint", allow ? `Approved once: ${p.resource}` : `Denied: ${p.resource}`)); }
+      catch (e) { toast(e.message, true); ok.disabled = no.disabled = false; }
+    };
+    ok.onclick = () => go(true); no.onclick = () => go(false);
+    acts.append(ok, no); row.append(acts); box.append(row);
+  }
+  return box;
+}
 function approvalNode(t) {
   if (t.status === "running") return null;
   const log = S.logs.get(t.id) || [];
@@ -1754,6 +1783,7 @@ function renderChat() {
   for (const ev of S.logs.get(t.id) || []) { const n = evNode(ev, t.cwd); if (n) log.append(n); }
   if (t.status === "cancelled") log.append(el("div", "ev bad", "⊘ cancelled"));
   const ap = approvalNode(t); if (ap) log.append(ap);
+  if (t.status !== "running") heldNode(t).then((n) => n && log.append(n));
   if (S.live.get(t.id)) log.append(mdNode(S.live.get(t.id), "live"));
   syncWaiting(t);
   const sc = $("#chat-scroll"); sc.scrollTop = sc.scrollHeight;

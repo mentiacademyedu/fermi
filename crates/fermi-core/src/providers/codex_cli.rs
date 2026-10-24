@@ -69,7 +69,8 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>, sandbox: O
         envs.push(("CODEX_HOME".into(), home.display().to_string()));
     }
 
-    let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, prompt, ctx.tx).await?;
+    let jail = ctx.jail(&bin).await?;
+    let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, prompt, ctx.tx, jail.as_ref()).await?;
     let (mut text, mut usage, mut error, mut completed) = (String::new(), Usage::default(), None::<String>, false);
     let mut session = None;
 

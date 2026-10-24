@@ -3,6 +3,7 @@
 //! Every front end (CLI, TUI, the future web dashboard) drives the same
 //! [`Engine`] and consumes the same [`Event`] stream.
 
+pub mod approvals;
 pub mod auth;
 pub mod billing;
 pub mod code;
@@ -17,6 +18,7 @@ pub mod models;
 pub mod policy;
 pub mod providers;
 pub mod router;
+pub mod sandbox;
 pub mod sessions;
 pub mod state;
 pub mod team;

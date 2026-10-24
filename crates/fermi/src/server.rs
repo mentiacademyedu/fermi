@@ -185,6 +185,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/code/{query}", get(code_query))
         .route("/api/checks", get(checks_list).post(checks_run))
         .route("/api/memory", get(memory_list).post(memory_record))
+        .route("/api/approvals", get(approvals_list).post(approvals_decide))
         .route("/api/memory/ingest", post(memory_ingest))
         .route("/api/memory/{id}", get(memory_get))
         .route("/api/memory/{id}/{action}", post(memory_action))
@@ -783,6 +784,57 @@ struct CodeQuery {
 }
 
 /// Index queries for a workspace: stats, search, symbol, file, impact, deps.
+// ── approvals (actions the policy holds) ────────────────────────────────────
+
+#[derive(Deserialize)]
+struct ApprovalsQuery {
+    task: Option<u64>,
+}
+
+/// Held actions nobody decided yet, and a task's whole approval history.
+async fn approvals_list(State(s): S, Query(q): Query<ApprovalsQuery>) -> Response {
+    use fermi_core::approvals::{Approvals, Entry};
+    let a = Approvals::open(&s.hub.engine().home);
+    let history: Vec<Entry> = a
+        .entries()
+        .into_iter()
+        .filter(|e| {
+            let t = match e {
+                Entry::Request { task, .. } | Entry::Decision { task, .. } | Entry::Use { task, .. } => *task,
+            };
+            q.task.is_none() || t == q.task
+        })
+        .collect();
+    Json(json!({ "pending": a.pending(q.task), "history": history })).into_response()
+}
+
+#[derive(Deserialize)]
+struct ApprovalBody {
+    task: Option<u64>,
+    tool: String,
+    resource: String,
+    allow: bool,
+    /// Also tell the agent to go ahead (approvals only).
+    #[serde(default)]
+    go: bool,
+}
+
+/// You approve (once) or deny exactly one held action of one task.
+async fn approvals_decide(State(s): S, Json(b): Json<ApprovalBody>) -> Response {
+    use fermi_core::approvals::{actor, Approvals};
+    let id = match Approvals::open(&s.hub.engine().home).decide(b.task, &b.tool, &b.resource, b.allow, &actor()) {
+        Ok(id) => id,
+        Err(e) => return err(StatusCode::BAD_REQUEST, format!("{e:#}")),
+    };
+    if let (true, true, Some(task)) = (b.allow, b.go, b.task) {
+        let prompt = format!("The user approved this once: `{}`. Run exactly that now, then continue the task.", b.resource);
+        if let Err(e) = s.hub.follow_up(task, &prompt, FollowUp::default()) {
+            return err(StatusCode::BAD_REQUEST, format!("approved ({id}), but the task couldn't continue: {e:#}"));
+        }
+    }
+    Json(json!({ "id": id })).into_response()
+}
+
 // ── project memory ──────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
