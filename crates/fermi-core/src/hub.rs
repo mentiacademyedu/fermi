@@ -436,6 +436,10 @@ impl Recorder {
     }
 
     fn save(&mut self) {
+        // Resumed elsewhere since: leave the newer attempt alone.
+        if read_task(&self.dir, self.rec.id).is_some_and(|disk| disk.attempt > self.rec.attempt) {
+            return;
+        }
         write_rec(&self.dir, &mut self.rec);
         self.last_save = Instant::now();
     }
@@ -1010,6 +1014,11 @@ impl Hub {
 
     fn save(&self, id: u64) {
         let Some(mut t) = self.get(id) else { return };
+        // Another window may have resumed this task since (a later attempt):
+        // a late save from here must not put the older run back.
+        if read_task(&self.dir, id).is_some_and(|disk| disk.attempt > t.attempt) {
+            return;
+        }
         if let Some(mtime) = write_rec(&self.dir, &mut t) {
             self.scanner.lock().unwrap().note(id, mtime);
         }
