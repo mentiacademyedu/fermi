@@ -6,6 +6,7 @@
 pub mod approvals;
 pub mod auth;
 pub mod billing;
+pub mod browser;
 pub mod code;
 pub mod config;
 pub mod deck;

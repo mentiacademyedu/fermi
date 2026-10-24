@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Responsive page</title><link rel="stylesheet" href="/style.css">
+<style>
+header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #1d6fb8; color: #fff; position: relative; }
+nav a { color: #fff; margin-left: 16px; }
+#menu-button { display: none; background: #fff; color: #1d6fb8; }
+@media (max-width: 600px) {
+  #menu-button { display: inline-block; }
+  nav { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #1d6fb8; padding: 8px 16px; }
+  nav.open { display: block; }
+  nav a { display: block; margin: 8px 0; }
+}
+</style></head>
+<body data-page="mobile">
+<header><strong>Fixture</strong><button id="menu-button" aria-expanded="false">Menu</button>
+<nav id="nav"><a id="nav-home" href="/">Home</a><a href="/form">Sign up</a><a href="/tour/1">Tour</a></nav></header>
+<main>
+<h1>Responsive</h1>
+<form id="m-form"><label for="m-name">Name</label><input id="m-name"><p><button id="m-send" type="submit">Send</button></p></form>
+<p id="m-result"></p>
+</main>
+<script>
+const b = document.getElementById('menu-button'), nav = document.getElementById('nav');
+b.addEventListener('click', () => { nav.classList.toggle('open'); b.setAttribute('aria-expanded', nav.classList.contains('open')); });
+document.getElementById('m-form').addEventListener('submit', (e) => { e.preventDefault(); document.getElementById('m-result').textContent = 'Sent: ' + document.getElementById('m-name').value; });
+</script>
+</body></html>

@@ -104,8 +104,14 @@ a("VE-06", "implemented", f"{core}/code.rs (replace_symbol), mcp.rs (code_replac
 a("VE-07", "implemented", f"{core}/verify.rs (run_task)", "Repair turns are bounded by max_repairs (task option, else the project's, else 3); the final failure is explicit. Added 2026-10-23.")
 a("VE-08", "implemented", f"{core}/verify.rs, team.rs (merge), hub.rs", "A verified task ends done only if every mandatory check passed; a team run is mergeable only with passing checks on exactly the commit being merged (service and API). Added 2026-10-23.")
 # System 6
-for i in range(1, 9):
-    a(f"BA-0{i}", "missing", "crates/fermi/src/preview.rs (user-facing only)", "The Preview tab is a browser for the user; agents have no browser automation tools in fermi.")
+a("BA-01", "implemented", f"{core}/browser.rs (open), mcp.rs (browser tools)", "Agents open pages in a headless Chromium-based browser through fermi's bridge; the result names the URL, title and page identity, and an unreachable page or an HTTP error is a failure.")
+a("BA-02", "implemented", f"{core}/browser.rs (fill, click)", "Fields are typed into once visible and enabled; clicks use real mouse events on the element's centre once it is visible, enabled and uncovered.")
+a("BA-03", "implemented", f"{core}/browser.rs (click, navigations)", "A click that starts a navigation returns once the new page has loaded; every main-frame navigation is recorded in the trace.")
+a("BA-04", "implemented", f"{core}/browser.rs (screenshot)", "PNG screenshots of the viewport or full page are saved with their size and SHA-256, referenced from the trace.")
+a("BA-05", "implemented", f"{core}/browser.rs (observe)", "Console errors, warnings and uncaught exceptions are captured with their source, redacted, and kept in the task's trace.")
+a("BA-06", "implemented", f"{core}/browser.rs (observe)", "Failed requests (HTTP 4xx/5xx and network errors) are recorded with URL, method and status.")
+a("BA-07", "implemented", f"{core}/browser.rs (viewport, check, state)", "Viewport and mobile emulation; element checks report visibility, enablement, coverage and viewport placement; the page state reports horizontal overflow.")
+a("BA-08", "implemented", f"{core}/browser.rs (wait, click)", "Actions wait for readiness with recorded state changes; a wait that runs out is an error and a click never fires on a disabled or covered element.")
 # System 7
 a("PL-01", "implemented", f"{core}/plugins.rs (install, enable, registry)", "A plugin folder with a plugin.toml (name, version, plugin API, command, declared capabilities: tool, command or adapter) is installed and enabled; only declared capabilities register, each attributed to the plugin version.")
 a("PL-02", "implemented", f"{core}/plugins.rs (disable)", "Disabling removes a plugin's capabilities from the registry and the agents' bridge; other plugins keep working.")

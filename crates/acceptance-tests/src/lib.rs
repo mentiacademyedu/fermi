@@ -7,6 +7,9 @@
 //! - Fixtures: pinned folders under `tests/fixtures` copied into a case and
 //!   committed with fixed dates, so every run starts from the same commit.
 
+pub mod web;
+pub use web::{web_fixture, Web};
+
 use anyhow::{bail, Context, Result};
 use fermi_core::config::Config;
 use fermi_core::engine::{Engine, Task};

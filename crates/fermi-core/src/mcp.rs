@@ -88,6 +88,23 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
         .map(|p| format!("mcp__fermi__{}", plugin_tool_name(&p.id)))
         .collect();
     tools.extend(plugin_tools.iter().map(String::as_str));
+    if crate::browser::available(&e.cfg.browser) {
+        tools.extend([
+            "mcp__fermi__browser_open",
+            "mcp__fermi__browser_click",
+            "mcp__fermi__browser_fill",
+            "mcp__fermi__browser_wait",
+            "mcp__fermi__browser_read",
+            "mcp__fermi__browser_check",
+            "mcp__fermi__browser_viewport",
+            "mcp__fermi__browser_screenshot",
+            "mcp__fermi__browser_state",
+            "mcp__fermi__browser_close",
+        ]);
+        prompt += " To check a web app you're working on, use fermi's browser tools (browser_open, browser_click, browser_fill, \
+            browser_wait, browser_read, browser_check, browser_screenshot, browser_state): they wait for elements to be ready, \
+            report console errors and failed requests, and keep a trace with the screenshots.";
+    }
     // Delegation would start other accounts' CLIs, which a sandbox doesn't allow.
     let (text, image) = if e.cfg.security.sandbox { (vec![], vec![]) } else { (text, image) };
     if !image.is_empty() {
@@ -219,6 +236,9 @@ fn tool_list(e: &Engine, profile: &Profile) -> Value {
             }, "required": ["prompt"] }
         }));
     }
+    if crate::browser::available(&e.cfg.browser) {
+        tools.extend(crate::browser::tool_defs());
+    }
     for p in crate::plugins::registry(e).entries.into_iter().filter(|p| p.kind == crate::plugins::Kind::Tool) {
         tools.push(json!({
             "name": plugin_tool_name(&p.id),
@@ -244,6 +264,9 @@ pub async fn call_tool(e: &Engine, profile: &Profile, cwd: &std::path::Path, nam
     }
     if name == "permission" {
         return permission(e, &cwd, args);
+    }
+    if let Some(op) = name.strip_prefix("browser_") {
+        return Ok(serde_json::to_string_pretty(&crate::browser::tool(e, &cwd, op, args).await?)?);
     }
     if let Some(id) = name.strip_prefix("plugin__") {
         // Through the same checks as any plugin call: schema, scope, deny_read.
@@ -470,5 +493,6 @@ pub async fn serve(engine: Arc<Engine>, profile_name: String) -> Result<()> {
     }
     drop(out_tx);
     let _ = writer.await;
+    crate::browser::close_all();
     Ok(())
 }

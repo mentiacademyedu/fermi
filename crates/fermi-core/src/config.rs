@@ -217,6 +217,22 @@ pub struct Config {
     pub trace: TraceCfg,
     #[serde(default)]
     pub plugins: PluginsCfg,
+    #[serde(default)]
+    pub browser: BrowserCfg,
+}
+
+/// The browser agents drive (see `browser`).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct BrowserCfg {
+    /// A Chromium-based browser (Chrome, Edge, Chromium); default: the first one found.
+    #[serde(default)]
+    pub path: Option<String>,
+    /// Start it with `--no-sandbox` (some containers need it).
+    #[serde(default)]
+    pub no_sandbox: bool,
+    /// Offer the browser tools to agents (default on when a browser is found).
+    #[serde(default)]
+    pub enabled: Option<bool>,
 }
 
 /// Plugins (see `plugins`).

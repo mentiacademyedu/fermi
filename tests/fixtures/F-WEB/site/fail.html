@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Data page</title><link rel="stylesheet" href="/style.css"></head>
+<body data-page="fail">
+<main><h1>Data</h1><button id="load">Load data</button><p id="status"></p></main>
+<script>
+document.getElementById('load').addEventListener('click', async () => {
+  const s = document.getElementById('status');
+  s.textContent = 'Loading...';
+  const r = await fetch('/api/fail');
+  if (r.ok) { s.className = 'ok'; s.textContent = 'Data loaded.'; }
+  else { s.className = 'bad'; s.textContent = 'Could not load data (' + r.status + ').'; }
+});
+</script>
+</body></html>
