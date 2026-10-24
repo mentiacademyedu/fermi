@@ -74,7 +74,7 @@ a("MA-04", "partial", f"{core}/team.rs (integrate)", "Conflicts are detected (un
 a("MA-05", "missing", "", "No delegate tool; agents cannot spawn scoped subtasks.")
 a("MA-06", "implemented", f"{core}/hub.rs, team.rs (on_done)", "A killed agent process marks only its task failed; concurrent tasks finish with their results. In team runs a failed task blocks its dependents (MA-02).")
 a("MA-07", "implemented", f"{core}/team.rs (cancel), providers/proc.rs (kill_tree)", "Cancel stops running agents and every process they started (process tree), and queued tasks never start. Fixed 2026-10-23: processes started by the CLI were orphaned (D-005).")
-a("MA-08", "partial", f"{core}/team.rs (integrate, merge)", "Merge into the user's branch requires approval and the final checks run on the integration branch, but checks are agent judgments: there is no mechanical verification command gating the merge.")
+a("MA-08", "implemented", f"{core}/team.rs (start_verification, merge)", "The integrated branch must pass the project's mandatory checks before merging; a failing run gets bounded debugger fixes and re-checks, and merge refuses anything but the exact commit that passed. Added 2026-10-23.")
 # System 3
 a("CI-01", "implemented", f"{core}/code.rs (Index::open/update)", "Indexes Rust, Python, JS, TS/TSX, Go with .gitignore; lists unsupported files and the indexed git revision (added 2026-10-23, D-006).", "code::tests::rust_project_graph, python_and_typescript")
 a("CI-02", "implemented", f"{core}/code.rs (search, symbol)", "Exact and prefix lookup with file and line span.", "code::tests::*")

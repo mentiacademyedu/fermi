@@ -359,3 +359,83 @@ async fn ma_07_parent_cancellation() {
     }
     c.finish();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ma_08_verified_integration() {
+    let mut c = Case::start("MA-08", "T1");
+    c.real(&["fermi team runs", "verification gate (cargo test)", "git worktrees and merges"]);
+    c.mocked(&["model output and edits (fake-cli)"]);
+    let fx = fixture("F-CODE", &c.work.join("repo")).unwrap();
+    let base = git(&fx.path, &["rev-parse", "HEAD"]).unwrap();
+    let src = |rel: &str| std::fs::read_to_string(fx.path.join(rel)).unwrap();
+    let shout = format!(
+        "{}\n/// Shouts a name.\npub fn shout(name: &str) -> String {{\n    normalize(name).to_uppercase()\n}}\n",
+        src("engine/src/lib.rs")
+    );
+    let util_ok = src("util/src/lib.rs");
+    let util_bad = util_ok.replace("s.trim().to_lowercase()", "s.to_lowercase()");
+    let steps = vec![
+        planner(json!([
+            { "id": "a", "role": "developer", "title": "Shout", "description": "Do [[A]].", "files": ["engine/src/lib.rs"] },
+            { "id": "b", "role": "developer", "title": "Simplify normalize", "description": "Do [[B]].", "files": ["util/src/lib.rs"] }
+        ])),
+        json!({ "match": "[[A]]", "text": "Added shout.", "edits": [{ "path": "engine/src/lib.rs", "content": shout }] }),
+        // Worker b breaks a mandatory test.
+        json!({ "match": "[[B]]", "text": "Simplified normalize.", "edits": [{ "path": "util/src/lib.rs", "content": util_bad }] }),
+        // The debugger's correction waits until the blocked merge has been tried.
+        json!({ "match": "Fix failing checks", "wait_for": "release-fix", "text": "Restored the trim.", "edits": [{ "path": "util/src/lib.rs", "content": util_ok }] }),
+    ];
+    let f = Fermi::new(&c, &[account("cl", "claude", steps)], "").unwrap();
+    let (teams, id) = team(&f, &fx.path, 2).await;
+    // 1. The checks fail on the integrated branch: integration is blocked.
+    let start = Instant::now();
+    let failed = loop {
+        let r = teams.get(id).unwrap();
+        if r.verification.as_ref().is_some_and(|v| !v.passed) || matches!(r.status, RunStatus::Ready | RunStatus::Attention) {
+            break r;
+        }
+        assert!(start.elapsed() < Duration::from_secs(300), "no verification: {:?}", r.log.last());
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+    let early = teams.merge(id);
+    let early_msg = early.as_ref().err().map(|e| format!("{e:#}")).unwrap_or_default();
+    c.json("gate-1-failed.json", &serde_json::to_value(&failed).unwrap());
+    c.check(
+        "failedChecksBlockIntegration",
+        failed.verification.as_ref().is_some_and(|v| !v.passed)
+            && early_msg.contains("merge is blocked")
+            && early_msg.contains("tests")
+            && git(&fx.path, &["rev-parse", "HEAD"]).unwrap() == base,
+        format!("merge attempt: {early_msg}"),
+    );
+    // 2. The correction, then the checks pass and the merge goes through.
+    f.release("cl", "release-fix");
+    let ready = wait_run(&teams, id, &[RunStatus::Ready, RunStatus::Attention]).await;
+    c.json("gate-2-passed.json", &serde_json::to_value(&ready).unwrap());
+    let integ = ready.integration.clone().unwrap();
+    let integ_head = git(&fx.path, &["rev-parse", &integ.branch]).unwrap();
+    let v = ready.verification.clone().unwrap();
+    let diff_a = teams.diff(id, Some("a"), Some("engine/src/lib.rs")).unwrap_or_default();
+    let diff_b = teams.diff(id, Some("b"), Some("util/src/lib.rs")).unwrap_or_default();
+    c.text("patch-a.diff", &diff_a);
+    c.text("patch-b.diff", &diff_b);
+    let merged = teams.merge(id);
+    let parent = git(&fx.path, &["rev-parse", "HEAD^2"]).unwrap_or_default();
+    c.text("integrated.diff", &git(&fx.path, &["diff", &base, "HEAD"]).unwrap_or_default());
+    c.check(
+        "passingResultAppliesToExactRevision",
+        ready.status == RunStatus::Ready && v.passed && v.fingerprint == integ_head[..12] && merged.is_ok() && parent == integ_head,
+        format!(
+            "checks passed at {} (integration head {}), merged parent {}",
+            v.fingerprint,
+            &integ_head[..12],
+            &parent[..parent.len().min(12)]
+        ),
+    );
+    c.check(
+        "bothPatchesReviewable",
+        diff_a.contains("pub fn shout") && diff_b.contains("s.to_lowercase()"),
+        "each worker's patch is available on its own",
+    );
+    c.finish();
+}

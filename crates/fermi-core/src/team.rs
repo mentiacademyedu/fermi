@@ -571,6 +571,9 @@ pub struct NewRun {
     pub checks: Option<Checks>,
 }
 
+/// Key prefix of the debugger steps that fix failing checks on the integrated branch.
+const FIX_CHECKS: &str = "fix-checks-";
+
 pub struct Teams {
     hub: Arc<Hub>,
     home: PathBuf,
@@ -1089,7 +1092,9 @@ impl Teams {
     }
 
     /// Runs the project's checks on the integrated branch; the run is ready
-    /// to merge only if they pass.
+    /// to merge only if they pass. When they fail, a debugger fixes the
+    /// integrated branch and the checks run again, up to the project's
+    /// `max_repairs` times.
     fn start_verification(&self, run: &mut TeamRun) {
         let Some(integ) = run.integration.clone() else { return };
         run.status = RunStatus::Verifying;
@@ -1112,10 +1117,45 @@ impl Teams {
                         run.verification = Some(r.trimmed());
                     }
                     Ok(r) => {
-                        run.status = RunStatus::Attention;
-                        run.error = Some(format!("{}. Fix it in a task's conversation, then run the checks again.", r.summary()));
                         run.note(format!("Checks: {}.", r.summary()));
                         run.verification = Some(r.trimmed());
+                        let max =
+                            crate::verify::load(&integ.worktree).ok().and_then(|c| c.max_repairs).unwrap_or(crate::verify::DEFAULT_REPAIRS);
+                        let tries = run.tasks.iter().filter(|t| t.key.starts_with(FIX_CHECKS)).count() as u32;
+                        if tries >= max {
+                            run.status = RunStatus::Attention;
+                            run.error = Some(format!(
+                                "{} (after {tries} fix attempt{}). Fix it in {}, then run the checks again.",
+                                r.summary(),
+                                if tries == 1 { "" } else { "s" },
+                                integ.worktree.display()
+                            ));
+                            return Ok(());
+                        }
+                        let fix = TeamTask {
+                            key: format!("{FIX_CHECKS}{}", tries + 1),
+                            role: Role::Debugger,
+                            title: format!("Fix failing checks ({} of {max})", tries + 1),
+                            description: format!(
+                                "fermi ran the project's checks on the integrated branch and they failed. Make them pass on this \
+                                 branch, then stop: fermi runs the checks again. Don't weaken or delete tests or checks.\n\n{}",
+                                crate::verify::text(&r)
+                            ),
+                            depends_on: vec![],
+                            files: vec![],
+                            done_when: "fermi's checks pass on the integrated branch".into(),
+                            stage: Stage::Check,
+                            state: TaskState::Pending,
+                            task_id: None,
+                            branch: Some(integ.branch.clone()),
+                            worktree: Some(integ.worktree.clone()),
+                            start: None,
+                            handoff: None,
+                            changed: vec![],
+                            note: None,
+                        };
+                        run.status = RunStatus::Checking;
+                        teams.start_integration_task(run, fix)?;
                     }
                     Err(e) => {
                         run.status = RunStatus::Attention;

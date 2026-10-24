@@ -20,8 +20,8 @@ cases:
     auditNote: "Five adapters (Claude/Codex/Gemini CLIs, Anthropic and OpenAI APIs) normalize into one Event stream and RunResult. The acceptance test covers the three CLI adapters through the fake CLI; the two API adapters need an HTTP mock (not built yet), so the case stays partial."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_01_adapter_normalization
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: AI-02
     title: "Common task interface"
     system: model-agnostic-ai-engine
@@ -38,8 +38,8 @@ cases:
     auditNote: "Every provider runs through Task and Engine::run with the same lifecycle and Event schema. Unverified against a fixture oracle."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_02_common_task_interface
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: AI-03
     title: "Model switching with state"
     system: model-agnostic-ai-engine
@@ -56,8 +56,8 @@ cases:
     auditNote: "Model switch per reply; same provider resumes the session, other providers get the transcript; Routed events attribute each turn."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_03_model_switching_with_state
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: AI-04
     title: "Rate limit handling"
     system: model-agnostic-ai-engine
@@ -92,8 +92,8 @@ cases:
     auditNote: "Provider outages (HTTP 5xx from the APIs; 5xx, overloaded or unavailable from the CLIs) fail over to the profile's next account, then the next candidate model, recorded as Failover events; pinning the account and model disables it. Fixed 2026-10-23: CLI outages failed without fallback (D-004)."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_05_provider_outage_handling
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: AI-06
     title: "Capability validation"
     system: model-agnostic-ai-engine
@@ -165,8 +165,8 @@ cases:
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_01_concurrent_workers
     repetitions: 20
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-02
     title: "Dependency ordering"
     system: multi-agent-orchestration
@@ -183,8 +183,8 @@ cases:
     auditNote: "Dependencies gate starts; failed or interrupted tasks block dependents (run goes to attention); cancel stops the run."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_02_dependency_ordering
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-03
     title: "Independent edits"
     system: multi-agent-orchestration
@@ -201,8 +201,8 @@ cases:
     auditNote: "Separate worktrees and branches merged with --no-ff into an integration branch; manually verified on a fixture (2 runs)."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_03_independent_edits
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-04
     title: "Conflicting edits"
     system: multi-agent-orchestration
@@ -219,8 +219,8 @@ cases:
     auditNote: "Conflicts are detected (unmerged paths) and logged with both branches kept, but resolution is delegated automatically to a debugger agent rather than escalated to the user. Manually verified once."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_04_conflicting_edits
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-05
     title: "Scoped delegation"
     system: multi-agent-orchestration
@@ -255,8 +255,8 @@ cases:
     auditNote: "A killed agent process marks only its task failed; concurrent tasks finish with their results. In team runs a failed task blocks its dependents (MA-02)."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_06_worker_crash_isolation
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-07
     title: "Parent cancellation"
     system: multi-agent-orchestration
@@ -273,8 +273,8 @@ cases:
     auditNote: "Cancel stops running agents and every process they started (process tree), and queued tasks never start. Fixed 2026-10-23: processes started by the CLI were orphaned (D-005)."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_07_parent_cancellation
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: MA-08
     title: "Verified integration"
     system: multi-agent-orchestration
@@ -286,11 +286,11 @@ cases:
     action: "Integrate completed agents into one branch"
     expected: "Merge succeeds only after configured verification gates pass"
     evidence: "Gate verdict tested revision and integrated diff."
-    capability: partial
-    implementation: "crates/fermi-core/src/team.rs (integrate, merge)"
-    auditNote: "Merge into the user's branch requires approval and the final checks run on the integration branch, but checks are agent judgments: there is no mechanical verification command gating the merge."
-    testFile: null
-    testName: null
+    capability: implemented
+    implementation: "crates/fermi-core/src/team.rs (start_verification, merge)"
+    auditNote: "The integrated branch must pass the project's mandatory checks before merging; a failing run gets bounded debugger fixes and re-checks, and merge refuses anything but the exact commit that passed. Added 2026-10-23."
+    testFile: crates/acceptance-tests/tests/agent_execution.rs
+    testName: ma_08_verified_integration
     executionState: not_run
     status: not_implemented
   - id: CI-01
@@ -309,8 +309,8 @@ cases:
     auditNote: "Indexes Rust, Python, JS, TS/TSX, Go with .gitignore; lists unsupported files and the indexed git revision (added 2026-10-23, D-006)."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_01_repository_indexing
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-02
     title: "Exact symbol lookup"
     system: semantic-codebase-intelligence
@@ -327,8 +327,8 @@ cases:
     auditNote: "Exact and prefix lookup with file and line span."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_02_exact_symbol_lookup
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-03
     title: "Caller discovery"
     system: semantic-codebase-intelligence
@@ -345,8 +345,8 @@ cases:
     auditNote: "Static callers resolved same-file, then imported files; results declare the analysis scope (dynamic dispatch is not covered; added 2026-10-23, D-006)."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_03_caller_discovery
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-04
     title: "Scope-safe rename"
     system: semantic-codebase-intelligence
@@ -381,8 +381,8 @@ cases:
     auditNote: "Incremental re-parse by mtime and size on every query; no completion event."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_05_incremental_refresh
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-06
     title: "Invalid syntax handling"
     system: semantic-codebase-intelligence
@@ -417,8 +417,8 @@ cases:
     auditNote: "Transitive callers and importers with visited sets (cycles terminate), tests to run, and a declared scope of what isn't covered."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_07_dependency_impact
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: CI-08
     title: "Symbol identity"
     system: semantic-codebase-intelligence
@@ -435,8 +435,8 @@ cases:
     auditNote: "Duplicate names resolve per importing file; lookup by Type::name, module path (util::text::helper, added 2026-10-23) or path:line."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_08_symbol_identity
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: PM-01
     title: "Durable decisions"
     system: persistent-project-memory
@@ -592,9 +592,9 @@ cases:
     action: "Introduce a syntax error"
     expected: "Compiler or language server reports the correct location"
     evidence: "Command exit code and structured diagnostics."
-    capability: missing
-    implementation: ""
-    auditNote: "No verification service; agents run compilers themselves."
+    capability: implemented
+    implementation: "crates/fermi-core/src/verify.rs (run, parse_output)"
+    auditNote: "fermi runs the project's checks (.fermi/checks.toml or detected from manifests) and parses diagnostics from cargo JSON and common text formats (rustc, gcc, go, tsc, eslint, ruff, Python) with file, line and column. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_01_compiler_diagnostics
     executionState: not_run
@@ -610,9 +610,9 @@ cases:
     action: "Introduce a deliberately failing test"
     expected: "Agent receives and records failure output"
     evidence: "Test output tool response and verification event."
-    capability: missing
-    implementation: ""
-    auditNote: "No verification tool; test output is only what the agent reports."
+    capability: implemented
+    implementation: "crates/fermi-core/src/verify.rs, mcp.rs (run_checks)"
+    auditNote: "Agents call the run_checks tool and get each failing test with its output and the exit code; verified tasks record a Verify event. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_02_failing_test_feedback
     executionState: not_run
@@ -628,9 +628,9 @@ cases:
     action: "Give the agent a simple failing test to fix"
     expected: "Agent attempts correction, reruns test, and records the outcome"
     evidence: "Before and after results patch and repair trace."
-    capability: missing
-    implementation: ""
-    auditNote: "No repair-and-rerun loop owned by fermi."
+    capability: implemented
+    implementation: "crates/fermi-core/src/verify.rs (run_task)"
+    auditNote: "Verified tasks: after the agent, fermi runs the checks and sends failures back to the same session; protected files (protect globs) must stay unchanged. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_03_repair_and_rerun
     executionState: not_run
@@ -646,9 +646,9 @@ cases:
     action: "Introduce a lint violation"
     expected: "Linter flags the expected rule"
     evidence: "Lint configuration diagnostic and exit code."
-    capability: missing
-    implementation: ""
-    auditNote: "No lint integration."
+    capability: implemented
+    implementation: "crates/fermi-core/src/verify.rs (Kind::Lint)"
+    auditNote: "Lint checks run like any other; clippy and text-format rule ids and locations are reported and a mandatory lint failure fails the task. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_04_lint_enforcement
     executionState: not_run
@@ -664,9 +664,9 @@ cases:
     action: "Introduce a vulnerable dependency in a controlled fixture"
     expected: "Configured scanner identifies the advisory"
     evidence: "Lockfile scanner report and advisory dataset hash."
-    capability: missing
-    implementation: ""
-    auditNote: "No dependency advisory scanner."
+    capability: implemented
+    implementation: "crates/fermi-core/src/verify.rs (audit)"
+    auditNote: "Built-in scanner matches Cargo.lock, package-lock.json and requirements.txt against OSV records; records scanner version and dataset SHA-256; nothing is installed or run. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_05_dependency_advisory_detection
     executionState: not_run
@@ -682,9 +682,9 @@ cases:
     action: "Apply a structured edit to a known symbol"
     expected: "Only intended target changes; parsing remains valid"
     evidence: "Target identity patch and parse result."
-    capability: missing
-    implementation: ""
-    auditNote: "No structured (syntax-tree) edit API."
+    capability: implemented
+    implementation: "crates/fermi-core/src/code.rs (replace_symbol), mcp.rs (code_replace)"
+    auditNote: "Replaces one definition by its syntax-tree byte range, refuses ambiguous targets and edits that don't parse or drop the definition. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_06_structured_edit_integrity
     executionState: not_run
@@ -700,9 +700,9 @@ cases:
     action: "Configure a maximum of three fix attempts"
     expected: "Agent stops after the allowed number rather than looping indefinitely"
     evidence: "Attempt counter dispatch trace and terminal failure."
-    capability: missing
-    implementation: ""
-    auditNote: "No bounded repair attempts."
+    capability: implemented
+    implementation: "crates/fermi-core/src/verify.rs (run_task)"
+    auditNote: "Repair turns are bounded by max_repairs (task option, else the project's, else 3); the final failure is explicit. Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_07_bounded_repair_attempts
     executionState: not_run
@@ -718,9 +718,9 @@ cases:
     action: "Attempt to mark a task complete when mandatory tests fail"
     expected: "Completion gate rejects the task"
     evidence: "Completion requests gate response and persisted task state."
-    capability: missing
-    implementation: "crates/fermi-core/src/team.rs (merge)"
-    auditNote: "No completion gate tied to mandatory checks (team merge needs user approval only)."
+    capability: implemented
+    implementation: "crates/fermi-core/src/verify.rs, team.rs (merge), hub.rs"
+    auditNote: "A verified task ends done only if every mandatory check passed; a team run is mergeable only with passing checks on exactly the commit being merged (service and API). Added 2026-10-23."
     testFile: crates/acceptance-tests/tests/verification.rs
     testName: ve_08_completion_enforcement
     executionState: not_run
@@ -1101,8 +1101,8 @@ cases:
     auditNote: "Every task's events persist in ~/.fermi/history/<id>.json and survive restarts."
     testFile: crates/acceptance-tests/tests/observability.rs
     testName: ob_05_trace_persistence
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: OB-06
     title: "Resume correlation"
     system: agent-observability
@@ -1461,8 +1461,8 @@ cases:
     auditNote: "Tasks run locally and record changed files and artifacts."
     testFile: crates/acceptance-tests/tests/execution.rs
     testName: lr_01_local_execution
-    executionState: completed
-    status: passed
+    executionState: not_run
+    status: not_implemented
   - id: LR-02
     title: "Container equivalence"
     system: local-and-remote-execution

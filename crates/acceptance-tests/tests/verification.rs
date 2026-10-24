@@ -398,6 +398,7 @@ async fn ve_08_completion_enforcement() {
     c.mocked(&["model output (fake-cli)"]);
     let fx = fixture("F-CODE", &c.work.join("repo")).unwrap();
     edit(&fx.path, "util/src/lib.rs", "s.trim().to_lowercase()", "s.to_lowercase()"); // a mandatory check fails
+    edit(&fx.path, ".fermi/checks.toml", "max_repairs = 3", "max_repairs = 0"); // no automatic fixes: the gate itself is tested
     commit(&fx.path, "a failing mandatory check");
     let rev = git(&fx.path, &["rev-parse", "HEAD"]).unwrap();
     let plan =
