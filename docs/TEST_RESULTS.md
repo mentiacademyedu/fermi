@@ -4,8 +4,8 @@
 
 | Field | Value |
 | --- | --- |
-| Run | `2026-10-24-f56fd58` (deterministic) and `2026-10-24-f56fd58-security`, plus the Linux CI security run on the same commit |
-| Revision | `f56fd58` (full SHA in the run summaries); clean working tree |
+| Run | `2026-10-24-c3b1f83` (deterministic) and `2026-10-24-c3b1f83-security`, plus the Linux CI security run on the same commit |
+| Revision | `c3b1f83` (full SHA in the run summaries); clean working tree |
 | Date | 2026-10-24 |
 | Environment | Windows 11 Home 10.0.26200, Rust 1.96.0 (`rust-toolchain.toml`), local developer machine |
 | Providers | fake CLI only (`crates/acceptance-tests/src/bin/fake-cli.rs`); no live provider calls, no metered usage |
@@ -20,27 +20,27 @@
 | --- | --- | --- |
 | Formatting | `cargo fmt --all -- --check` | passed |
 | Static analysis | `cargo clippy --workspace --all-targets --locked -- -D warnings` | passed |
-| Unit tests | `cargo test --workspace --locked --lib --bins` | passed: 54 (fermi-core 41, fermi lib 12, fermi bin 1) |
-| Acceptance, deterministic | `xtask acceptance --implemented` | passed: 61 of 61 executed cases, runner exit 0 |
-| Acceptance, security (Windows) | `xtask acceptance --implemented --profile security --allow-blocked` | 13 passed, 4 blocked (PL-07, SE-01/04/05 need Linux Landlock), runner exit 0 |
-| Acceptance, security (Linux CI) | `xtask acceptance --system SE --system MA --system PL --profile security` on Ubuntu | passed: all 12 (SE-01 … SE-08, MA-06, MA-07, PL-04, PL-07) on the real OS sandbox; 4 of these blocked on Windows (`docs/acceptance-runs/linux-ci-security/`) |
-| Coverage | `cargo llvm-cov --workspace --locked` | 64.7% of product lines (see `TEST_COVERAGE.md`) |
+| Unit tests | `cargo test --workspace --locked --lib --bins` | passed: 56 (fermi-core 43, fermi lib 12, fermi bin 1) |
+| Acceptance, deterministic | `xtask acceptance --implemented` | passed: 68 of 68 executed cases, runner exit 0 |
+| Acceptance, security (Windows) | `xtask acceptance --implemented --profile security --allow-blocked` | 14 passed, 4 blocked (PL-07, SE-01/04/05 need Linux Landlock), runner exit 0 |
+| Acceptance, security (Linux CI) | `xtask acceptance --system SE --system MA --system PL --system EV --profile security` on Ubuntu | passed: all 13 (SE-01 … SE-08, MA-06, MA-07, PL-04, PL-07, EV-06) on the real OS sandbox; 4 of these blocked on Windows (`docs/acceptance-runs/linux-ci-security/`) |
+| Coverage | `cargo llvm-cov --workspace --locked` | 65.7% of product lines (see `TEST_COVERAGE.md`) |
 
 ## Acceptance outcomes
 
 | Outcome | Cases |
 | --- | --- |
-| passed | 64 on Windows: the 57 before, plus PL-01, PL-02, PL-03, PL-04, PL-05, PL-06, PL-08. PL-07, SE-01, SE-04 and SE-05 pass on Linux CI (they are blocked on Windows), so 68 counting the Linux security run |
+| passed | 72 on Windows: the 64 before, plus EV-01 … EV-08. PL-07, SE-01, SE-04 and SE-05 pass on Linux CI (they are blocked on Windows), so 76 counting the Linux security run |
 | failed | 0 |
 | skipped | 0 |
 | blocked | 4 on Windows (PL-07, SE-01, SE-04, SE-05: the OS sandbox needs Linux Landlock); 0 on Linux CI |
-| not_implemented | 38 (no executable test; the capability is missing or only partly present, see `ACCEPTANCE_MATRIX.md`) |
+| not_implemented | 30 (no executable test; the capability is missing or only partly present, see `ACCEPTANCE_MATRIX.md`) |
 
-**Overall acceptance: 68 / 106 passed** (64.2%), counting the Linux CI security run for the four OS-sandbox cases (64 / 106 on the Windows run, with those four blocked). Execution coverage: 68 / 106.
+**Overall acceptance: 76 / 106 passed** (71.7%), counting the Linux CI security run for the four OS-sandbox cases (72 / 106 on the Windows run, with those four blocked). Execution coverage: 76 / 106.
 
 Every pass has a `result.json` whose checks all passed and whose artifacts match their recorded hashes. Each test declares what was real and what was mocked: model output is mocked (fake CLI); the engine, hub, team scheduler, code index, verification service, git, worktrees, compilers, test runners, files and processes are real.
 
-**Six systems meet their completion gate (8 / 8): System 4 (persistent project memory), System 5 (integrated verification engine), System 7 (composable plugin system — PL-07 on Linux CI with the real OS sandbox, as its gate requires), System 8 (agent observability), System 9 (cost and performance optimization), and System 10 (security and isolation — all eight on Linux CI with the real OS sandbox).** One end-to-end workflow passes (E2E-08).
+**Seven systems meet their completion gate (8 / 8): System 4 (persistent project memory), System 5 (integrated verification engine), System 7 (composable plugin system — PL-07 on Linux CI with the real OS sandbox, as its gate requires), System 8 (agent observability), System 9 (cost and performance optimization), System 10 (security and isolation — all eight on Linux CI with the real OS sandbox), and System 12 (evaluation and self-improvement).** One end-to-end workflow passes (E2E-08).
 
 ### Controls
 
@@ -62,15 +62,19 @@ Every pass has a `result.json` whose checks all passed and whose artifacts match
 | Negative: plugin argument scope check removed | `negative-control-plugin-scope` | PL-07 failed (the plugin read the sentinel through a path argument; canary in its output), runner exit 1 |
 | Negative: a name collision resolved by silent overwrite | `negative-control-collisions` | PL-03 failed (one plugin's `greet` vanished, the bare name resolved), runner exit 1 |
 | Positive: both restored | `2026-10-24-f56fd58` | all PL cases passed (PL-07 on Linux CI) |
+| Negative: failed and empty runs keep the credit of the checks they pass | `negative-control-eval-credit` | EV-01 failed (the untouched stub and the failed run each earned 1), runner exit 1 |
+| Negative: runs of different dataset versions compared | `negative-control-eval-versions` | EV-07 failed, runner exit 1 |
+| Negative: the late-save guard removed | `hub::tests::late_save_keeps_a_resumed_attempt` | the unit test failed (the resumed attempt was overwritten) |
+| Positive: all restored | `2026-10-24-c3b1f83` | all EV cases and OB-06 passed (EV-06 also on Linux CI, where the owner bypass is invalidated) |
 | In-test control (OB-08): a tampered recording | each OB-08 run | the replay reports the difference and the state hashes differ |
 
 ### Defects
 
-No product defect is open. Product defects found and fixed so far: CLI outages without failover (D-004), orphaned processes after cancel (D-005), four code-index gaps (D-006); plus gate and environment issues D-001, D-002, D-003, D-007. Design gaps in the merge gate and in redaction, and an egress-proxy regression while building plugins, were caught before release. Details in `KNOWN_DEFECTS.md`.
+No product defect is open. Product defects found and fixed so far: CLI outages without failover (D-004), orphaned processes after cancel (D-005), four code-index gaps (D-006); plus gate and environment issues D-001, D-002, D-003, D-007. Design gaps in the merge gate, in redaction and in protecting evaluation assets on Windows, an egress-proxy regression, and a history race (a late save overwriting a resumed task) were caught before release. Details in `KNOWN_DEFECTS.md`.
 
 ## Readiness verdict
 
-**Not ready.** 67 of 96 system cases (counting Linux CI for the four OS-sandbox cases) and 1 of 10 end-to-end workflows pass. The cases that exist pass reliably; the gap is missing capability, not failing behavior.
+**Not ready.** 75 of 96 system cases (counting Linux CI for the four OS-sandbox cases) and 1 of 10 end-to-end workflows pass. The cases that exist pass reliably; the gap is missing capability, not failing behavior.
 
 ## Verified status of the 12 systems
 
@@ -89,7 +93,7 @@ No product defect is open. Product defects found and fixed so far: CLI outages w
 | 9 Cost and performance optimization | 8 / 8 | **verified** (exact arithmetic against a hand-worked oracle; ledger, routing and attribution with mock usage) | price tables and cost, cache discounts, economy and quality routing, shared reservations, versioned prices, context warnings, usage attribution |
 | 10 Security and isolation | 8 / 8 on Linux CI (5 / 8 on Windows) | **verified** (real OS sandbox on Linux via Landlock; fermi's policy, approvals, environment allowlist and egress proxy on every platform) | forbidden reads, secret isolation, destructive-action gating, network restrictions, cross-task isolation, repository-injection resistance, scoped approvals, alternate-route denial |
 | 11 Local and remote execution | 1 / 8 | partly verified (mock-only model, real cargo test) | local execution |
-| 12 Evaluation and self-improvement | 0 / 8 | unverified | missing |
+| 12 Evaluation and self-improvement | 8 / 8 | **verified** (real evaluator scoring with cargo on pristine copies, protected assets enforced by the OS, real dashboard API; the candidate models and the proposing agent are test doubles) | five-task smoke evaluation, cross-model reports, known failure detection, configuration comparison, reproducible setup, protected evaluation assets, dataset history, evaluated improvement proposals |
 | End-to-end workflows | 1 / 10 | partly verified | E2E-08 (task exceeding a budget); 6 partial, 3 missing |
 
 ## Earlier runs
@@ -105,3 +109,4 @@ No product defect is open. Product defects found and fixed so far: CLI outages w
 | 2026-10-24-e72c2c7 | `e72c2c7`, clean | 45 / 45 executed passed (45 / 106); superseded by security and isolation |
 | 2026-10-24-02130df | `02130df`, clean | 47 / 47 deterministic, 50 / 106 on Windows, 53 with Linux CI; superseded by agent observability |
 | 2026-10-24-d0302dc | `d0302dc`, clean | 54 / 54 deterministic, 57 / 106 on Windows, 60 with Linux CI; superseded by the plugin system |
+| 2026-10-24-f56fd58 | `f56fd58`, clean | 61 / 61 deterministic, 64 / 106 on Windows, 68 with Linux CI; superseded by evaluation |

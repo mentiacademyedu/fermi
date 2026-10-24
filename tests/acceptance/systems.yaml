@@ -1600,13 +1600,13 @@ cases:
     action: "Run a set of five known coding tasks"
     expected: "Each task produces a recorded score and evidence"
     evidence: "Five score records test output and candidate patches."
-    capability: missing
-    implementation: ""
-    auditNote: "No evaluation harness, datasets or scoring."
+    capability: implemented
+    implementation: "crates/fermi-core/src/eval.rs (run, run_task)"
+    auditNote: "Each task runs in a fresh fixture copy through the normal engine and is scored by fermi's evaluator in its own folder; every task gets a score, status and evidence (patch, check outputs); failed runs and no change earn no credit."
     testFile: crates/acceptance-tests/tests/evaluation.rs
     testName: ev_01_five_task_smoke_evaluation
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: EV-02
     title: "Cross-model reports"
     system: evaluation-and-self-improvement
@@ -1618,13 +1618,13 @@ cases:
     action: "Repeat benchmark using another model"
     expected: "Comparable reports are generated"
     evidence: "Paired reports configuration fingerprints and run manifests."
-    capability: missing
-    implementation: ""
-    auditNote: "No evaluation harness, datasets or scoring."
+    capability: implemented
+    implementation: "crates/fermi-core/src/eval.rs (Report)"
+    auditNote: "Every run produces the same report schema bound to the dataset hash, evaluator and limits, with the model and account, latency, tokens and cost (unknown when no price applies)."
     testFile: crates/acceptance-tests/tests/evaluation.rs
     testName: ev_02_cross_model_reports
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: EV-03
     title: "Known failure detection"
     system: evaluation-and-self-improvement
@@ -1636,13 +1636,13 @@ cases:
     action: "Introduce a failing implementation"
     expected: "Benchmark correctly marks failure"
     evidence: "Negative control result positive control and evaluator log."
-    capability: missing
-    implementation: ""
-    auditNote: "No evaluation harness, datasets or scoring."
+    capability: implemented
+    implementation: "crates/fermi-core/src/eval.rs (hidden files, scoring folder)"
+    auditNote: "Hidden tests are laid over a pristine copy only when scoring, so a wrong implementation that passes the visible tests still fails; failure output is kept."
     testFile: crates/acceptance-tests/tests/evaluation.rs
     testName: ev_03_known_failure_detection
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: EV-04
     title: "Configuration comparison"
     system: evaluation-and-self-improvement
@@ -1654,13 +1654,13 @@ cases:
     action: "Compare two configurations"
     expected: "Dashboard reports differences in quality, latency, and cost"
     evidence: "Comparison table raw metrics and scoring calculations."
-    capability: missing
-    implementation: ""
-    auditNote: "No evaluation harness, datasets or scoring."
+    capability: implemented
+    implementation: "crates/fermi-core/src/eval.rs (compare), crates/fermi/src/server.rs (/api/evals), web/index.html (Evaluations)"
+    auditNote: "Runs of the same dataset version are compared per task and in total (quality, latency, cost), reconciling to the raw records, with missing measurements and the sample size shown and no significance claimed."
     testFile: crates/acceptance-tests/tests/evaluation.rs
     testName: ev_04_configuration_comparison
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: EV-05
     title: "Reproducible evaluation setup"
     system: evaluation-and-self-improvement
@@ -1672,13 +1672,13 @@ cases:
     action: "Repeat benchmark using fixed fixtures"
     expected: "Test setup and scoring remain reproducible"
     evidence: "Two manifests fixture hashes and reproducibility comparison."
-    capability: missing
-    implementation: ""
-    auditNote: "No evaluation harness, datasets or scoring."
+    capability: implemented
+    implementation: "crates/fermi-core/src/eval.rs (reproducibility, task_hash)"
+    auditNote: "Reports pin dataset, fixture and evaluator hashes, the configuration fingerprint and limits; two runs are checked for the same setup and scores, and differing outputs are reported as variation."
     testFile: crates/acceptance-tests/tests/evaluation.rs
     testName: ev_05_reproducible_evaluation_setup
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: EV-06
     title: "Protected evaluation assets"
     system: evaluation-and-self-improvement
@@ -1690,13 +1690,13 @@ cases:
     action: "Attempt to change evaluation tests during execution"
     expected: "Protected evaluation fixtures cannot be modified by the candidate agent"
     evidence: "Write denial pre and post hashes and evaluator identity."
-    capability: missing
-    implementation: ""
-    auditNote: "No evaluation harness, datasets or scoring."
+    capability: implemented
+    implementation: "crates/fermi-core/src/eval.rs (protect, lock)"
+    auditNote: "Protected assets are read-only to the candidate (read-only files and folders on Unix; locked files and a deny ACL on Windows), hashed before and after, and scoring uses pristine copies; any change invalidates the task."
     testFile: crates/acceptance-tests/tests/evaluation.rs
     testName: ev_06_protected_evaluation_assets
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: EV-07
     title: "Dataset history"
     system: evaluation-and-self-improvement
@@ -1708,13 +1708,13 @@ cases:
     action: "Add a new evaluation dataset version"
     expected: "Historical scores remain attached to their original version"
     evidence: "Dataset registry historical records and versioned reports."
-    capability: missing
-    implementation: ""
-    auditNote: "No evaluation harness, datasets or scoring."
+    capability: implemented
+    implementation: "crates/fermi-core/src/eval.rs (register, history)"
+    auditNote: "Datasets are registered by version and content hash; reports stay bound to theirs, changed contents need a new version, and runs of different versions aren't compared."
     testFile: crates/acceptance-tests/tests/evaluation.rs
     testName: ev_07_dataset_history
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: EV-08
     title: "Evaluated improvement proposals"
     system: evaluation-and-self-improvement
@@ -1726,13 +1726,13 @@ cases:
     action: "Agent proposes an optimization based on previous failures"
     expected: "Recommendation is recorded and requires evaluation before adoption"
     evidence: "Proposal linked failures active config hash and adoption decision."
-    capability: missing
-    implementation: ""
-    auditNote: "No evaluation harness, datasets or scoring."
+    capability: implemented
+    implementation: "crates/fermi-core/src/eval.rs (propose, evaluate, adopt)"
+    auditNote: "An agent's proposal cites the failures it addresses and the evaluation rule; it can't become the active configuration until evaluated without regressions and approved by a named person."
     testFile: crates/acceptance-tests/tests/evaluation.rs
     testName: ev_08_evaluated_improvement_proposals
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: E2E-01
     title: "User creates coding task > model selected > file changed > tests run"
     system: end-to-end

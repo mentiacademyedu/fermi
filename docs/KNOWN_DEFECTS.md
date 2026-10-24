@@ -106,6 +106,15 @@ Found and fixed while writing the tests; listed so the history is complete.
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
 
+## Found while building System 12 (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Product race, caught by OB-06 when the machine ran low on memory | a window that cancelled a task does one last save; if another window had resumed the task meanwhile, that late save put the old, cancelled run back over the resumed one | a hub or recorder never saves over a record with a later attempt; `hub::tests::late_save_keeps_a_resumed_attempt` reproduces it deterministically and fails without the fix |
+| Design gap, caught by EV-06 on Windows | a read-only file can still be deleted or replaced on Windows (Rust's `remove_file` and `rename` ignore the attribute), and a folder's read-only flag doesn't stop new files in it | while the candidate runs, the evaluator holds protected files open without delete or write sharing, and protected folders get a deny ACL (add, delete, rename) for Everyone; Unix keeps read-only files and folders, and a change the owner forces anyway invalidates the task (seen on Linux CI) |
+| Test implementation | the F-EVAL crates sit inside fermi's own Cargo workspace, so cargo refused to build them; one hidden test file was written in the Windows code page; the first wrong `add` also failed the visible test | each fixture crate declares an empty `[workspace]`; files are UTF-8; the wrong `add` overflows in 32 bits, passing the visible test and failing the hidden one |
+| Environment | the first local regression run was stopped by Claude Code because the machine was low on memory | runs use `CARGO_BUILD_JOBS=2`; Linux CI covers the security profile |
+
 ## Found while building System 7 (no open defects)
 
 | Kind | Issue | Fix |

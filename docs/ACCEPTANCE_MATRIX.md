@@ -2,7 +2,7 @@
 
 Phase 1 audit of fermi (called APEX in the spec) against `docs/FERMI_ADE_Verification_and_Acceptance_Testing`.
 
-Published run `2026-10-24-f56fd58` on revision `f56fd58c9b48`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-24-f56fd58/REPORT.md`.
+Published run `2026-10-24-c3b1f83` on revision `c3b1f833cc1d`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-24-c3b1f83/REPORT.md`.
 
 *Result* is the published acceptance outcome: `passed` or `failed` from an executed test with validated evidence; `not_implemented` when no test exists (usually because the capability is missing); `not_run` when a test exists but wasn't in the published run.
 *Capability* is an audit finding from reading the code; it is not verification.
@@ -24,9 +24,9 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | 9 Cost and performance optimization | 8 | 8 | 0 | 0 | 8 / 8 |
 | 10 Security and isolation | 8 | 8 | 0 | 0 | 5 / 8 |
 | 11 Local and remote execution | 8 | 1 | 1 | 6 | 1 / 8 |
-| 12 Evaluation and self-improvement | 8 | 0 | 0 | 8 | 0 / 8 |
+| 12 Evaluation and self-improvement | 8 | 8 | 0 | 0 | 8 / 8 |
 | End-to-end workflows | 10 | 1 | 6 | 3 | 1 / 10 |
-| **Total** | **106** | **66** | **10** | **30** | **64 / 106** |
+| **Total** | **106** | **74** | **10** | **22** | **72 / 106** |
 
 ## 1 Model-agnostic AI engine
 
@@ -175,14 +175,14 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| EV-01 | Five-task smoke evaluation | T1 | **not_implemented** | — | missing | — | No evaluation harness, datasets or scoring. |
-| EV-02 | Cross-model reports | T1 T4 | **not_implemented** | — | missing | — | No evaluation harness, datasets or scoring. |
-| EV-03 | Known failure detection | T1 | **not_implemented** | — | missing | — | No evaluation harness, datasets or scoring. |
-| EV-04 | Configuration comparison | T1 T4 | **not_implemented** | — | missing | — | No evaluation harness, datasets or scoring. |
-| EV-05 | Reproducible evaluation setup | T1 | **not_implemented** | — | missing | — | No evaluation harness, datasets or scoring. |
-| EV-06 | Protected evaluation assets | T3 | **not_implemented** | — | missing | — | No evaluation harness, datasets or scoring. |
-| EV-07 | Dataset history | T1 | **not_implemented** | — | missing | — | No evaluation harness, datasets or scoring. |
-| EV-08 | Evaluated improvement proposals | T1 | **not_implemented** | — | missing | — | No evaluation harness, datasets or scoring. |
+| EV-01 | Five-task smoke evaluation | T1 | **passed** | ev_01_five_task_smoke_evaluation | implemented | crates/fermi-core/src/eval.rs (run, run_task) | Each task runs in a fresh fixture copy through the normal engine and is scored by fermi's evaluator in its own folder; every task gets a score, status and evidence (patch, check outputs); failed runs and no change earn no credit. |
+| EV-02 | Cross-model reports | T1 T4 | **passed** | ev_02_cross_model_reports | implemented | crates/fermi-core/src/eval.rs (Report) | Every run produces the same report schema bound to the dataset hash, evaluator and limits, with the model and account, latency, tokens and cost (unknown when no price applies). |
+| EV-03 | Known failure detection | T1 | **passed** | ev_03_known_failure_detection | implemented | crates/fermi-core/src/eval.rs (hidden files, scoring folder) | Hidden tests are laid over a pristine copy only when scoring, so a wrong implementation that passes the visible tests still fails; failure output is kept. |
+| EV-04 | Configuration comparison | T1 T4 | **passed** | ev_04_configuration_comparison | implemented | crates/fermi-core/src/eval.rs (compare), crates/fermi/src/server.rs (/api/evals), web/index.html (Evaluations) | Runs of the same dataset version are compared per task and in total (quality, latency, cost), reconciling to the raw records, with missing measurements and the sample size shown and no significance claimed. |
+| EV-05 | Reproducible evaluation setup | T1 | **passed** | ev_05_reproducible_evaluation_setup | implemented | crates/fermi-core/src/eval.rs (reproducibility, task_hash) | Reports pin dataset, fixture and evaluator hashes, the configuration fingerprint and limits; two runs are checked for the same setup and scores, and differing outputs are reported as variation. |
+| EV-06 | Protected evaluation assets | T3 | **passed** | ev_06_protected_evaluation_assets | implemented | crates/fermi-core/src/eval.rs (protect, lock) | Protected assets are read-only to the candidate (read-only files and folders on Unix; locked files and a deny ACL on Windows), hashed before and after, and scoring uses pristine copies; any change invalidates the task. |
+| EV-07 | Dataset history | T1 | **passed** | ev_07_dataset_history | implemented | crates/fermi-core/src/eval.rs (register, history) | Datasets are registered by version and content hash; reports stay bound to theirs, changed contents need a new version, and runs of different versions aren't compared. |
+| EV-08 | Evaluated improvement proposals | T1 | **passed** | ev_08_evaluated_improvement_proposals | implemented | crates/fermi-core/src/eval.rs (propose, evaluate, adopt) | An agent's proposal cites the failures it addresses and the evaluation rule; it can't become the active configuration until evaluated without regressions and approved by a named person. |
 
 ## End-to-end workflows
 
