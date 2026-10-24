@@ -170,6 +170,7 @@ button:disabled { opacity: .45; cursor: default; }
 .tk-num { color: var(--tk-num); } .tk-fn { color: var(--tk-fn); } .tk-type { color: var(--tk-type); }
 .ev.tool { color: var(--tool); padding-left: 2px; }
 .ev.warn { color: var(--warn); }
+.ev.tool-fail { color: var(--bad); padding-left: 12px; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .approve { margin: 10px 0 4px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); border-radius: var(--r); background: color-mix(in srgb, var(--warn) 7%, var(--panel)); }
 .approve .h { font-weight: 600; margin-bottom: 6px; }
 .approve ul { margin: 0 0 10px; padding-left: 18px; font: 12.5px/1.6 var(--mono); color: var(--muted); }
@@ -665,6 +666,18 @@ textarea.paths { width: 100%; min-height: 58px; resize: vertical; padding: 8px 1
 /* Routing decisions and budgets */
 .ev.decision summary { cursor: pointer; }
 .dec-body { display: grid; gap: 2px; padding: 4px 0 6px 14px; font-size: 12px; }
+.op-list { display: grid; gap: 2px; max-height: 62vh; overflow: auto; font-size: 12.5px; }
+.op-list details > summary { display: flex; gap: 8px; align-items: baseline; padding: 4px 6px; border-radius: 8px; cursor: pointer; list-style: none; }
+.op-list details > summary::-webkit-details-marker { display: none; }
+.op-list details > summary:hover { background: var(--hover); }
+.op-list .op-seq { color: var(--faint); font-family: var(--mono); min-width: 52px; }
+.op-list .op-name { font-weight: 600; white-space: nowrap; }
+.op-list .op-detail { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.op-list .op-st { margin-left: auto; white-space: nowrap; color: var(--muted); }
+.op-list .op-st.bad { color: var(--bad); }
+.op-list .op-st.ok { color: var(--ok); }
+.op-list .op-call .op-name { color: var(--meta); }
+.op-list pre { margin: 2px 6px 8px 66px; padding: 8px; background: var(--panel-2); border-radius: 8px; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; font-size: 12px; }
 .dec-row { display: flex; gap: 8px; align-items: baseline; }
 .dec-row.out { opacity: .6; }
 .dec-m { color: var(--text); }
@@ -796,6 +809,8 @@ select[aria-expanded=true] { border-color: var(--accent); }
           <div class="convo-head">
             <div class="title" id="convo-title"></div>
             <button class="small danger" id="cancel" hidden>Cancel</button>
+            <button class="small" id="resume-task" hidden title="Continue in the same provider session, as the next attempt of this task">Resume</button>
+            <button class="small ghost" id="trace-task" hidden title="Every model call and tool invocation">Trace</button>
             <button class="small ghost" id="delete-task" hidden>Delete</button>
           </div>
           <div class="route" id="convo-route"></div>
@@ -1116,6 +1131,14 @@ select[aria-expanded=true] { border-color: var(--accent); }
     <div><h3 id="open-title">Open file</h3></div>
     <label class="find" style="margin:0"><span data-i="search"></span><input id="open-q" placeholder="Type part of a file name" autocomplete="off"></label>
     <div class="qo-list" id="open-list"></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-trace" class="wide">
+  <form method="dialog">
+    <div><h3>Trace</h3><div class="muted" id="trace-sub"></div></div>
+    <div class="op-list" id="trace-list"></div>
+    <div style="display:flex;justify-content:flex-end"><button class="small ghost">Close</button></div>
   </form>
 </dialog>
 
@@ -1728,6 +1751,11 @@ function evNode(ev, cwd) {
     case "routed": return el("div", "ev meta", `▸ ${ev.label || ev.model}${ev.effort ? " · effort " + ev.effort : ""} @ ${ev.account}   [${ev.profile}]   ${ev.why}`);
     case "text": return mdNode(ev.text);
     case "tool": return el("div", "ev tool", `· ${ev.name} ${ev.detail}`);
+    case "tool_result":
+      // Successful results stay in the trace; failures show where they happened.
+      if (ev.status === "ok") return null;
+      return el("div", "ev tool-fail", `✗ ${ev.status === "no_result" ? "no result came back" : ev.status}${ev.code && ev.code !== ev.status ? ` (${ev.code})` : ""} ${(ev.output || "").split("\n").find((l) => l.trim() && !/^Exit code /.test(l)) || ""}`);
+    case "call": return null;
     case "limit":
       if (ev.blocked) return el("div", "ev warn", `! ${ev.account} hit its usage limit`);
       if (ev.utilization != null && ev.utilization >= 0.8) return el("div", "ev warn", `! ${ev.account} at ${Math.round(ev.utilization * 100)}% of its window`);
@@ -1735,7 +1763,7 @@ function evNode(ev, cwd) {
     case "failover": return el("div", "ev warn", `↷ ${ev.account}: ${ev.reason}, trying the next account`);
     case "blocked": return el("div", "ev warn", `⚠ needed your approval: ${ev.tool} ${ev.detail}`);
     case "artifact": { const n = el("div", "ev art", `⇒ ${ev.path}`); n.title = "Open"; n.onclick = () => openFile(ev.path); return n; }
-    case "log": return el("div", "ev dim", ev.line);
+    case "log": return ev.line === "cancelled" ? null : el("div", "ev dim", ev.line);
     case "done": return el("div", "ev " + (ev.ok ? "ok" : "bad"), `${ev.ok ? "✓" : "✗"} ${ev.summary}`);
     case "estimate": {
       const e = ev.estimate || {};
@@ -1778,6 +1806,8 @@ function renderChat() {
   $("#convo-title").textContent = titleOf(t);
   $("#convo-route").textContent = [t.route, relTo("", t.cwd), viaLabel(t.via)].filter(Boolean).join("   ·   ");
   $("#cancel").hidden = t.status !== "running";
+  $("#resume-task").hidden = !(t.resumable && ["cancelled", "failed"].includes(t.status));
+  $("#trace-task").hidden = false;
   $("#delete-task").hidden = t.status === "running"; $("#delete-task").textContent = "Delete";
   const log = $("#log"); log.replaceChildren();
   for (const ev of S.logs.get(t.id) || []) { const n = evNode(ev, t.cwd); if (n) log.append(n); }
@@ -2147,6 +2177,39 @@ $("#cancel").onclick = async () => {
     const r = await api(`/api/tasks/${S.sel}/cancel`, {});
     if (!r.ok) { const via = S.tasks.get(S.sel)?.via; toast(`This task runs in ${via ? "fermi " + via : "another fermi window"}; stop it there.`, true); }
   } catch (e) { toast(e.message, true); }
+};
+$("#resume-task").onclick = async () => {
+  if (S.sel == null) return;
+  try { await api(`/api/tasks/${S.sel}/resume`, {}); } catch (e) { toast(e.message, true); }
+};
+$("#trace-task").onclick = async () => {
+  if (S.sel == null) return;
+  let tr;
+  try { tr = await api(`/api/tasks/${S.sel}/trace`); } catch (e) { return toast(e.message, true); }
+  const ops = tr.operations || [];
+  const tools = ops.filter((o) => o.kind === "tool"), calls = ops.filter((o) => o.kind === "model_call");
+  $("#trace-sub").textContent = `${calls.length} model call${calls.length === 1 ? "" : "s"} · ${tools.length} tool invocation${tools.length === 1 ? "" : "s"}` +
+    `${tr.failures?.length ? ` · ${tr.failures.length} not ok` : ""} · ${tr.attempts || 1} attempt${tr.attempts > 1 ? "s" : ""} · ${tr.events} events`;
+  const list = $("#trace-list"); list.replaceChildren();
+  const num = (u, k) => (u && u[k] != null ? u[k] : "?");
+  for (const o of ops) {
+    const d = el("details", o.kind === "model_call" ? "op-call" : "op-tool");
+    const s = el("summary");
+    s.append(el("span", "op-seq", `#${o.seq} ${o.attempt > 1 || o.try > 1 ? `a${o.attempt}${o.try > 1 ? "·t" + o.try : ""}` : ""}`));
+    if (o.kind === "model_call") {
+      s.append(el("span", "op-name", "model call"), el("span", "op-detail", `${o.model || ""} ${o.id}`),
+        el("span", "op-st", `${num(o.usage, "input_tokens")} in / ${num(o.usage, "output_tokens")} out`));
+      d.append(s, el("pre", null, JSON.stringify(o.usage, null, 2)));
+    } else {
+      const ok = o.status === "ok";
+      s.append(el("span", "op-name", o.name), el("span", "op-detail", o.detail || ""),
+        el("span", "op-st " + (ok ? "ok" : o.status === "unknown" ? "" : "bad"), `${ok ? "✓" : o.status.replace("_", " ")}${o.code && o.code !== o.status ? ` ${o.code}` : ""}${o.ms != null ? ` · ${o.ms < 1000 ? o.ms + " ms" : (o.ms / 1000).toFixed(1) + " s"}` : ""}`));
+      d.append(s, el("pre", null, `input\n${JSON.stringify(o.input, null, 2)}\n\noutput\n${o.output || ""}`));
+    }
+    list.append(d);
+  }
+  if (!ops.length) list.append(el("div", "muted", "No operations recorded for this task."));
+  $("#dlg-trace").showModal();
 };
 $("#delete-task").onclick = confirmClick($("#delete-task"), "Click again to delete", async () => {
   if (S.sel == null) return;

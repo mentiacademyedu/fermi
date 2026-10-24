@@ -206,6 +206,19 @@ pub struct Config {
     pub security: SecurityCfg,
     #[serde(default)]
     pub memory: MemoryCfg,
+    #[serde(default)]
+    pub trace: TraceCfg,
+}
+
+/// What task traces keep (see `trace` and `redact`).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct TraceCfg {
+    /// More patterns (regular expressions) whose matches are removed before anything is saved.
+    #[serde(default)]
+    pub redact: Vec<String>,
+    /// Keep each CLI's responses so the task can be replayed (default on).
+    #[serde(default)]
+    pub tapes: Option<bool>,
 }
 
 /// What agents may not touch (see `policy`).
@@ -270,6 +283,7 @@ impl Config {
         cfg.validate()?;
         crate::billing::validate(&cfg)?;
         crate::policy::validate(&cfg.security.deny_read)?;
+        crate::redact::Redactor::new(&cfg.trace.redact)?;
         Ok(cfg)
     }
 

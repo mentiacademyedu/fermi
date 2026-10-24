@@ -9,11 +9,17 @@ use tokio::process::{Child, ChildStdout, Command};
 
 /// A headless CLI child. The prompt goes through stdin (no argv length or
 /// quoting limits); stdout is read as JSON lines; stderr is forwarded as
-/// `Log` events and its tail kept for error messages.
+/// `Log` events and its tail kept for error messages. In a replay it plays
+/// a recording instead (see `trace`).
 pub struct Proc {
-    child: Child,
-    lines: Lines<BufReader<ChildStdout>>,
+    child: Option<Child>,
+    lines: Option<Lines<BufReader<ChildStdout>>>,
     stderr_tail: Arc<Mutex<VecDeque<String>>>,
+    /// Where the responses are recorded.
+    pub tape: Option<crate::trace::TapeOut>,
+    /// Applied to every line of output as it is read.
+    pub redact: Option<Arc<crate::redact::Redactor>>,
+    replay: Option<(crate::trace::Tape, Tx)>,
 }
 
 impl Proc {
@@ -72,14 +78,36 @@ impl Proc {
         });
 
         let lines = BufReader::new(child.stdout.take().expect("piped stdout")).lines();
-        Ok(Proc { child, lines, stderr_tail })
+        Ok(Proc { child: Some(child), lines: Some(lines), stderr_tail, tape: None, redact: None, replay: None })
+    }
+
+    /// Plays a recording: nothing is started.
+    pub fn replay(tape: crate::trace::Tape, tx: &Tx) -> Proc {
+        Proc { child: None, lines: None, stderr_tail: Default::default(), tape: None, redact: None, replay: Some((tape, tx.clone())) }
     }
 
     pub async fn next_json(&mut self) -> Result<Option<serde_json::Value>> {
-        while let Some(line) = self.lines.next_line().await? {
-            if let Ok(v) = serde_json::from_str(&line) {
-                return Ok(Some(v));
+        if let Some((tape, tx)) = &mut self.replay {
+            while let Some(line) = tape.lines.pop_front() {
+                if let Ok(v) = serde_json::from_str(&line) {
+                    return Ok(Some(v));
+                }
             }
+            if tape.end.is_none() {
+                emit(tx, Event::Log { line: crate::trace::TAPE_CUT.into() });
+            }
+            return Ok(None);
+        }
+        let Some(lines) = self.lines.as_mut() else { return Ok(None) };
+        while let Some(line) = lines.next_line().await? {
+            let Ok(mut v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+            // Secrets go before anything reads the line, so no preview or
+            // shortened output can keep part of one.
+            let changed = self.redact.as_ref().is_some_and(|r| r.value(&mut v));
+            if let Some(t) = &mut self.tape {
+                t.line(&if changed { v.to_string() } else { line });
+            }
+            return Ok(Some(v));
         }
         Ok(None)
     }
@@ -87,8 +115,9 @@ impl Proc {
     /// Stops the CLI and every process it started (shell commands, servers,
     /// test runs). Killing only the CLI would orphan them.
     fn kill_tree(&mut self) {
-        let Some(pid) = self.child.id() else { return }; // already reaped
-        if !matches!(self.child.try_wait(), Ok(None)) {
+        let Some(child) = self.child.as_mut() else { return };
+        let Some(pid) = child.id() else { return }; // already reaped
+        if !matches!(child.try_wait(), Ok(None)) {
             return; // it exited on its own
         }
         kill_tree(pid);
@@ -96,10 +125,17 @@ impl Proc {
 
     /// Waits for exit; returns (success, stderr tail).
     pub async fn finish(mut self) -> Result<(bool, String)> {
-        let status = self.child.wait().await?;
+        if let Some((tape, _)) = self.replay.take() {
+            return Ok(tape.end.unwrap_or_default());
+        }
+        let Some(child) = self.child.as_mut() else { return Ok((false, String::new())) };
+        let status = child.wait().await?;
         // Give the stderr reader a moment to drain.
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
         let tail = self.stderr_tail.lock().unwrap().iter().cloned().collect::<Vec<_>>().join("\n");
+        if let Some(t) = &mut self.tape {
+            t.end(status.success(), &tail);
+        }
         Ok((status.success(), tail))
     }
 }

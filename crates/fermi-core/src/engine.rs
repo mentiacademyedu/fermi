@@ -11,7 +11,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct Task {
     pub prompt: String,
     pub cwd: PathBuf,
@@ -46,6 +47,8 @@ pub struct Task {
     /// The hub task this run belongs to, and the task that delegated it (usage attribution).
     pub id: Option<u64>,
     pub parent: Option<u64>,
+    /// Which run of the hub task this is (1 = the first; follow-ups and resumes count up).
+    pub attempt: u32,
 }
 
 /// Which team run and plan task an agent's conversation belongs to.
@@ -77,6 +80,7 @@ impl Task {
             verify: None,
             id: None,
             parent: None,
+            attempt: 1,
         }
     }
 
@@ -124,6 +128,10 @@ pub struct Engine {
     pub ledger: crate::billing::Ledger,
     /// The egress proxy for sandboxed agents, started on first use.
     egress: tokio::sync::OnceCell<Option<u16>>,
+    /// Removes secrets before anything about a task is saved (see `redact`).
+    pub redactor: Arc<crate::redact::Redactor>,
+    /// Set for a replay: recorded responses stand in for the CLIs (see `trace::replay`).
+    pub replay: Option<crate::trace::Replay>,
 }
 
 impl Engine {
@@ -140,6 +148,12 @@ impl Engine {
             store: Store::open(&home),
             ledger: crate::billing::Ledger::open(&home),
             egress: tokio::sync::OnceCell::new(),
+            redactor: Arc::new(
+                crate::redact::Redactor::new(&cfg.trace.redact)
+                    .unwrap_or_else(|_| crate::redact::Redactor::new(&[]).expect("built-in patterns"))
+                    .with_env(),
+            ),
+            replay: None,
             cfg,
             home,
             depth,
@@ -349,10 +363,10 @@ impl Engine {
                     account: &acct.id,
                     model: &model.id,
                     status,
-                    input_tokens: res.usage.input,
-                    cached_input_tokens: res.usage.cached_input,
-                    cache_write_tokens: res.usage.cache_write,
-                    output_tokens: res.usage.output,
+                    input_tokens: res.usage.known(Usage::INPUT, res.usage.input),
+                    cached_input_tokens: res.usage.known(Usage::CACHED, res.usage.cached_input),
+                    cache_write_tokens: res.usage.known(Usage::CACHE_WRITE, res.usage.cache_write),
+                    output_tokens: res.usage.known(Usage::OUTPUT, res.usage.output),
                     cost_usd: res.usage.cost_usd,
                     cost: cost.as_ref(),
                     estimate_micros: est.micros,

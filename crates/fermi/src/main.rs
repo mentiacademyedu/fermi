@@ -63,6 +63,20 @@ enum Cmd {
     },
     /// Print one task's conversation
     Show { id: u64 },
+    /// Every model call and tool invocation of a task: inputs, outputs, status, durations
+    Trace {
+        id: u64,
+        /// The full trace as JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run a task again from its recorded responses (no CLI, no network) and
+    /// check that its events and state come out the same
+    Replay {
+        id: u64,
+        #[arg(long)]
+        json: bool,
+    },
     /// List sessions from Claude Code, Codex and the Gemini CLI, or import some
     /// (by list number or session id) so they show up and continue in fermi
     Import {
@@ -253,6 +267,8 @@ async fn real_main() -> Result<ExitCode> {
         Cmd::Run(t) => return run(t).await,
         Cmd::History { limit } => history(limit)?,
         Cmd::Show { id } => show(id)?,
+        Cmd::Trace { id, json } => trace_cmd(id, json)?,
+        Cmd::Replay { id, json } => return replay_cmd(id, json).await,
         Cmd::Import { which, limit } => import(which, limit)?,
         Cmd::Skills(cmd) => skills_cmd(cmd)?,
         Cmd::Code(cmd) => code_cmd(cmd)?,
@@ -345,6 +361,59 @@ fn memory_cmd(cmd: MemoryCmd) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn trace_cmd(id: u64, as_json: bool) -> Result<()> {
+    let dir = fermi_core::hub::history_dir(&fermi_core::Config::home());
+    let t = fermi_core::hub::read_task(&dir, id).ok_or_else(|| anyhow::anyhow!("no task {id} (see `fermi history`)"))?;
+    let tr = fermi_core::trace::export(&t);
+    if as_json {
+        println!("{}", serde_json::to_string_pretty(&tr)?);
+        return Ok(());
+    }
+    println!("task {id} · {:?} · {} attempt(s) · {} events", t.status, tr["attempts"], tr["events"]);
+    for o in tr["operations"].as_array().into_iter().flatten() {
+        let at = format!("#{:<4} a{} t{}", o["seq"], o["attempt"], o["try"]);
+        if o["kind"] == "model_call" {
+            let u = &o["usage"];
+            let n = |k: &str| u[k].as_u64().map(|v| v.to_string()).unwrap_or_else(|| "?".into());
+            println!("{at}  call {}  {} in / {} out", o["id"].as_str().unwrap_or(""), n("input_tokens"), n("output_tokens"));
+        } else {
+            let ms = o["ms"].as_u64().map(|m| format!(" {m} ms")).unwrap_or_default();
+            let code = o["code"].as_str().map(|c| format!(" ({c})")).unwrap_or_default();
+            println!(
+                "{at}    {} {} {}  → {}{code}{ms}",
+                o["id"].as_str().unwrap_or(""),
+                o["name"].as_str().unwrap_or(""),
+                o["detail"].as_str().unwrap_or(""),
+                o["status"].as_str().unwrap_or("")
+            );
+        }
+    }
+    Ok(())
+}
+
+async fn replay_cmd(id: u64, as_json: bool) -> Result<ExitCode> {
+    let engine = Engine::load()?;
+    let scratch = std::env::temp_dir().join(format!("fermi-replay-{id}-{}", std::process::id()));
+    let r = fermi_core::trace::replay(&engine.cfg, &engine.home, id, &scratch).await;
+    let _ = std::fs::remove_dir_all(&scratch);
+    let r = r?;
+    if as_json {
+        println!("{}", serde_json::to_string_pretty(&r)?);
+    } else {
+        println!("task {id}: replayed attempts {:?} from {} recording(s), {} events compared", r.attempts, r.tapes.len(), r.compared);
+        if r.matches {
+            println!("✓ the replay matches: same events and state ({})", &r.replay_hash[..12]);
+        } else {
+            println!("✗ the replay differs:");
+            for d in &r.differences {
+                println!("  {d}");
+            }
+        }
+        println!("  (the text comes from the recordings; a live model wouldn't reproduce it word for word)");
+    }
+    Ok(if r.matches { ExitCode::SUCCESS } else { ExitCode::FAILURE })
 }
 
 fn budget_cmd(as_json: bool) -> Result<()> {
@@ -446,12 +515,12 @@ fn route(t: Target) -> Result<()> {
 
 async fn run(t: Target) -> Result<ExitCode> {
     let engine = Engine::load()?;
-    let task = task_from(t)?;
+    let mut task = task_from(t)?;
     let color = std::io::stderr().is_terminal();
     let paint = |code: &str, s: String| if color { format!("\x1b[{code}m{s}\x1b[0m") } else { s };
 
     // Saved to the shared history, so the desktop app and dashboard show it too.
-    let mut history = fermi_core::hub::Recorder::start(&engine.home, &task, "cli");
+    let mut history = fermi_core::hub::Recorder::start(&engine, &mut task, "cli");
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
     let job = tokio::spawn({
         let engine = engine.clone();
@@ -497,7 +566,12 @@ async fn run(t: Target) -> Result<ExitCode> {
                 streamed = false;
             }
             Event::Text { text } => println!("{text}"),
-            Event::Tool { name, detail } => eprintln!("{}", paint("36", format!("  · {name} {detail}"))),
+            Event::Tool { name, detail, .. } => eprintln!("{}", paint("36", format!("  · {name} {detail}"))),
+            Event::ToolResult { status, output, code, .. } if status != "ok" => {
+                let first = output.lines().next().unwrap_or_default();
+                eprintln!("{}", paint("31", format!("    ✗ {status}{} {first}", code.map(|c| format!(" ({c})")).unwrap_or_default())))
+            }
+            Event::ToolResult { .. } | Event::Call { .. } => {}
             Event::Limit { account, utilization, blocked, .. } => {
                 if blocked {
                     eprintln!("{}", paint("31", format!("  ! {account} is rate limited")));
@@ -736,7 +810,7 @@ fn show(id: u64) -> Result<()> {
         match ev {
             Event::User { text } => println!("\n> {}\n", text.replace('\n', "\n> ")),
             Event::Text { text } => println!("{text}\n"),
-            Event::Tool { name, detail } => println!("  · {name} {detail}"),
+            Event::Tool { name, detail, .. } => println!("  · {name} {detail}"),
             Event::Artifact { path } => println!("  ⇒ {path}"),
             Event::Failover { account, reason } => println!("  ↷ {account}: {reason}"),
             Event::Done { ok, summary } => println!("{} {summary}", if *ok { "✓" } else { "✗" }),

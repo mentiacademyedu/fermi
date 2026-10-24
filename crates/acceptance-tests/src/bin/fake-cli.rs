@@ -17,6 +17,11 @@
 //! `done_touch` (a file written with the time when the step finishes),
 //! `read` (an absolute path the agent reads: its content joins the reply,
 //! unless a `--disallowedTools "Read(//…)"` rule denies it, as Claude Code does),
+//! `calls` (model calls, each `{id, model, usage, text, tools}`: Claude streams
+//! one line per content block sharing the call's message id, with `usage`
+//! verbatim; a tool is `{id, name, input, output, error, exit, code, ms,
+//! no_result}` and gets its result in each CLI's format after `ms`), `hold`
+//! (after the calls, wait for this file: a run that is still busy),
 //! `ops` (actions with real effects, in order: each `{tool, input, do}`; with a
 //! `tool`, the Claude flavor first decides like Claude Code: deny rules, allow
 //! rules, the permission mode, then the `--permission-prompt-tool` over MCP,
@@ -184,21 +189,91 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
     }
     let (op_text, op_denials) = run_ops(step, flavor);
     text += &op_text;
-    let tools: Vec<Value> = step["tools"].as_array().cloned().unwrap_or_default();
+    // Model calls: `calls` as given, or the plain `tools` as one call.
+    let calls: Vec<Value> = match step["calls"].as_array() {
+        Some(c) => c.clone(),
+        None => match step["tools"].as_array() {
+            Some(t) if !t.is_empty() => vec![json!({ "id": format!("msg_{n}_1"), "tools": t })],
+            _ => vec![],
+        },
+    };
+    let calls: Vec<Value> = calls
+        .into_iter()
+        .enumerate()
+        .map(|(i, mut c)| {
+            if c["id"].is_null() {
+                c["id"] = json!(format!("msg_{n}_{}", i + 1));
+            }
+            for (j, t) in c["tools"].as_array_mut().into_iter().flatten().enumerate() {
+                if t["id"].is_null() {
+                    t["id"] = json!(format!("toolu_{n}_{}_{}", i + 1, j + 1));
+                }
+            }
+            c
+        })
+        .collect();
+    let tools: Vec<Value> = calls.iter().flat_map(|c| c["tools"].as_array().cloned().unwrap_or_default()).collect();
+    // Text the calls carry is already in their messages.
+    let derived = text.is_empty();
+    if derived {
+        text = calls.iter().filter_map(|c| c["text"].as_str()).collect::<Vec<_>>().join("\n");
+    }
+    // Totals: the step's `usage`, else the sum of the calls' usage (each call counted once).
+    let summed = |k: &str| calls.iter().filter_map(|c| c["usage"][k].as_u64()).reduce(|a, b| a + b);
     let usage = &step["usage"];
-    let (input, output) = (usage["input"].as_u64().unwrap_or(10), usage["output"].as_u64().unwrap_or(5));
+    let explicit = step["usage"].is_object() || step["calls"].is_null();
+    let (input, output) = if explicit {
+        (usage["input"].as_u64().unwrap_or(10), usage["output"].as_u64().unwrap_or(5))
+    } else {
+        (summed("input_tokens").unwrap_or(0), summed("output_tokens").unwrap_or(0))
+    };
     // Input read from the prompt cache, on top of `input`.
-    let cached = usage["cached"].as_u64().unwrap_or(0);
+    let cached = if explicit { usage["cached"].as_u64().unwrap_or(0) } else { summed("cache_read_input_tokens").unwrap_or(0) };
     let cost = usage["cost"].as_f64();
     let session = format!("fake-session-{n}");
+    // How a tool ends: after `ms`, with `output`, failing if `error`.
+    let pause = |t: &Value| {
+        if let Some(ms) = t["ms"].as_u64() {
+            std::thread::sleep(Duration::from_millis(ms));
+        }
+    };
+    let tool_out = |t: &Value| t["output"].as_str().unwrap_or("ok").to_string();
 
     match flavor {
         Flavor::Claude => {
             out(json!({ "type": "system", "subtype": "init", "session_id": session }));
-            for t in &tools {
-                out(
-                    json!({ "type": "assistant", "parent_tool_use_id": null, "message": { "content": [{ "type": "tool_use", "name": t["name"], "input": t["input"] }] } }),
-                );
+            // One API response per call, one line per content block (sharing the
+            // message id, as Claude Code streams them); then the tools run.
+            for c in &calls {
+                let msg = |content: Value| {
+                    let mut m = json!({ "id": c["id"], "type": "message", "role": "assistant", "model": c["model"].as_str().unwrap_or("claude-fake"), "content": [content] });
+                    if c["usage"].is_object() {
+                        m["usage"] = c["usage"].clone();
+                    }
+                    json!({ "type": "assistant", "parent_tool_use_id": null, "message": m })
+                };
+                if let Some(t) = c["text"].as_str() {
+                    out(msg(json!({ "type": "text", "text": t })));
+                }
+                for t in c["tools"].as_array().into_iter().flatten() {
+                    out(msg(json!({ "type": "tool_use", "id": t["id"], "name": t["name"], "input": t["input"] })));
+                }
+                if step["crash"] == true {
+                    std::process::exit(101);
+                }
+                for t in c["tools"].as_array().into_iter().flatten().filter(|t| t["no_result"] != true) {
+                    pause(t);
+                    out(json!({ "type": "user", "parent_tool_use_id": null, "message": { "role": "user", "content": [
+                        { "type": "tool_result", "tool_use_id": t["id"], "content": tool_out(t), "is_error": t["error"] == true }
+                    ] } }));
+                }
+            }
+            // Stay busy until the file appears (or the run is interrupted).
+            if let Some(h) = step["hold"].as_str() {
+                let start = Instant::now();
+                while !home.join(h).exists() && start.elapsed() < Duration::from_secs(120) {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
             }
             if step["crash"] == true {
                 std::process::exit(101);
@@ -218,12 +293,12 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
                 );
                 std::process::exit(step["exit"].as_i64().unwrap_or(1) as i32);
             }
-            if !text.is_empty() {
+            if !text.is_empty() && !derived {
                 out(
                     json!({ "type": "stream_event", "parent_tool_use_id": null, "event": { "type": "content_block_delta", "delta": { "type": "text_delta", "text": text } } }),
                 );
                 out(
-                    json!({ "type": "assistant", "parent_tool_use_id": null, "message": { "content": [{ "type": "text", "text": text }] } }),
+                    json!({ "type": "assistant", "parent_tool_use_id": null, "message": { "id": format!("msg_{n}_final"), "model": "claude-fake", "content": [{ "type": "text", "text": text }] } }),
                 );
             }
             let mut denials: Vec<Value> = step["denials"]
@@ -237,8 +312,12 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
                 denials.push(json!({ "tool_name": "Read", "tool_use_id": "toolu_read", "tool_input": { "file_path": p } }));
             }
             denials.extend(op_denials);
+            let mut usage = json!({ "input_tokens": input, "cache_read_input_tokens": cached, "output_tokens": output });
+            if let Some(w) = summed("cache_creation_input_tokens").filter(|_| !explicit) {
+                usage["cache_creation_input_tokens"] = json!(w);
+            }
             let mut result = json!({ "type": "result", "subtype": "success", "is_error": false, "result": text, "session_id": session,
-                "usage": { "input_tokens": input, "cache_read_input_tokens": cached, "output_tokens": output }, "permission_denials": denials });
+                "usage": usage, "permission_denials": denials });
             if let Some(c) = cost {
                 result["total_cost_usd"] = json!(c);
             }
@@ -248,9 +327,18 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
             out(json!({ "type": "thread.started", "thread_id": session }));
             out(json!({ "type": "turn.started" }));
             for t in &tools {
+                let command = t["input"]["command"].as_str().unwrap_or(t["name"].as_str().unwrap_or("tool"));
                 out(
-                    json!({ "type": "item.completed", "item": { "type": "command_execution", "command": t["input"]["command"].as_str().unwrap_or(t["name"].as_str().unwrap_or("tool")) } }),
+                    json!({ "type": "item.started", "item": { "id": t["id"], "type": "command_execution", "command": command, "status": "in_progress" } }),
                 );
+                if t["no_result"] == true {
+                    continue;
+                }
+                pause(t);
+                let failed = t["error"] == true;
+                out(json!({ "type": "item.completed", "item": { "id": t["id"], "type": "command_execution", "command": command,
+                    "aggregated_output": tool_out(t), "exit_code": if failed { t["exit"].as_i64().unwrap_or(1) } else { 0 },
+                    "status": if failed { "failed" } else { "completed" } } }));
             }
             if step["crash"] == true {
                 std::process::exit(101);
@@ -270,7 +358,17 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
         Flavor::Gemini => {
             out(json!({ "type": "init", "session_id": session }));
             for t in &tools {
-                out(json!({ "type": "tool_use", "tool_name": t["name"], "parameters": t["input"] }));
+                out(json!({ "type": "tool_use", "tool_name": t["name"], "tool_id": t["id"], "parameters": t["input"] }));
+                if t["no_result"] == true {
+                    continue;
+                }
+                pause(t);
+                if t["error"] == true {
+                    out(json!({ "type": "tool_result", "tool_id": t["id"], "status": "error",
+                        "error": { "type": t["code"].as_str().unwrap_or("TOOL_ERROR"), "message": tool_out(t) } }));
+                } else {
+                    out(json!({ "type": "tool_result", "tool_id": t["id"], "status": "success", "output": tool_out(t) }));
+                }
             }
             if step["crash"] == true {
                 std::process::exit(101);

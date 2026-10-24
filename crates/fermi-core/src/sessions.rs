@@ -298,7 +298,7 @@ impl Parsed {
             Value::String(s) => serde_json::from_str(s).unwrap_or_else(|_| input.clone()),
             _ => input.clone(),
         };
-        self.events.push(Event::Tool { name: name.to_string(), detail: brief(&input) });
+        self.events.push(Event::tool(name, brief(&input)));
     }
 }
 
@@ -650,6 +650,8 @@ pub fn to_rec(engine: &Engine, found: &Found, id: u64) -> Result<TaskRec> {
         via: Some(found.source.key().to_string()),
         origin: Some(found.origin()),
         events,
+        attempt: 1,
+        stamps: vec![],
     })
 }
 
@@ -692,7 +694,7 @@ mod tests {
             .map(|e| match e {
                 Event::User { text } => format!("user:{text}"),
                 Event::Text { text } => format!("text:{text}"),
-                Event::Tool { name, detail } => format!("tool:{name}:{detail}"),
+                Event::Tool { name, detail, .. } => format!("tool:{name}:{detail}"),
                 _ => "other".into(),
             })
             .collect();

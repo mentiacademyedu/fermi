@@ -1,9 +1,8 @@
 //! `codex exec --json`, one config dir per account (`CODEX_HOME`).
 
-use super::proc::Proc;
-use super::{brief, classify_error, RunCtx, RunResult, Usage};
+use super::{classify_error, RunCtx, RunResult, Usage};
 use crate::events::{emit, Event};
-use crate::util::resolve_bin;
+use crate::trace::Ops;
 use anyhow::Result;
 use std::path::PathBuf;
 
@@ -27,7 +26,7 @@ fn needs_windows_sandbox(account: &crate::config::Account, sandbox: Option<&str>
 /// `sandbox` overrides the profile/task sandbox (image generation runs read-only).
 pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>, sandbox: Option<&str>) -> Result<RunResult> {
     let e = ctx.engine;
-    let bin = resolve_bin("codex", e.cfg.bins.codex.as_deref())?;
+    let bin = ctx.bin("codex", e.cfg.bins.codex.as_deref())?;
     // `exec resume <id>` continues a thread; it runs in the process's working
     // directory and has no --cd/--sandbox flags, so those go through config.
     let resume = ctx.task.resume.as_deref();
@@ -69,36 +68,63 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>, sandbox: O
         envs.push(("CODEX_HOME".into(), home.display().to_string()));
     }
 
-    let jail = ctx.jail(&bin).await?;
-    let mut p = Proc::spawn(&bin, &args, &envs, &ctx.task.cwd, prompt, ctx.tx, jail.as_ref()).await?;
+    let mut p = ctx.spawn(&bin, &args, &envs, prompt).await?;
     let (mut text, mut usage, mut error, mut completed) = (String::new(), Usage::default(), None::<String>, false);
     let mut session = None;
+    let (mut ops, mut turns) = (Ops::new(ctx), 0u32);
 
     while let Some(v) = p.next_json().await? {
-        match v["type"].as_str().unwrap_or_default() {
+        let kind = v["type"].as_str().unwrap_or_default();
+        match kind {
             "thread.started" => {
                 if let Some(id) = v["thread_id"].as_str() {
                     session = Some(id.to_string());
                     emit(ctx.tx, Event::Session { id: id.to_string() });
                 }
             }
-            "item.completed" => {
+            "turn.started" => turns += 1,
+            "item.started" | "item.completed" => {
                 let item = &v["item"];
                 let s = |k: &str| item[k].as_str().unwrap_or_default().to_string();
-                match item["type"].as_str().unwrap_or_default() {
-                    "agent_message" => {
-                        text = s("text");
-                        emit(ctx.tx, Event::Text { text: text.clone() });
+                let id = item["id"].as_str();
+                let call = format!("turn-{}", turns.max(1));
+                // A tool item: its name and input; reported when it starts (or,
+                // if it never said so, when it completes).
+                let tool = match item["type"].as_str().unwrap_or_default() {
+                    "command_execution" => Some(("shell".to_string(), serde_json::json!({ "command": item["command"] }))),
+                    "file_change" => Some(("edit".to_string(), serde_json::json!({ "changes": item["changes"] }))),
+                    "mcp_tool_call" => Some((format!("{}:{}", s("server"), s("tool")), item["arguments"].clone())),
+                    "web_search" => Some(("web_search".to_string(), serde_json::json!({ "query": item["query"] }))),
+                    _ => None,
+                };
+                if let Some((name, input)) = &tool {
+                    let id = ops.tool(id, name, input, Some(&call));
+                    if kind == "item.completed" {
+                        let status = match item["status"].as_str() {
+                            Some("failed") => "error",
+                            Some("declined") => "declined",
+                            _ => "ok",
+                        };
+                        let output = match item["type"].as_str() {
+                            Some("mcp_tool_call") => {
+                                let result = || crate::trace::content_text(&item["result"]["content"]);
+                                item["error"]["message"].as_str().map(str::to_string).unwrap_or_else(result)
+                            }
+                            _ => s("aggregated_output"),
+                        };
+                        let code = item["exit_code"].as_i64().filter(|c| *c != 0).map(|c| format!("exit {c}"));
+                        let code = code.or_else(|| (status != "ok").then(|| status.to_string()));
+                        ops.result(&id, status, &output, code);
                     }
-                    "command_execution" => emit(ctx.tx, Event::Tool { name: "shell".into(), detail: brief(&item["command"]) }),
-                    "file_change" => {
-                        let paths: Vec<_> = item["changes"].as_array().into_iter().flatten().filter_map(|c| c["path"].as_str()).collect();
-                        emit(ctx.tx, Event::Tool { name: "edit".into(), detail: paths.join(", ") });
+                } else if kind == "item.completed" {
+                    match item["type"].as_str().unwrap_or_default() {
+                        "agent_message" => {
+                            text = s("text");
+                            emit(ctx.tx, Event::Text { text: text.clone() });
+                        }
+                        "error" => emit(ctx.tx, Event::Log { line: s("message") }),
+                        _ => {}
                     }
-                    "mcp_tool_call" => emit(ctx.tx, Event::Tool { name: format!("{}:{}", s("server"), s("tool")), detail: String::new() }),
-                    "web_search" => emit(ctx.tx, Event::Tool { name: "web_search".into(), detail: s("query") }),
-                    "error" => emit(ctx.tx, Event::Log { line: s("message") }),
-                    _ => {}
                 }
             }
             "turn.completed" => {
@@ -106,13 +132,25 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>, sandbox: O
                 let u = &v["usage"];
                 usage.input += u["input_tokens"].as_u64().unwrap_or(0);
                 usage.cached_input += u["cached_input_tokens"].as_u64().unwrap_or(0);
+                usage.cache_write += u["cache_write_input_tokens"].as_u64().unwrap_or(0);
                 usage.output += u["output_tokens"].as_u64().unwrap_or(0);
+                usage.reported |= Usage::present(
+                    u,
+                    &[
+                        ("input_tokens", Usage::INPUT),
+                        ("cached_input_tokens", Usage::CACHED),
+                        ("cache_write_input_tokens", Usage::CACHE_WRITE),
+                        ("output_tokens", Usage::OUTPUT),
+                    ],
+                );
+                ops.call(&format!("turn-{}", turns.max(1)), model, u);
             }
             "turn.failed" => error = v["error"]["message"].as_str().map(str::to_string),
             "error" => error = v["message"].as_str().map(str::to_string),
             _ => {}
         }
     }
+    ops.finish();
 
     let (success, stderr) = p.finish().await?;
     let mut res = match error {

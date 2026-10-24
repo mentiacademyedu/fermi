@@ -34,6 +34,32 @@ impl RunCtx<'_> {
         let port = e.egress_port().await;
         crate::sandbox::jail(&e.cfg, &e.home, &self.task.cwd, self.account.home_dir().as_deref(), bin, port).map(Some)
     }
+    /// Starts the CLI, recording its responses (see `trace`); in a replay,
+    /// plays the recorded ones instead and starts nothing.
+    pub async fn spawn(&self, bin: &std::path::Path, args: &[String], envs: &[(String, String)], input: &str) -> Result<proc::Proc> {
+        if let Some(r) = &self.engine.replay {
+            return Ok(proc::Proc::replay(r.open(self)?, self.tx));
+        }
+        let jail = self.jail(bin).await?;
+        let mut p = proc::Proc::spawn(bin, args, envs, &self.task.cwd, input, self.tx, jail.as_ref()).await?;
+        p.redact = Some(self.engine.redactor.clone());
+        p.tape = crate::trace::TapeOut::create(self, args);
+        Ok(p)
+    }
+    /// The CLI to run (a replay starts none, so it needn't be installed).
+    pub fn bin(&self, name: &str, overridden: Option<&str>) -> Result<PathBuf> {
+        match &self.engine.replay {
+            Some(_) => Ok(PathBuf::from(name)),
+            None => crate::util::resolve_bin(name, overridden),
+        }
+    }
+    /// A new provider session id (in a replay, the recorded one).
+    pub fn new_session(&self) -> Result<String> {
+        match &self.engine.replay {
+            Some(r) => Ok(r.session(self.task)?.unwrap_or_else(crate::util::uuid_v4)),
+            None => Ok(crate::util::uuid_v4()),
+        }
+    }
     /// Task effort, else the profile's default.
     pub fn effort(&self) -> Option<&str> {
         self.task.effort.as_deref().or(self.profile.effort.as_deref())
@@ -64,6 +90,25 @@ pub struct Usage {
     pub output: u64,
     /// Cost the provider (CLI) reported, if any.
     pub cost_usd: Option<f64>,
+    /// Which counts the provider reported (`INPUT | OUTPUT…`); the others are unknown, not zero.
+    pub reported: u8,
+}
+
+impl Usage {
+    pub const INPUT: u8 = 1;
+    pub const CACHED: u8 = 2;
+    pub const CACHE_WRITE: u8 = 4;
+    pub const OUTPUT: u8 = 8;
+
+    /// `value` if the provider reported that count.
+    pub fn known(&self, field: u8, value: u64) -> Option<u64> {
+        (self.reported & field != 0).then_some(value)
+    }
+
+    /// The bits for the keys present in a provider's usage object.
+    pub fn present(u: &serde_json::Value, keys: &[(&str, u8)]) -> u8 {
+        keys.iter().filter(|(k, _)| u.get(*k).is_some_and(|v| v.is_u64())).fold(0, |acc, (_, b)| acc | b)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -106,6 +151,9 @@ impl RunResult {
 }
 
 pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
+    if ctx.engine.replay.is_some() && ctx.account.auth == Auth::Api && ctx.account.provider != Provider::Gemini {
+        anyhow::bail!("replays cover CLI accounts; `{}` calls an HTTP API, which isn't recorded", ctx.account.id);
+    }
     if ctx.model.image_only() {
         return image::run(ctx).await;
     }
