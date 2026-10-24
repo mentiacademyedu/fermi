@@ -739,8 +739,8 @@ cases:
     capability: missing
     implementation: "crates/fermi/src/preview.rs (user-facing only)"
     auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/browser.rs
+    testName: ba_01_local_site_launch
     executionState: not_run
     status: not_implemented
   - id: BA-02
@@ -757,8 +757,8 @@ cases:
     capability: missing
     implementation: "crates/fermi/src/preview.rs (user-facing only)"
     auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/browser.rs
+    testName: ba_02_form_submission
     executionState: not_run
     status: not_implemented
   - id: BA-03
@@ -775,8 +775,8 @@ cases:
     capability: missing
     implementation: "crates/fermi/src/preview.rs (user-facing only)"
     auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/browser.rs
+    testName: ba_03_navigation_chain
     executionState: not_run
     status: not_implemented
   - id: BA-04
@@ -793,8 +793,8 @@ cases:
     capability: missing
     implementation: "crates/fermi/src/preview.rs (user-facing only)"
     auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/browser.rs
+    testName: ba_04_screenshot_artifact
     executionState: not_run
     status: not_implemented
   - id: BA-05
@@ -811,8 +811,8 @@ cases:
     capability: missing
     implementation: "crates/fermi/src/preview.rs (user-facing only)"
     auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/browser.rs
+    testName: ba_05_console_error_capture
     executionState: not_run
     status: not_implemented
   - id: BA-06
@@ -829,8 +829,8 @@ cases:
     capability: missing
     implementation: "crates/fermi/src/preview.rs (user-facing only)"
     auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/browser.rs
+    testName: ba_06_network_failure_detection
     executionState: not_run
     status: not_implemented
   - id: BA-07
@@ -847,8 +847,8 @@ cases:
     capability: missing
     implementation: "crates/fermi/src/preview.rs (user-facing only)"
     auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/browser.rs
+    testName: ba_07_mobile_layout_assertions
     executionState: not_run
     status: not_implemented
   - id: BA-08
@@ -865,8 +865,8 @@ cases:
     capability: missing
     implementation: "crates/fermi/src/preview.rs (user-facing only)"
     auditNote: "The Preview tab is a browser for the user; agents have no browser automation tools in fermi."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/browser.rs
+    testName: ba_08_dynamic_readiness
     executionState: not_run
     status: not_implemented
   - id: PL-01

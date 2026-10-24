@@ -1,0 +1,11 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; font: 16px/1.5 system-ui, sans-serif; color: #18181b; background: #ffffff; }
+main { padding: 24px; max-width: 760px; margin: 0 auto; }
+.banner { background: #1d6fb8; color: #ffffff; padding: 48px 24px; }
+.banner h1 { margin: 0; }
+a.button, button { display: inline-block; padding: 10px 16px; border-radius: 8px; border: 1px solid #1d6fb8; background: #1d6fb8; color: #fff; font: inherit; text-decoration: none; cursor: pointer; }
+button:disabled { background: #99aabb; border-color: #99aabb; cursor: default; }
+label { display: block; margin: 12px 0 4px; }
+input { width: 100%; padding: 8px; font: inherit; border: 1px solid #999; border-radius: 6px; }
+.ok { color: #15915a; }
+.bad { color: #d1342f; }

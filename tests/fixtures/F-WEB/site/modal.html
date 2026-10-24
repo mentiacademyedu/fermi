@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Dialog page</title><link rel="stylesheet" href="/style.css">
+<style>
+#backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); }
+#dialog { display: none; position: fixed; top: 20%; left: 50%; transform: translateX(-50%); background: #fff; padding: 20px; border-radius: 12px; width: 320px; }
+.open #backdrop, .open #dialog { display: block; }
+#code-row { display: none; }
+</style></head>
+<body data-page="modal">
+<main><h1>Dialog</h1><button id="open">Open dialog</button><p id="outcome"></p></main>
+<div id="backdrop"></div>
+<div id="dialog" role="dialog" aria-modal="true">
+  <p id="loading">Loading...</p>
+  <div id="code-row"><label for="code">Code</label><input id="code" disabled></div>
+  <p><button id="confirm" disabled>Confirm</button></p>
+</div>
+<script>
+document.getElementById('open').addEventListener('click', async () => {
+  document.body.classList.add('open');
+  const r = await fetch('/api/slow');
+  const data = await r.json();
+  document.getElementById('loading').textContent = 'Enter ' + data.hint;
+  document.getElementById('code-row').style.display = 'block';
+  document.getElementById('code').disabled = false;
+  document.getElementById('confirm').disabled = false;
+});
+document.getElementById('confirm').addEventListener('click', async () => {
+  const code = document.getElementById('code').value;
+  const r = await fetch('/api/confirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: code }) });
+  const rec = await r.json();
+  document.body.classList.remove('open');
+  document.getElementById('outcome').textContent = 'Confirmed ' + rec.code + ' as record ' + rec.id + '.';
+});
+</script>
+</body></html>

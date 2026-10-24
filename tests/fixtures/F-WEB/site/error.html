@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Error page</title><link rel="stylesheet" href="/style.css"></head>
+<body data-page="error">
+<main><h1>Errors</h1><button id="break">Break it</button></main>
+<script>
+document.getElementById('break').addEventListener('click', () => {
+  setTimeout(() => { throw new Error('fixture-boom-42'); }, 0);
+});
+</script>
+</body></html>

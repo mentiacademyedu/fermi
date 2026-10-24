@@ -452,6 +452,33 @@ name = "proxy"
 - A plugin needing a plugin API this fermi doesn't support is refused at
   install, saying which versions are needed and supported.
 
+## Browser
+
+Claude agents can check the web app they're working on in a real browser.
+fermi starts a headless Chromium-based browser (Chrome, Edge or Chromium,
+the first found, or `[browser] path`) and offers it through its MCP bridge:
+`browser_open`, `browser_click`, `browser_fill`, `browser_wait`,
+`browser_read`, `browser_check`, `browser_viewport`, `browser_screenshot`,
+`browser_state`, `browser_close`.
+
+- Actions wait for what they need: a click happens only once the element is
+  visible, enabled and not covered; a wait that runs out is reported as an
+  error. Opening a page fails if it can't be reached or answers with an HTTP
+  error.
+- `browser_state` reports console errors, failed requests (URL, method,
+  status), the navigations so far and whether the page overflows sideways;
+  `browser_viewport` (or `width`/`height`/`mobile` on `browser_open`) checks
+  phone layouts.
+- Each task gets a trace of every action, navigation, console message and
+  failed request (redacted) and its screenshots, in `~/.fermi/browser/<task>/`.
+
+```toml
+[browser]
+path = "C:/Program Files/Google/Chrome/Application/chrome.exe"   # optional
+no_sandbox = false     # some containers need true
+enabled = true         # false hides the tools
+```
+
 ## Evaluations
 
 Measure which model and configuration does best on the same tasks, and keep
@@ -555,6 +582,7 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   redact.rs        removes secrets before anything about a task is saved
   plugins.rs       plugin manifests, registry, sandboxed MCP client, model adapters
   eval.rs          evaluation datasets, runs, scoring, comparisons, gated improvements
+  browser.rs       headless browser for agents (DevTools protocol), traces, screenshots
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
   slides.rs        .pptx parts in and out (the dashboard renders and edits the XML)
