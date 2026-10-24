@@ -1315,8 +1315,8 @@ cases:
     capability: partial
     implementation: "crates/fermi-core/src/policy.rs"
     auditNote: "deny_read globs reach Claude agents as --disallowedTools Read rules and fermi's own tools refuse them; no OS-level boundary, and Codex/Gemini agents aren't covered."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/security.rs
+    testName: se_01_forbidden_file_read
     executionState: not_run
     status: not_implemented
   - id: SE-02
@@ -1333,8 +1333,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "Child processes inherit the full environment."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/security.rs
+    testName: se_02_secret_isolation
     executionState: not_run
     status: not_implemented
   - id: SE-03
@@ -1351,8 +1351,8 @@ cases:
     capability: partial
     implementation: "crates/fermi-core/src/providers/claude_cli.rs (permission_denials), hub.rs (allow)"
     auditNote: "Claude in acceptEdits/default modes blocks commands that need approval; fermi surfaces them and continues only after the user allows them."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/security.rs
+    testName: se_03_destructive_action_gating
     executionState: not_run
     status: not_implemented
   - id: SE-04
@@ -1369,8 +1369,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No network policy."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/security.rs
+    testName: se_04_network_restrictions
     executionState: not_run
     status: not_implemented
   - id: SE-05
@@ -1387,8 +1387,8 @@ cases:
     capability: partial
     implementation: "crates/fermi-core/src/team.rs (worktrees)"
     auditNote: "Team agents get separate worktrees, but no OS-level sandbox or secret separation."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/security.rs
+    testName: se_05_cross_task_isolation
     executionState: not_run
     status: not_implemented
   - id: SE-06
@@ -1405,8 +1405,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No provenance or untrusted-content policy."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/security.rs
+    testName: se_06_repository_injection_resistance
     executionState: not_run
     status: not_implemented
   - id: SE-07
@@ -1423,8 +1423,8 @@ cases:
     capability: partial
     implementation: "crates/fermi-core/src/hub.rs (FollowUp.allow), team.rs"
     auditNote: "Approvals are scoped to tool rules (Bash(node:*)) per conversation and stored; no actor, timestamp or replay protection."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/security.rs
+    testName: se_07_scoped_approval_audit
     executionState: not_run
     status: not_implemented
   - id: SE-08
@@ -1441,8 +1441,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No shared policy across entry points."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/security.rs
+    testName: se_08_alternate_route_bypass
     executionState: not_run
     status: not_implemented
   - id: LR-01

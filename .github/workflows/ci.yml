@@ -39,6 +39,12 @@ jobs:
         env:
           ACCEPTANCE_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # The security profile (T3) on Linux, where the OS sandbox (Landlock) is real.
+      - name: Acceptance (security profile)
+        run: cargo run --locked -p xtask -- acceptance --system SE --system MA --profile security
+        env:
+          ACCEPTANCE_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}-security
+
       - uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Coverage
