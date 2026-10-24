@@ -2,7 +2,7 @@
 
 Phase 1 audit of fermi (called APEX in the spec) against `docs/FERMI_ADE_Verification_and_Acceptance_Testing`.
 
-No published acceptance run yet.
+Published run `2026-10-24-d44f68e` on revision `d44f68e6e5c0`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-24-d44f68e/REPORT.md`.
 
 *Result* is the published acceptance outcome: `passed` or `failed` from an executed test with validated evidence; `not_implemented` when no test exists (usually because the capability is missing); `not_run` when a test exists but wasn't in the published run.
 *Capability* is an audit finding from reading the code; it is not verification.
@@ -13,59 +13,59 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 
 | System | Cases | Capability implemented | Partial | Missing | Acceptance passed |
 | --- | --- | --- | --- | --- | --- |
-| 1 Model-agnostic AI engine | 8 | 4 | 2 | 2 | 0 / 8 |
-| 2 Multi-agent orchestration | 8 | 6 | 1 | 1 | 0 / 8 |
-| 3 Semantic codebase intelligence | 8 | 6 | 0 | 2 | 0 / 8 |
+| 1 Model-agnostic AI engine | 8 | 4 | 2 | 2 | 5 / 8 |
+| 2 Multi-agent orchestration | 8 | 6 | 1 | 1 | 7 / 8 |
+| 3 Semantic codebase intelligence | 8 | 6 | 0 | 2 | 6 / 8 |
 | 4 Persistent project memory | 8 | 0 | 0 | 8 | 0 / 8 |
-| 5 Integrated verification engine | 8 | 8 | 0 | 0 | 0 / 8 |
+| 5 Integrated verification engine | 8 | 8 | 0 | 0 | 8 / 8 |
 | 6 Browser and application control | 8 | 0 | 0 | 8 | 0 / 8 |
 | 7 Composable harness and plugin system | 8 | 0 | 2 | 6 | 0 / 8 |
-| 8 Agent observability | 8 | 1 | 5 | 2 | 0 / 8 |
-| 9 Cost and performance optimization | 8 | 8 | 0 | 0 | 0 / 8 |
+| 8 Agent observability | 8 | 1 | 5 | 2 | 1 / 8 |
+| 9 Cost and performance optimization | 8 | 8 | 0 | 0 | 8 / 8 |
 | 10 Security and isolation | 8 | 0 | 3 | 5 | 0 / 8 |
-| 11 Local and remote execution | 8 | 1 | 1 | 6 | 0 / 8 |
+| 11 Local and remote execution | 8 | 1 | 1 | 6 | 1 / 8 |
 | 12 Evaluation and self-improvement | 8 | 0 | 0 | 8 | 0 / 8 |
-| End-to-end workflows | 10 | 1 | 6 | 3 | 0 / 10 |
-| **Total** | **106** | **35** | **20** | **51** | **0 / 106** |
+| End-to-end workflows | 10 | 1 | 6 | 3 | 1 / 10 |
+| **Total** | **106** | **35** | **20** | **51** | **37 / 106** |
 
 ## 1 Model-agnostic AI engine
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| AI-01 | Adapter normalization | T1 | **not_run** | ai_01_adapter_normalization | partial | crates/fermi-core/src/providers/*.rs, events.rs | Five adapters (Claude/Codex/Gemini CLIs, Anthropic and OpenAI APIs) normalize into one Event stream and RunResult. The acceptance test covers the three CLI adapters through the fake CLI; the two API adapters need an HTTP mock (not built yet), so the case stays partial. |
-| AI-02 | Common task interface | T1 | **not_run** | ai_02_common_task_interface | implemented | crates/fermi-core/src/engine.rs (Task, Engine::run) | Every provider runs through Task and Engine::run with the same lifecycle and Event schema. Unverified against a fixture oracle. |
-| AI-03 | Model switching with state | T1 | **not_run** | ai_03_model_switching_with_state | implemented | crates/fermi-core/src/hub.rs (follow_up, continuation) | Model switch per reply; same provider resumes the session, other providers get the transcript; Routed events attribute each turn. |
+| AI-01 | Adapter normalization | T1 | **passed** | ai_01_adapter_normalization | partial | crates/fermi-core/src/providers/*.rs, events.rs | Five adapters (Claude/Codex/Gemini CLIs, Anthropic and OpenAI APIs) normalize into one Event stream and RunResult. The acceptance test covers the three CLI adapters through the fake CLI; the two API adapters need an HTTP mock (not built yet), so the case stays partial. |
+| AI-02 | Common task interface | T1 | **passed** | ai_02_common_task_interface | implemented | crates/fermi-core/src/engine.rs (Task, Engine::run) | Every provider runs through Task and Engine::run with the same lifecycle and Event schema. Unverified against a fixture oracle. |
+| AI-03 | Model switching with state | T1 | **passed** | ai_03_model_switching_with_state | implemented | crates/fermi-core/src/hub.rs (follow_up, continuation) | Model switch per reply; same provider resumes the session, other providers get the transcript; Routed events attribute each turn. |
 | AI-04 | Rate limit handling | T1 | **not_implemented** | — | missing | crates/fermi-core/src/providers/api.rs, engine.rs | 429 maps to Limited (Retry-After read) and fails over to the next account; there is no backoff/retry policy or attempt ceiling. |
-| AI-05 | Provider outage handling | T1 | **not_run** | ai_05_provider_outage_handling | implemented | crates/fermi-core/src/engine.rs (run_inner), providers/mod.rs (classify_error) | Provider outages (HTTP 5xx from the APIs; 5xx, overloaded or unavailable from the CLIs) fail over to the profile's next account, then the next candidate model, recorded as Failover events; pinning the account and model disables it. Fixed 2026-10-23: CLI outages failed without fallback (D-004). |
+| AI-05 | Provider outage handling | T1 | **passed** | ai_05_provider_outage_handling | implemented | crates/fermi-core/src/engine.rs (run_inner), providers/mod.rs (classify_error) | Provider outages (HTTP 5xx from the APIs; 5xx, overloaded or unavailable from the CLIs) fail over to the profile's next account, then the next candidate model, recorded as Failover events; pinning the account and model disables it. Fixed 2026-10-23: CLI outages failed without fallback (D-004). |
 | AI-06 | Capability validation | T0 T1 | **not_implemented** | — | missing | crates/fermi-core/src/models.rs (Cap) | Capabilities cover code/reasoning/general/fast/image; tool calling is not modeled or validated before dispatch. |
-| AI-07 | Budget exhaustion | T0 T1 | **not_run** | ai_07_budget_exhaustion | implemented | crates/fermi-core/src/billing.rs (Ledger), engine.rs | Profiles with a budget reserve each call's estimate atomically in a shared ledger before dispatch; a call that doesn't fit is refused with the numbers behind it; actual costs settle later and overruns stay visible. Added 2026-10-24. |
+| AI-07 | Budget exhaustion | T0 T1 | **passed** | ai_07_budget_exhaustion | implemented | crates/fermi-core/src/billing.rs (Ledger), engine.rs | Profiles with a budget reserve each call's estimate atomically in a shared ledger before dispatch; a call that doesn't fit is refused with the numbers behind it; actual costs settle later and overruns stay visible. Added 2026-10-24. |
 | AI-08 | Local endpoint support | T1 T2 | **not_implemented** | — | partial | crates/fermi-core/src/providers/api.rs (base_url) | API accounts accept base_url (OpenAI-compatible endpoint), untested against a local model server; uses the Responses API, which local servers may not support. |
 
 ## 2 Multi-agent orchestration
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| MA-01 | Concurrent workers | T1 | **not_run** | ma_01_concurrent_workers | implemented | crates/fermi-core/src/hub.rs (submit/launch), team.rs (schedule) | Tasks run concurrently; team runs start up to N agents in parallel, each in its own worktree. |
-| MA-02 | Dependency ordering | T0 T1 | **not_run** | ma_02_dependency_ordering | implemented | crates/fermi-core/src/team.rs (schedule, topo) | Dependencies gate starts; failed or interrupted tasks block dependents (run goes to attention); cancel stops the run. |
-| MA-03 | Independent edits | T1 | **not_run** | ma_03_independent_edits | implemented | crates/fermi-core/src/team.rs (start_task, integrate) | Separate worktrees and branches merged with --no-ff into an integration branch; manually verified on a fixture (2 runs). |
-| MA-04 | Conflicting edits | T1 | **not_run** | ma_04_conflicting_edits | partial | crates/fermi-core/src/team.rs (integrate) | Conflicts are detected (unmerged paths) and logged with both branches kept, but resolution is delegated automatically to a debugger agent rather than escalated to the user. Manually verified once. |
+| MA-01 | Concurrent workers | T1 | **passed (20/20)** | ma_01_concurrent_workers | implemented | crates/fermi-core/src/hub.rs (submit/launch), team.rs (schedule) | Tasks run concurrently; team runs start up to N agents in parallel, each in its own worktree. |
+| MA-02 | Dependency ordering | T0 T1 | **passed** | ma_02_dependency_ordering | implemented | crates/fermi-core/src/team.rs (schedule, topo) | Dependencies gate starts; failed or interrupted tasks block dependents (run goes to attention); cancel stops the run. |
+| MA-03 | Independent edits | T1 | **passed** | ma_03_independent_edits | implemented | crates/fermi-core/src/team.rs (start_task, integrate) | Separate worktrees and branches merged with --no-ff into an integration branch; manually verified on a fixture (2 runs). |
+| MA-04 | Conflicting edits | T1 | **passed** | ma_04_conflicting_edits | partial | crates/fermi-core/src/team.rs (integrate) | Conflicts are detected (unmerged paths) and logged with both branches kept, but resolution is delegated automatically to a debugger agent rather than escalated to the user. Manually verified once. |
 | MA-05 | Scoped delegation | T1 | **not_implemented** | — | missing | — | No delegate tool; agents cannot spawn scoped subtasks. |
-| MA-06 | Worker crash isolation | T1 T3 | **not_run** | ma_06_worker_crash_isolation | implemented | crates/fermi-core/src/hub.rs, team.rs (on_done) | A killed agent process marks only its task failed; concurrent tasks finish with their results. In team runs a failed task blocks its dependents (MA-02). |
-| MA-07 | Parent cancellation | T1 T3 | **not_run** | ma_07_parent_cancellation | implemented | crates/fermi-core/src/team.rs (cancel), providers/proc.rs (kill_tree) | Cancel stops running agents and every process they started (process tree), and queued tasks never start. Fixed 2026-10-23: processes started by the CLI were orphaned (D-005). |
-| MA-08 | Verified integration | T1 T2 | **not_run** | ma_08_verified_integration | implemented | crates/fermi-core/src/team.rs (start_verification, merge) | The integrated branch must pass the project's mandatory checks before merging; a failing run gets bounded debugger fixes and re-checks, and merge refuses anything but the exact commit that passed. Added 2026-10-23. |
+| MA-06 | Worker crash isolation | T1 T3 | **passed** | ma_06_worker_crash_isolation | implemented | crates/fermi-core/src/hub.rs, team.rs (on_done) | A killed agent process marks only its task failed; concurrent tasks finish with their results. In team runs a failed task blocks its dependents (MA-02). |
+| MA-07 | Parent cancellation | T1 T3 | **passed** | ma_07_parent_cancellation | implemented | crates/fermi-core/src/team.rs (cancel), providers/proc.rs (kill_tree) | Cancel stops running agents and every process they started (process tree), and queued tasks never start. Fixed 2026-10-23: processes started by the CLI were orphaned (D-005). |
+| MA-08 | Verified integration | T1 T2 | **passed** | ma_08_verified_integration | implemented | crates/fermi-core/src/team.rs (start_verification, merge) | The integrated branch must pass the project's mandatory checks before merging; a failing run gets bounded debugger fixes and re-checks, and merge refuses anything but the exact commit that passed. Added 2026-10-23. |
 
 ## 3 Semantic codebase intelligence
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| CI-01 | Repository indexing | T1 | **not_run** | ci_01_repository_indexing | implemented | crates/fermi-core/src/code.rs (Index::open/update) | Indexes Rust, Python, JS, TS/TSX, Go with .gitignore; lists unsupported files and the indexed git revision (added 2026-10-23, D-006). |
-| CI-02 | Exact symbol lookup | T1 | **not_run** | ci_02_exact_symbol_lookup | implemented | crates/fermi-core/src/code.rs (search, symbol) | Exact and prefix lookup with file and line span. |
-| CI-03 | Caller discovery | T1 | **not_run** | ci_03_caller_discovery | implemented | crates/fermi-core/src/code.rs (graph callers) | Static callers resolved same-file, then imported files; results declare the analysis scope (dynamic dispatch is not covered; added 2026-10-23, D-006). |
+| CI-01 | Repository indexing | T1 | **passed** | ci_01_repository_indexing | implemented | crates/fermi-core/src/code.rs (Index::open/update) | Indexes Rust, Python, JS, TS/TSX, Go with .gitignore; lists unsupported files and the indexed git revision (added 2026-10-23, D-006). |
+| CI-02 | Exact symbol lookup | T1 | **passed** | ci_02_exact_symbol_lookup | implemented | crates/fermi-core/src/code.rs (search, symbol) | Exact and prefix lookup with file and line span. |
+| CI-03 | Caller discovery | T1 | **passed** | ci_03_caller_discovery | implemented | crates/fermi-core/src/code.rs (graph callers) | Static callers resolved same-file, then imported files; results declare the analysis scope (dynamic dispatch is not covered; added 2026-10-23, D-006). |
 | CI-04 | Scope-safe rename | T1 | **not_implemented** | — | missing | — | No semantic rename / edit API. |
-| CI-05 | Incremental refresh | T1 | **not_run** | ci_05_incremental_refresh | implemented | crates/fermi-core/src/code.rs (update) | Incremental re-parse by mtime and size on every query; no completion event. |
+| CI-05 | Incremental refresh | T1 | **passed** | ci_05_incremental_refresh | implemented | crates/fermi-core/src/code.rs (update) | Incremental re-parse by mtime and size on every query; no completion event. |
 | CI-06 | Invalid syntax handling | T1 | **not_implemented** | — | missing | crates/fermi-core/src/code.rs | tree-sitter parses error-tolerantly; syntax errors are not surfaced and results are not marked stale. |
-| CI-07 | Dependency impact | T1 | **not_run** | ci_07_dependency_impact | implemented | crates/fermi-core/src/code.rs (impact) | Transitive callers and importers with visited sets (cycles terminate), tests to run, and a declared scope of what isn't covered. |
-| CI-08 | Symbol identity | T1 | **not_run** | ci_08_symbol_identity | implemented | crates/fermi-core/src/code.rs (find, resolution) | Duplicate names resolve per importing file; lookup by Type::name, module path (util::text::helper, added 2026-10-23) or path:line. |
+| CI-07 | Dependency impact | T1 | **passed** | ci_07_dependency_impact | implemented | crates/fermi-core/src/code.rs (impact) | Transitive callers and importers with visited sets (cycles terminate), tests to run, and a declared scope of what isn't covered. |
+| CI-08 | Symbol identity | T1 | **passed** | ci_08_symbol_identity | implemented | crates/fermi-core/src/code.rs (find, resolution) | Duplicate names resolve per importing file; lookup by Type::name, module path (util::text::helper, added 2026-10-23) or path:line. |
 
 ## 4 Persistent project memory
 
@@ -84,14 +84,14 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| VE-01 | Compiler diagnostics | T1 | **not_run** | ve_01_compiler_diagnostics | implemented | crates/fermi-core/src/verify.rs (run, parse_output) | fermi runs the project's checks (.fermi/checks.toml or detected from manifests) and parses diagnostics from cargo JSON and common text formats (rustc, gcc, go, tsc, eslint, ruff, Python) with file, line and column. Added 2026-10-23. |
-| VE-02 | Failing test feedback | T1 | **not_run** | ve_02_failing_test_feedback | implemented | crates/fermi-core/src/verify.rs, mcp.rs (run_checks) | Agents call the run_checks tool and get each failing test with its output and the exit code; verified tasks record a Verify event. Added 2026-10-23. |
-| VE-03 | Repair and rerun | T1 T2 | **not_run** | ve_03_repair_and_rerun | implemented | crates/fermi-core/src/verify.rs (run_task) | Verified tasks: after the agent, fermi runs the checks and sends failures back to the same session; protected files (protect globs) must stay unchanged. Added 2026-10-23. |
-| VE-04 | Lint enforcement | T1 | **not_run** | ve_04_lint_enforcement | implemented | crates/fermi-core/src/verify.rs (Kind::Lint) | Lint checks run like any other; clippy and text-format rule ids and locations are reported and a mandatory lint failure fails the task. Added 2026-10-23. |
-| VE-05 | Dependency advisory detection | T1 | **not_run** | ve_05_dependency_advisory_detection | implemented | crates/fermi-core/src/verify.rs (audit) | Built-in scanner matches Cargo.lock, package-lock.json and requirements.txt against OSV records; records scanner version and dataset SHA-256; nothing is installed or run. Added 2026-10-23. |
-| VE-06 | Structured edit integrity | T1 | **not_run** | ve_06_structured_edit_integrity | implemented | crates/fermi-core/src/code.rs (replace_symbol), mcp.rs (code_replace) | Replaces one definition by its syntax-tree byte range, refuses ambiguous targets and edits that don't parse or drop the definition. Added 2026-10-23. |
-| VE-07 | Bounded repair attempts | T0 T1 | **not_run** | ve_07_bounded_repair_attempts | implemented | crates/fermi-core/src/verify.rs (run_task) | Repair turns are bounded by max_repairs (task option, else the project's, else 3); the final failure is explicit. Added 2026-10-23. |
-| VE-08 | Completion enforcement | T1 T2 | **not_run** | ve_08_completion_enforcement | implemented | crates/fermi-core/src/verify.rs, team.rs (merge), hub.rs | A verified task ends done only if every mandatory check passed; a team run is mergeable only with passing checks on exactly the commit being merged (service and API). Added 2026-10-23. |
+| VE-01 | Compiler diagnostics | T1 | **passed** | ve_01_compiler_diagnostics | implemented | crates/fermi-core/src/verify.rs (run, parse_output) | fermi runs the project's checks (.fermi/checks.toml or detected from manifests) and parses diagnostics from cargo JSON and common text formats (rustc, gcc, go, tsc, eslint, ruff, Python) with file, line and column. Added 2026-10-23. |
+| VE-02 | Failing test feedback | T1 | **passed** | ve_02_failing_test_feedback | implemented | crates/fermi-core/src/verify.rs, mcp.rs (run_checks) | Agents call the run_checks tool and get each failing test with its output and the exit code; verified tasks record a Verify event. Added 2026-10-23. |
+| VE-03 | Repair and rerun | T1 T2 | **passed** | ve_03_repair_and_rerun | implemented | crates/fermi-core/src/verify.rs (run_task) | Verified tasks: after the agent, fermi runs the checks and sends failures back to the same session; protected files (protect globs) must stay unchanged. Added 2026-10-23. |
+| VE-04 | Lint enforcement | T1 | **passed** | ve_04_lint_enforcement | implemented | crates/fermi-core/src/verify.rs (Kind::Lint) | Lint checks run like any other; clippy and text-format rule ids and locations are reported and a mandatory lint failure fails the task. Added 2026-10-23. |
+| VE-05 | Dependency advisory detection | T1 | **passed** | ve_05_dependency_advisory_detection | implemented | crates/fermi-core/src/verify.rs (audit) | Built-in scanner matches Cargo.lock, package-lock.json and requirements.txt against OSV records; records scanner version and dataset SHA-256; nothing is installed or run. Added 2026-10-23. |
+| VE-06 | Structured edit integrity | T1 | **passed** | ve_06_structured_edit_integrity | implemented | crates/fermi-core/src/code.rs (replace_symbol), mcp.rs (code_replace) | Replaces one definition by its syntax-tree byte range, refuses ambiguous targets and edits that don't parse or drop the definition. Added 2026-10-23. |
+| VE-07 | Bounded repair attempts | T0 T1 | **passed** | ve_07_bounded_repair_attempts | implemented | crates/fermi-core/src/verify.rs (run_task) | Repair turns are bounded by max_repairs (task option, else the project's, else 3); the final failure is explicit. Added 2026-10-23. |
+| VE-08 | Completion enforcement | T1 T2 | **passed** | ve_08_completion_enforcement | implemented | crates/fermi-core/src/verify.rs, team.rs (merge), hub.rs | A verified task ends done only if every mandatory check passed; a team run is mergeable only with passing checks on exactly the commit being merged (service and API). Added 2026-10-23. |
 
 ## 6 Browser and application control
 
@@ -127,7 +127,7 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | OB-02 | Invocation detail | T1 | **not_implemented** | — | partial | crates/fermi-core/src/events.rs (Tool) | Tool name and a one-line input summary only; no outputs, duration or status. |
 | OB-03 | Usage fidelity | T0 T1 | **not_implemented** | — | partial | crates/fermi-core/src/state.rs (UsageRecord), billing.rs | Input, cached and cache-write tokens, output tokens, the CLI-reported cost and the price-table cost (with version and breakdown) are recorded per call; per-model-call detail inside a CLI run isn't visible. |
 | OB-04 | Failure diagnostics | T1 | **not_implemented** | — | partial | crates/fermi-core/src/events.rs (Done, Failover, Blocked) | Run failures and blocked approvals recorded; per-tool failures are not. |
-| OB-05 | Trace persistence | T1 | **not_run** | ob_05_trace_persistence | implemented | crates/fermi-core/src/hub.rs (history files) | Every task's events persist in ~/.fermi/history/<id>.json and survive restarts. |
+| OB-05 | Trace persistence | T1 | **passed** | ob_05_trace_persistence | implemented | crates/fermi-core/src/hub.rs (history files) | Every task's events persist in ~/.fermi/history/<id>.json and survive restarts. |
 | OB-06 | Resume correlation | T1 T3 | **not_implemented** | — | partial | crates/fermi-core/src/hub.rs (follow_up) | Follow-ups keep the task id; there is no attempt id or durable checkpoint resume. |
 | OB-07 | Secret redaction | T1 T3 | **not_implemented** | — | missing | — | No secret redaction before persistence. |
 | OB-08 | Deterministic replay | T1 | **not_implemented** | — | missing | — | No captured-response replay. |
@@ -136,14 +136,14 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| CO-01 | Token cost arithmetic | T0 | **not_run** | co_01_token_cost_arithmetic | implemented | crates/fermi-core/src/billing.rs (cost) | Versioned price tables in config; exact picodollar arithmetic rounded half up to USD 0.000001 per call. Added 2026-10-24. |
-| CO-02 | Cached token discounts | T0 | **not_run** | co_02_cached_token_discounts | implemented | crates/fermi-core/src/billing.rs (cost), providers | Cached and cache-write input tokens are tracked separately; the cache rate applies only where the model's price declares one. Added 2026-10-24. |
-| CO-03 | Economy routing | T0 T1 | **not_run** | co_03_economy_routing | implemented | crates/fermi-core/src/router.rs (policy) | routing = "economy": the cheapest eligible model by estimate (capability required), declared tie-breakers, recorded decision. Added 2026-10-24. |
-| CO-04 | Quality routing | T0 T1 | **not_run** | co_04_quality_routing | implemented | crates/fermi-core/src/router.rs (policy) | routing = "quality": the highest declared quality rank among models with the capability that fit the budget; recorded decision. Added 2026-10-24. |
-| CO-05 | Shared budget reservations | T0 T1 | **not_run** | co_05_shared_budget_reservations | implemented | crates/fermi-core/src/billing.rs (Ledger::reserve) | Reservations are atomic across threads and fermi processes (lock file); refusals leave no charge; settlement reconciles actual cost. Added 2026-10-24. |
-| CO-06 | Versioned price updates | T0 T1 | **not_run** | co_06_versioned_price_updates | implemented | crates/fermi-core/src/billing.rs (price_at) | Each call records the price version in effect and its calculation; new versions apply from their effective time without rewriting history. Added 2026-10-24. |
-| CO-07 | Large context warnings | T0 T1 | **not_run** | co_07_large_context_warnings | implemented | crates/fermi-core/src/billing.rs (estimate), engine.rs | Documented estimator (4 bytes per token); warnings from a configurable share of the context window; over-window requests aren't sent. Added 2026-10-24. |
-| CO-08 | Usage attribution | T1 | **not_run** | co_08_usage_attribution | implemented | crates/fermi-core/src/billing.rs (report), state.rs | Usage records carry task, delegating task, team run, agent and attempt; reports group by any of them and reconcile, showing failed attempts and unallocated calls. Added 2026-10-24. |
+| CO-01 | Token cost arithmetic | T0 | **passed** | co_01_token_cost_arithmetic | implemented | crates/fermi-core/src/billing.rs (cost) | Versioned price tables in config; exact picodollar arithmetic rounded half up to USD 0.000001 per call. Added 2026-10-24. |
+| CO-02 | Cached token discounts | T0 | **passed** | co_02_cached_token_discounts | implemented | crates/fermi-core/src/billing.rs (cost), providers | Cached and cache-write input tokens are tracked separately; the cache rate applies only where the model's price declares one. Added 2026-10-24. |
+| CO-03 | Economy routing | T0 T1 | **passed** | co_03_economy_routing | implemented | crates/fermi-core/src/router.rs (policy) | routing = "economy": the cheapest eligible model by estimate (capability required), declared tie-breakers, recorded decision. Added 2026-10-24. |
+| CO-04 | Quality routing | T0 T1 | **passed** | co_04_quality_routing | implemented | crates/fermi-core/src/router.rs (policy) | routing = "quality": the highest declared quality rank among models with the capability that fit the budget; recorded decision. Added 2026-10-24. |
+| CO-05 | Shared budget reservations | T0 T1 | **passed** | co_05_shared_budget_reservations | implemented | crates/fermi-core/src/billing.rs (Ledger::reserve) | Reservations are atomic across threads and fermi processes (lock file); refusals leave no charge; settlement reconciles actual cost. Added 2026-10-24. |
+| CO-06 | Versioned price updates | T0 T1 | **passed** | co_06_versioned_price_updates | implemented | crates/fermi-core/src/billing.rs (price_at) | Each call records the price version in effect and its calculation; new versions apply from their effective time without rewriting history. Added 2026-10-24. |
+| CO-07 | Large context warnings | T0 T1 | **passed** | co_07_large_context_warnings | implemented | crates/fermi-core/src/billing.rs (estimate), engine.rs | Documented estimator (4 bytes per token); warnings from a configurable share of the context window; over-window requests aren't sent. Added 2026-10-24. |
+| CO-08 | Usage attribution | T1 | **passed** | co_08_usage_attribution | implemented | crates/fermi-core/src/billing.rs (report), state.rs | Usage records carry task, delegating task, team run, agent and attempt; reports group by any of them and reconcile, showing failed attempts and unallocated calls. Added 2026-10-24. |
 
 ## 10 Security and isolation
 
@@ -162,7 +162,7 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| LR-01 | Local execution | T1 T2 | **not_run** | lr_01_local_execution | implemented | crates/fermi-core/src/engine.rs, hub.rs | Tasks run locally and record changed files and artifacts. |
+| LR-01 | Local execution | T1 T2 | **passed** | lr_01_local_execution | implemented | crates/fermi-core/src/engine.rs, hub.rs | Tasks run locally and record changed files and artifacts. |
 | LR-02 | Container equivalence | T1 T3 | **not_implemented** | — | missing | — | No container workers. |
 | LR-03 | Remote dispatch | T4 | **not_implemented** | — | missing | — | No remote workers. |
 | LR-04 | Desktop-independent jobs | T2 T4 | **not_implemented** | — | missing | crates/fermi-core/src/hub.rs | Tasks run inside the UI process and are marked interrupted when it closes. |
@@ -195,7 +195,7 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | E2E-05 | User cancels task during a tool operation | T2 T3 | **not_implemented** | — | partial | crates/fermi-core/src/hub.rs (cancel) | Cancel aborts the run and kills the CLI process; grandchildren are not tracked. |
 | E2E-06 | User closes desktop during remote execution | T2 T4 | **not_implemented** | — | missing | — | Needs remote execution (System 11). |
 | E2E-07 | Plugin attempts forbidden operation | T2 T3 | **not_implemented** | — | missing | — | Needs a plugin sandbox (System 7). |
-| E2E-08 | Agent completes task exceeding budget | T2 T3 | **not_run** | e2e_08_task_exceeding_budget | implemented | crates/fermi-core/src/billing.rs, engine.rs, crates/fermi/src/server.rs | After an in-flight call settles over its estimate, new calls are refused; the overrun and remaining allowance show in the task and the dashboard. Added 2026-10-24. |
+| E2E-08 | Agent completes task exceeding budget | T2 T3 | **passed** | e2e_08_task_exceeding_budget | implemented | crates/fermi-core/src/billing.rs, engine.rs, crates/fermi/src/server.rs | After an in-flight call settles over its estimate, new calls are refused; the overrun and remaining allowance show in the task and the dashboard. Added 2026-10-24. |
 | E2E-09 | User compares two models on identical task | T2 T4 | **not_implemented** | — | partial | crates/fermi-core/src/team.rs, hub.rs | Two models can be run separately; no paired comparison with isolation and a shared oracle. |
 | E2E-10 | Agent finishes a multi-file refactor | T2 | **not_implemented** | — | partial | crates/fermi-core/src/code.rs, team.rs | Impact analysis and agent edits exist; no mandatory-check gate on the final revision. |
 

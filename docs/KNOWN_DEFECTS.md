@@ -94,6 +94,7 @@ Found and fixed while writing the tests; listed so the history is complete.
 | MA-07 | the fake CLI started its child after waiting on the barrier, so cancel arrived before the child existed | start the child first, then wait |
 | VE-08 | read the task's history file right after the task left `running` in memory; the hub writes the file a moment later | poll the file until it shows the final state |
 | MA-08 | asked for a task's diff without a file, which returns a diffstat, then looked for code in it | ask for each worker's file |
+| E2E-08 | counted every fake-CLI invocation as a model call, but the dashboard runs the CLI once at start to check the login (`auth status`) | count only calls that carry a prompt |
 | VE-08 control | the first negative-control mutation didn't compile, so the case "failed" for the wrong reason; discarded | a compiling mutation (no checks, merge without the gate): VE-08 failed, runner exit 1 |
 
 ## Design gap caught before release

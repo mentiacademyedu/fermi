@@ -9,7 +9,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1333,
+      "durationMs": 884,
       "id": "MA-06",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -23,15 +23,29 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3219,
+      "durationMs": 2855,
       "id": "MA-07",
       "status": "passed",
       "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 702,
+      "id": "E2E-08",
+      "status": "passed",
+      "system": "end-to-end"
     }
   ],
-  "commitSha": "19f85c1604899ddd2336e5b6baeb23ec78b88455",
+  "commitSha": "d44f68e6e5c01f60c76e6d57a7620bd22df9687a",
   "dirtyTree": true,
   "os": "windows",
   "profile": "security",
-  "runId": "2026-10-23-19f85c1-security"
+  "runId": "2026-10-24-d44f68e-security"
 }

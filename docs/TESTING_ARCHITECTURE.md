@@ -24,7 +24,8 @@ Status: **implemented** for the deterministic profile (T0–T2 without a browser
 | --- | --- |
 | F-CODE | built: 3-crate Rust workspace (`util`, `engine`, `app`) with duplicate `helper` functions in separate modules, a call cycle (`ping`/`pong`), cross-crate imports, a test, and sentinel strings in a comment and a string literal. Ground truth: `manifest.json`, `symbols.json`, `references.json`, `dependency-graph.json`, `expected/engine-lib-greet.rs`. |
 | F-CODE (verification) | `repo/.fermi/checks.toml` pins the checks (offline `cargo check` and `cargo test`, `max_repairs = 3`); `repo/Cargo.lock` and `.gitignore` keep runs reproducible. `advisories/` is a pinned two-record OSV dataset; `expected/vulnerable-Cargo.lock` pins an affected `smallvec`; `expected/util-text-helper-edit.rs` is the oracle for the structured edit. |
-| F-PROVIDER, F-WORKER | built inline in the tests as fake-CLI scenarios (outages, limits, crashes, barriers, children, scripted repairs). |
+| F-PROVIDER | `cost-cases.json`: a pinned price table and usage with costs worked out by hand (the CO-01 oracle, including zero tokens and rounding boundaries). Price tables, budgets and models for the other cost cases are declared in each test's config. |
+| F-WORKER | built inline in the tests as fake-CLI scenarios (outages, limits, crashes, barriers, children, scripted repairs, scripted usage including cached tokens). |
 | F-SECURITY, F-WEB, F-MEMORY, F-PLUGIN, F-EVAL | not built yet; they come with the systems that need them. |
 
 ## Layout
@@ -36,6 +37,7 @@ crates/acceptance-tests/
   tests/model_providers.rs      # AI-01 02 03 05
   tests/agent_execution.rs      # MA-01 02 03 04 06 07 08
   tests/verification.rs         # VE-01 … VE-08
+  tests/cost.rs                 # CO-01 … CO-08, AI-07, E2E-08
   tests/code_intelligence.rs    # CI-01 02 03 05 07 08
   tests/observability.rs        # OB-05
   tests/execution.rs            # LR-01
@@ -94,4 +96,4 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 
 ## Next
 
-Build the missing systems in an agreed order, each with its eight cases. Done: the verification engine (System 5). Next suggested: budgets and price tables (System 9 with AI-07), then project memory (System 4).
+Build the missing systems in an agreed order, each with its eight cases. Done: the verification engine (System 5) and cost and performance (System 9, with AI-07 and E2E-08). Next suggested: project memory (System 4), then security and isolation (System 10).
