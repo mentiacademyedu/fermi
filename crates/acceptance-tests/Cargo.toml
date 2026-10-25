@@ -27,3 +27,7 @@ path = "src/bin/fermi-bridge.rs"
 [[bin]]
 name = "fermi-worker"
 path = "src/bin/fermi-worker.rs"
+
+[[bin]]
+name = "fermi-run"
+path = "src/bin/fermi-run.rs"

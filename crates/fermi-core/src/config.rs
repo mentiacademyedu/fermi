@@ -62,9 +62,15 @@ pub struct Account {
     /// Env var holding the API key (auth = "api").
     #[serde(default)]
     pub api_key_env: Option<String>,
-    /// Override the API base URL (proxies, compatible endpoints).
+    /// Override the API base URL (proxies, compatible endpoints). With a
+    /// base_url, api_key_env may be left out: a local server needs no key.
     #[serde(default)]
     pub base_url: Option<String>,
+    /// What the endpoint speaks, for `openai` API accounts: `responses`
+    /// (OpenAI's, the default) or `chat` (chat completions, which local
+    /// servers such as llama.cpp, Ollama, vLLM and LM Studio offer).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_format: Option<ApiFormat>,
     /// A plugin's model adapter to run this account's calls instead of the
     /// built-in one: `<plugin>.<adapter>` (see `plugins`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -87,7 +93,9 @@ impl Account {
             return None; // the plugin handles its own credentials
         }
         if self.auth == Auth::Api {
-            let var = self.api_key_env.as_deref()?;
+            let Some(var) = self.api_key_env.as_deref() else {
+                return Some(self.base_url.is_some()); // a local endpoint, no key
+            };
             return Some(std::env::var(var).map(|v| !v.is_empty()).unwrap_or(false));
         }
         let (default_dir, file) = match self.provider {
@@ -103,6 +111,13 @@ impl Account {
         let dir = self.home_dir().or_else(|| dirs::home_dir().map(|h| h.join(default_dir)))?;
         Some(dir.join(file).is_file())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ApiFormat {
+    Responses,
+    Chat,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
@@ -158,6 +173,10 @@ pub struct Profile {
     /// first first; a retry after a worker is lost goes to the next.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub workers: Vec<String>,
+    /// Every task of this profile needs tool calling (editing files, running
+    /// commands): models that can't call tools are never used for them.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub require_tools: bool,
 }
 
 /// Model ordering policy for a profile (see `router::policy`).
@@ -171,6 +190,26 @@ pub enum Routing {
     Economy,
     /// The highest declared quality among eligible models.
     Quality,
+}
+
+/// Retrying a rate-limited API call (HTTP 429) on the same account.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct RetryCfg {
+    /// Calls to one account for one task, the first included (default 3).
+    pub attempts: u32,
+    /// Wait before a retry when the provider doesn't say (Retry-After):
+    /// this, doubled each time (default 1 second).
+    pub backoff_secs: u64,
+    /// Longest wait for a retry; a longer Retry-After moves on to the next
+    /// account instead (default 60 seconds).
+    pub max_wait_secs: u64,
+}
+
+impl Default for RetryCfg {
+    fn default() -> Self {
+        RetryCfg { attempts: 3, backoff_secs: 1, max_wait_secs: 60 }
+    }
 }
 
 /// Billing settings (see `billing`).
@@ -213,6 +252,8 @@ pub struct Config {
     pub budgets: Vec<crate::billing::BudgetCfg>,
     #[serde(default)]
     pub billing: BillingCfg,
+    #[serde(default)]
+    pub retry: RetryCfg,
     #[serde(default)]
     pub security: SecurityCfg,
     #[serde(default)]
@@ -377,8 +418,11 @@ impl Config {
             if !ids.insert(a.id.as_str()) {
                 bail!("duplicate account id `{}`", a.id);
             }
-            if a.auth == Auth::Api && a.api_key_env.is_none() {
-                bail!("account `{}` uses auth = \"api\" but has no api_key_env", a.id);
+            if a.auth == Auth::Api && a.api_key_env.is_none() && a.base_url.is_none() {
+                bail!("account `{}` uses auth = \"api\" but has no api_key_env (or base_url, for a local endpoint)", a.id);
+            }
+            if a.api_format == Some(ApiFormat::Chat) && (a.provider != Provider::Openai || a.auth != Auth::Api) {
+                bail!("account `{}`: api_format = \"chat\" is for openai accounts with auth = \"api\"", a.id);
             }
         }
         let catalog = self.catalog();
@@ -408,6 +452,20 @@ impl Config {
             if p.mode != Mode::Auto && p.models.is_empty() {
                 bail!("profile `{}` is {:?} but lists no models", p.name, p.mode);
             }
+            if p.require_tools && p.mode != Mode::Auto {
+                let without: Vec<&str> =
+                    p.models.iter().filter(|id| catalog.iter().any(|m| &m.id == *id && !m.tool_calling())).map(String::as_str).collect();
+                if without.len() == p.models.len() {
+                    bail!(
+                        "profile `{}` requires tool calling, but none of its models can call tools ({}); add one that can, or drop require_tools",
+                        p.name,
+                        without.join(", ")
+                    );
+                }
+            }
+        }
+        if self.retry.attempts == 0 {
+            bail!("[retry] attempts must be at least 1");
         }
         if let Some(d) = &self.default_profile {
             if !names.contains(d.as_str()) {
@@ -473,6 +531,7 @@ impl Config {
                 budget: None,
                 routing: Routing::Auto,
                 workers: vec![],
+                require_tools: false,
             });
         }
         bail!("no profile matches {} and no default_profile is set (use -p <profile>)", cwd.display())

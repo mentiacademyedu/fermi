@@ -72,8 +72,8 @@ cases:
     capability: missing
     implementation: "crates/fermi-core/src/providers/api.rs, engine.rs"
     auditNote: "429 maps to Limited (Retry-After read) and fails over to the next account; there is no backoff/retry policy or attempt ceiling."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/model_providers.rs
+    testName: ai_04_rate_limit_handling
     executionState: not_run
     status: not_implemented
   - id: AI-05
@@ -108,8 +108,8 @@ cases:
     capability: missing
     implementation: "crates/fermi-core/src/models.rs (Cap)"
     auditNote: "Capabilities cover code/reasoning/general/fast/image; tool calling is not modeled or validated before dispatch."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/model_providers.rs
+    testName: ai_06_capability_validation
     executionState: not_run
     status: not_implemented
   - id: AI-07
@@ -144,8 +144,8 @@ cases:
     capability: partial
     implementation: "crates/fermi-core/src/providers/api.rs (base_url)"
     auditNote: "API accounts accept base_url (OpenAI-compatible endpoint), untested against a local model server; uses the Responses API, which local servers may not support."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/model_providers.rs
+    testName: ai_08_local_endpoint_support
     executionState: not_run
     status: not_implemented
   - id: MA-01
@@ -235,8 +235,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No delegate tool; agents cannot spawn scoped subtasks."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/agent_execution.rs
+    testName: ma_05_scoped_delegation
     executionState: not_run
     status: not_implemented
   - id: MA-06
@@ -361,8 +361,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No semantic rename / edit API."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/code_intelligence.rs
+    testName: ci_04_scope_safe_rename
     executionState: not_run
     status: not_implemented
   - id: CI-05
@@ -397,8 +397,8 @@ cases:
     capability: missing
     implementation: "crates/fermi-core/src/code.rs"
     auditNote: "tree-sitter parses error-tolerantly; syntax errors are not surfaced and results are not marked stale."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/code_intelligence.rs
+    testName: ci_06_invalid_syntax_handling
     executionState: not_run
     status: not_implemented
   - id: CI-07

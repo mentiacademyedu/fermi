@@ -41,6 +41,9 @@ pub struct Task {
     pub allowed: Vec<String>,
     /// Set when the task is one agent of a team run.
     pub team: Option<TeamRef>,
+    /// The task needs tool calling (editing files, running commands): only
+    /// models that can call tools, on accounts that run them as agents.
+    pub tools: bool,
     /// Run the project's checks after the agent and send failures back to it
     /// (see `verify::run_task`). The hub honors it; `Engine::run` ignores it.
     pub verify: Option<crate::verify::VerifyOpts>,
@@ -64,6 +67,9 @@ pub struct TeamRef {
 /// Permission modes a task may ask for.
 pub const PERMISSIONS: [&str; 4] = ["acceptEdits", "bypassPermissions", "plan", "default"];
 
+/// The same modes from narrowest to broadest (a delegated task gets one no broader than its delegator's).
+pub const SCOPES: [&str; 4] = ["plan", "default", "acceptEdits", "bypassPermissions"];
+
 impl Task {
     pub fn new(prompt: impl Into<String>, cwd: impl Into<PathBuf>) -> Self {
         Task {
@@ -79,6 +85,7 @@ impl Task {
             context: None,
             allowed: vec![],
             team: None,
+            tools: false,
             verify: None,
             id: None,
             parent: None,
@@ -117,6 +124,8 @@ pub struct Plan {
     pub models: Vec<ModelSpec>,
     /// Set when an economy or quality policy ordered the models.
     pub decision: Option<router::Decision>,
+    /// Models left out because the task needs tool calling and they can't.
+    pub skipped: Vec<String>,
 }
 
 pub struct Engine {
@@ -136,6 +145,8 @@ pub struct Engine {
     pub redactor: Arc<crate::redact::Redactor>,
     /// Set for a replay: recorded responses stand in for the CLIs (see `trace::replay`).
     pub replay: Option<crate::trace::Replay>,
+    /// What waits between retries of a rate-limited call (a test makes it manual).
+    pub clock: crate::clock::Clock,
 }
 
 impl Engine {
@@ -158,6 +169,7 @@ impl Engine {
                     .with_env(),
             ),
             replay: None,
+            clock: crate::clock::Clock::Real,
             cfg,
             home,
             depth,
@@ -197,6 +209,21 @@ impl Engine {
             None => self.cfg.profile_accounts(&profile).collect(),
         };
         let mut models = router::candidates(&self.catalog, &profile, &accounts, &need, task.model.as_deref())?;
+        // Tool calling is checked before anything is sent: a model that can't
+        // call tools never gets a task that needs them.
+        let mut skipped = vec![];
+        if task.tools || profile.require_tools {
+            let (able, unable): (Vec<_>, Vec<_>) = models.into_iter().partition(|m| m.tool_calling());
+            skipped = unable.iter().map(|m| m.id.clone()).collect();
+            if able.is_empty() {
+                bail!(
+                    "this task needs tool calling, and {} can't call tools (the model is declared with `tools = false`); \
+                     pick a model that can, or run the task without tools",
+                    skipped.join(", ")
+                );
+            }
+            models = able;
+        }
         let mut decision = None;
         if profile.routing != crate::config::Routing::Auto && task.model.is_none() && profile.mode != crate::config::Mode::Single {
             let at = now();
@@ -212,12 +239,25 @@ impl Engine {
             models = ordered;
             decision = Some(d);
         }
-        Ok(Plan { profile, need, models, decision })
+        Ok(Plan { profile, need, models, decision, skipped })
     }
 
     /// Next account to try for `provider`. Priority order unless the profile
     /// rotates, in which case the least busy / least used account wins.
     pub fn pick_account(&self, profile: &Profile, provider: Provider, forced: Option<&str>, tried: &HashSet<String>) -> Option<Account> {
+        self.pick_account_for(profile, provider, forced, tried, false)
+    }
+
+    /// Like `pick_account`; `tools` keeps to accounts that run an agent with
+    /// tools (the CLIs and plugin adapters), not the plain HTTP APIs.
+    pub fn pick_account_for(
+        &self,
+        profile: &Profile,
+        provider: Provider,
+        forced: Option<&str>,
+        tried: &HashSet<String>,
+        tools: bool,
+    ) -> Option<Account> {
         let snap = self.store.snapshot();
         let t = now();
         let mut avail: Vec<&Account> = match forced {
@@ -227,6 +267,7 @@ impl Engine {
         avail.retain(|a| {
             a.provider == provider
                 && !tried.contains(&a.id)
+                && (!tools || a.auth == crate::config::Auth::Cli || a.adapter.is_some())
                 && (forced.is_some() || (!snap.get(&a.id).is_some_and(|s| s.limited(t)) && a.credentials_present() != Some(false)))
         });
         if profile.rotate {
@@ -272,6 +313,10 @@ impl Engine {
         if let Some(d) = &plan.decision {
             emit(tx, Event::Decision { decision: serde_json::to_value(d).unwrap_or_default() });
         }
+        for m in &plan.skipped {
+            emit(tx, Event::Log { line: format!("skipped {m}: the task needs tool calling and it can't call tools") });
+        }
+        let tools = task.tools || profile.require_tools;
         let budget = match &profile.budget {
             Some(b) => Some(crate::billing::budget(&self.cfg, b)?),
             None => None,
@@ -281,153 +326,190 @@ impl Engine {
 
         for model in &plan.models {
             let Some(provider) = model.provider() else { continue };
-            'accounts: while let Some(acct) = self.pick_account(profile, provider, task.account.as_deref(), &tried) {
+            'accounts: while let Some(acct) = self.pick_account_for(profile, provider, task.account.as_deref(), &tried, tools) {
                 tried.insert(acct.id.clone());
-                attempt += 1;
-                // Before sending: the estimate, the context window, the budget.
-                let at = now();
-                let est = crate::billing::estimate(&self.cfg, model, task, at);
-                emit(tx, Event::Estimate { estimate: serde_json::to_value(&est).unwrap_or_default() });
-                if est.over_context && !self.cfg.billing.allow_over_context {
-                    let why = est.warning.clone().unwrap_or_default();
-                    emit(tx, Event::Log { line: format!("not sent to {}: {why}", model.name()) });
-                    last_err = Some(why);
-                    break 'accounts; // try a model with a larger window
-                }
-                let reservation = match budget {
-                    Some(b) => {
-                        let need = est.micros.or(b.reserve).ok_or_else(|| {
+                // Calls to this account; a short rate limit is retried here (see `RetryCfg`).
+                let mut tries = 0u32;
+                'call: loop {
+                    tries += 1;
+                    attempt += 1;
+                    // Before sending: the estimate, the context window, the budget.
+                    let at = now();
+                    let est = crate::billing::estimate(&self.cfg, model, task, at);
+                    emit(tx, Event::Estimate { estimate: serde_json::to_value(&est).unwrap_or_default() });
+                    if est.over_context && !self.cfg.billing.allow_over_context {
+                        let why = est.warning.clone().unwrap_or_default();
+                        emit(tx, Event::Log { line: format!("not sent to {}: {why}", model.name()) });
+                        last_err = Some(why);
+                        break 'accounts; // try a model with a larger window
+                    }
+                    let reservation = match budget {
+                        Some(b) => {
+                            let need = est.micros.or(b.reserve).ok_or_else(|| {
                             anyhow::anyhow!(
                                 "{} has no price, so budget `{}` can't be checked: add it to [[prices]] or give the budget a `reserve` amount",
                                 model.id,
                                 b.name
                             )
                         })?;
-                        match self.ledger.reserve(b, need, &model.id, &acct.id, &who)? {
-                            Ok(r) => {
-                                let state = self.ledger.state(b, now());
-                                emit(
-                                    tx,
-                                    Event::Budget {
-                                        action: "reserved".into(),
-                                        state: serde_json::to_value(&state).unwrap_or_default(),
-                                        note: format!("reserved {} for this call", crate::billing::fmt_usd(need)),
-                                    },
-                                );
-                                Some(r)
-                            }
-                            Err(denied) => {
-                                emit(
-                                    tx,
-                                    Event::Budget {
-                                        action: "denied".into(),
-                                        state: serde_json::to_value(&denied.state).unwrap_or_default(),
-                                        note: denied.to_string(),
-                                    },
-                                );
-                                bail!("{denied}");
+                            match self.ledger.reserve(b, need, &model.id, &acct.id, &who)? {
+                                Ok(r) => {
+                                    let state = self.ledger.state(b, now());
+                                    emit(
+                                        tx,
+                                        Event::Budget {
+                                            action: "reserved".into(),
+                                            state: serde_json::to_value(&state).unwrap_or_default(),
+                                            note: format!("reserved {} for this call", crate::billing::fmt_usd(need)),
+                                        },
+                                    );
+                                    Some(r)
+                                }
+                                Err(denied) => {
+                                    emit(
+                                        tx,
+                                        Event::Budget {
+                                            action: "denied".into(),
+                                            state: serde_json::to_value(&denied.state).unwrap_or_default(),
+                                            note: denied.to_string(),
+                                        },
+                                    );
+                                    bail!("{denied}");
+                                }
                             }
                         }
-                    }
-                    None => None,
-                };
-                emit(
-                    tx,
-                    Event::Routed {
-                        profile: profile.name.clone(),
-                        model: model.id.clone(),
-                        label: model.name().to_string(),
-                        effort: task.effort.clone().or_else(|| profile.effort.clone()),
-                        account: acct.id.clone(),
-                        why: match (&task.resume, &task.model) {
-                            (Some(_), _) => "continuing the conversation".into(),
-                            (None, _) if task.context.is_some() => "continuing; the conversation so far was passed on".into(),
-                            (None, Some(_)) => "chosen".into(),
-                            (None, None) => plan.need.why.clone(),
-                        },
-                    },
-                );
-
-                let started = Instant::now();
-                self.store.begin(&acct.id);
-                let ctx = RunCtx { engine: self, profile, account: &acct, model, task, tx };
-                let res = providers::run(&ctx).await.unwrap_or_else(|e| RunResult::failed(format!("{e:#}"), false));
-                self.store.end(&acct.id);
-
-                let status = match &res.status {
-                    Status::Ok => "ok",
-                    Status::Limited { .. } => "limited",
-                    Status::Failed { .. } => "failed",
-                };
-                // The price in effect when the call was made, recorded with it.
-                let cost = crate::billing::price_at(&self.cfg.prices, &model.id, at)
-                    .map(|(v, p)| crate::billing::cost(v, &model.id, p, &res.usage));
-                self.store.record(&UsageRecord {
-                    ts: now(),
-                    profile: &profile.name,
-                    account: &acct.id,
-                    model: &model.id,
-                    status,
-                    input_tokens: res.usage.known(Usage::INPUT, res.usage.input),
-                    cached_input_tokens: res.usage.known(Usage::CACHED, res.usage.cached_input),
-                    cache_write_tokens: res.usage.known(Usage::CACHE_WRITE, res.usage.cache_write),
-                    output_tokens: res.usage.known(Usage::OUTPUT, res.usage.output),
-                    cost_usd: res.usage.cost_usd,
-                    cost: cost.as_ref(),
-                    estimate_micros: est.micros,
-                    attempt,
-                    who: &who,
-                    secs: started.elapsed().as_secs_f64(),
-                });
-                if let (Some(r), Some(b)) = (reservation, budget) {
-                    let (actual, source) = match (&cost, res.usage.cost_usd) {
-                        (Some(c), _) => (c.micros, "price"),
-                        (None, Some(usd)) => ((usd * 1e6).round() as crate::billing::Micros, "reported"),
-                        (None, None) => (r.micros, "estimate"),
+                        None => None,
                     };
-                    let reserved = r.micros;
-                    r.settle(actual, source)?;
-                    let state = self.ledger.state(b, now());
-                    let note = if actual > reserved {
-                        format!(
-                            "this call cost {}, {} more than its estimate; {} of {} left",
-                            crate::billing::fmt_usd(actual),
-                            crate::billing::fmt_usd(actual - reserved),
-                            crate::billing::fmt_usd(state.remaining.max(0)),
-                            crate::billing::fmt_usd(state.limit)
-                        )
-                    } else {
-                        format!(
-                            "this call cost {} ({source}); {} of {} left",
-                            crate::billing::fmt_usd(actual),
-                            crate::billing::fmt_usd(state.remaining.max(0)),
-                            crate::billing::fmt_usd(state.limit)
-                        )
-                    };
-                    emit(tx, Event::Budget { action: "settled".into(), state: serde_json::to_value(&state).unwrap_or_default(), note });
-                }
-
-                match res.status {
-                    Status::Ok => {
-                        return Ok(Outcome {
-                            text: res.text,
+                    emit(
+                        tx,
+                        Event::Routed {
+                            profile: profile.name.clone(),
                             model: model.id.clone(),
+                            label: model.name().to_string(),
+                            effort: task.effort.clone().or_else(|| profile.effort.clone()),
                             account: acct.id.clone(),
-                            usage: res.usage,
-                            artifacts: res.artifacts,
-                        })
+                            why: match (&task.resume, &task.model) {
+                                (Some(_), _) => "continuing the conversation".into(),
+                                (None, _) if task.context.is_some() => "continuing; the conversation so far was passed on".into(),
+                                (None, Some(_)) => "chosen".into(),
+                                (None, None) => plan.need.why.clone(),
+                            },
+                        },
+                    );
+
+                    let started = Instant::now();
+                    self.store.begin(&acct.id);
+                    let ctx = RunCtx { engine: self, profile, account: &acct, model, task, tx };
+                    let res = providers::run(&ctx).await.unwrap_or_else(|e| RunResult::failed(format!("{e:#}"), false));
+                    self.store.end(&acct.id);
+
+                    let status = match &res.status {
+                        Status::Ok => "ok",
+                        Status::Limited { .. } => "limited",
+                        Status::Failed { .. } => "failed",
+                    };
+                    // The price in effect when the call was made, recorded with it.
+                    let cost = crate::billing::price_at(&self.cfg.prices, &model.id, at)
+                        .map(|(v, p)| crate::billing::cost(v, &model.id, p, &res.usage));
+                    self.store.record(&UsageRecord {
+                        ts: now(),
+                        profile: &profile.name,
+                        account: &acct.id,
+                        model: &model.id,
+                        status,
+                        input_tokens: res.usage.known(Usage::INPUT, res.usage.input),
+                        cached_input_tokens: res.usage.known(Usage::CACHED, res.usage.cached_input),
+                        cache_write_tokens: res.usage.known(Usage::CACHE_WRITE, res.usage.cache_write),
+                        output_tokens: res.usage.known(Usage::OUTPUT, res.usage.output),
+                        cost_usd: res.usage.cost_usd,
+                        cost: cost.as_ref(),
+                        estimate_micros: est.micros,
+                        attempt,
+                        who: &who,
+                        secs: started.elapsed().as_secs_f64(),
+                    });
+                    if let (Some(r), Some(b)) = (reservation, budget) {
+                        let (actual, source) = match (&cost, res.usage.cost_usd) {
+                            (Some(c), _) => (c.micros, "price"),
+                            (None, Some(usd)) => ((usd * 1e6).round() as crate::billing::Micros, "reported"),
+                            (None, None) => (r.micros, "estimate"),
+                        };
+                        let reserved = r.micros;
+                        r.settle(actual, source)?;
+                        let state = self.ledger.state(b, now());
+                        let note = if actual > reserved {
+                            format!(
+                                "this call cost {}, {} more than its estimate; {} of {} left",
+                                crate::billing::fmt_usd(actual),
+                                crate::billing::fmt_usd(actual - reserved),
+                                crate::billing::fmt_usd(state.remaining.max(0)),
+                                crate::billing::fmt_usd(state.limit)
+                            )
+                        } else {
+                            format!(
+                                "this call cost {} ({source}); {} of {} left",
+                                crate::billing::fmt_usd(actual),
+                                crate::billing::fmt_usd(state.remaining.max(0)),
+                                crate::billing::fmt_usd(state.limit)
+                            )
+                        };
+                        emit(tx, Event::Budget { action: "settled".into(), state: serde_json::to_value(&state).unwrap_or_default(), note });
                     }
-                    Status::Limited { until } => {
-                        self.store.mark_limited(&acct.id, until);
-                        let reason = "usage limit reached".to_string();
-                        emit(tx, Event::Failover { account: acct.id.clone(), reason: reason.clone() });
-                        last_err = Some(format!("{}: {reason}", acct.id));
+
+                    match res.status {
+                        Status::Ok => {
+                            return Ok(Outcome {
+                                text: res.text,
+                                model: model.id.clone(),
+                                account: acct.id.clone(),
+                                usage: res.usage,
+                                artifacts: res.artifacts,
+                            })
+                        }
+                        Status::Limited { until } => {
+                            let policy = &self.cfg.retry;
+                            if let Some(asked) = res.retry_in {
+                                let wait = if asked > 0 { asked } else { policy.backoff_secs.saturating_mul(1 << (tries - 1).min(16)) };
+                                if tries < policy.attempts && wait <= policy.max_wait_secs {
+                                    emit(
+                                        tx,
+                                        Event::Retry {
+                                            account: acct.id.clone(),
+                                            attempt: tries + 1,
+                                            wait_secs: wait,
+                                            reason: match asked {
+                                                0 => format!("rate limited (HTTP 429); backing off {wait}s"),
+                                                s => format!("rate limited (HTTP 429); the provider asked to wait {s}s"),
+                                            },
+                                        },
+                                    );
+                                    self.clock.sleep(wait).await;
+                                    continue 'call;
+                                }
+                            }
+                            self.store.mark_limited(&acct.id, until);
+                            let reason = match res.retry_in {
+                                Some(_) if tries >= policy.attempts => {
+                                    format!("rate limited (HTTP 429) on all {tries} attempts, the most [retry] allows")
+                                }
+                                Some(s) if s > policy.max_wait_secs => {
+                                    format!(
+                                        "rate limited (HTTP 429) for {s}s, longer than [retry] max_wait_secs ({})",
+                                        policy.max_wait_secs
+                                    )
+                                }
+                                _ => "usage limit reached".to_string(),
+                            };
+                            emit(tx, Event::Failover { account: acct.id.clone(), reason: reason.clone() });
+                            last_err = Some(format!("{}: {reason}", acct.id));
+                        }
+                        Status::Failed { msg, retry: true } => {
+                            emit(tx, Event::Failover { account: acct.id.clone(), reason: msg.clone() });
+                            last_err = Some(format!("{}: {msg}", acct.id));
+                        }
+                        Status::Failed { msg, retry: false } => bail!("{msg}"),
                     }
-                    Status::Failed { msg, retry: true } => {
-                        emit(tx, Event::Failover { account: acct.id.clone(), reason: msg.clone() });
-                        last_err = Some(format!("{}: {msg}", acct.id));
-                    }
-                    Status::Failed { msg, retry: false } => bail!("{msg}"),
+                    break 'call;
                 }
             }
         }

@@ -157,6 +157,15 @@ pub struct FileIdx {
     /// Import specs as written (`crate::a::b`, `./util`, `os.path`), with their line.
     pub imports: Vec<(String, u32)>,
     pub test: bool,
+    /// The first syntax error in the file as it is now (line, column).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<(u32, u32)>,
+    /// The symbols are from the last version that parsed, not the current one.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stale: bool,
+    /// The last few parses: when, and whether the file was valid.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<Value>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -304,6 +313,7 @@ impl Index {
                                 let mut f = parse_file(&mut ctx, lang_of(rel)?, &src, rel)?;
                                 f.mtime = *mt;
                                 f.size = *sz;
+                                f.error = syntax_error(lang_of(rel)?, &src);
                                 Some((rel.clone(), f))
                             })
                             .collect::<Vec<_>>()
@@ -323,7 +333,23 @@ impl Index {
             || revision != self.stored.revision;
         self.stored.unsupported = unsupported;
         self.stored.revision = revision;
-        for (rel, f) in results {
+        for (rel, mut f) in results {
+            let prev = self.stored.files.remove(&rel);
+            let mut history = prev.as_ref().map(|p| p.history.clone()).unwrap_or_default();
+            history.push(json!({ "at": crate::util::now(), "mtime": f.mtime, "valid": f.error.is_none(), "error": f.error }));
+            let keep = history.len().saturating_sub(10);
+            history.drain(..keep);
+            if f.error.is_some() {
+                // A file that doesn't parse keeps the symbols of its last valid
+                // version, marked stale; with none, the partial parse, also stale.
+                if let Some(p) = prev.filter(|p| p.error.is_none() || p.stale) {
+                    f.syms = p.syms;
+                    f.refs = p.refs;
+                    f.imports = p.imports;
+                }
+                f.stale = true;
+            }
+            f.history = history;
             self.stored.files.insert(rel, f);
         }
         self.stored.manifests = manifests;
@@ -487,6 +513,9 @@ fn parse_file(ctx: &mut TagsContext, lang: usize, src: &[u8], rel: &str) -> Opti
         refs: refs.into_iter().map(|r| r.1).collect(),
         imports,
         test: test_file,
+        error: None,
+        stale: false,
+        history: vec![],
     })
 }
 
@@ -969,6 +998,9 @@ pub struct SymRef {
     pub test: bool,
     /// The enclosing type, for methods.
     pub owner: Option<String>,
+    /// The file has a syntax error now: this is from its last valid version.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stale: bool,
 }
 
 impl Index {
@@ -984,6 +1016,7 @@ impl Index {
                 sig: String::new(),
                 test,
                 owner: None,
+                stale: self.files().get(&file).is_some_and(|f| f.stale),
                 file,
             });
         }
@@ -999,6 +1032,7 @@ impl Index {
             sig: s.sig.clone(),
             test: s.test,
             owner,
+            stale: self.files().get(file).is_some_and(|f| f.stale),
         })
     }
 
@@ -1187,8 +1221,12 @@ impl Index {
                     .filter_map(|i| self.graph.paths.get(*i as usize))
                     .take(40)
                     .collect();
+                let file_now = self.files().get(&r.file);
                 Some(json!({
                     "symbol": r, "doc": s.doc, "body": self.body(&r.file, s.line, s.end, 80),
+                    "stale": file_now.is_some_and(|f| f.stale),
+                    "diagnostic": file_now.and_then(|f| f.error).map(|(l, c)| json!({ "file": r.file, "line": l, "column": c,
+                        "message": format!("{}:{l}:{c} has a syntax error: these results are from its last valid version", r.file) })),
                     "callers": callers, "callers_total": self.graph.callers.get(id).map(Vec::len).unwrap_or(0),
                     "callees": callees, "external_calls": unresolved,
                     "tests": self.tests_for(*id), "coverage": self.coverage_of(*id),
@@ -1210,7 +1248,9 @@ impl Index {
         let deps: Vec<&String> = self.graph.deps.get(&n).into_iter().flatten().filter_map(|i| self.graph.paths.get(*i as usize)).collect();
         let importers: Vec<&String> =
             self.graph.importers.get(&n).into_iter().flatten().filter_map(|i| self.graph.paths.get(*i as usize)).collect();
-        json!({ "file": rel, "lang": f.lang, "test": f.test, "symbols": outline, "imports": deps, "external": self.graph.externals.get(&n), "imported_by": importers })
+        json!({ "file": rel, "lang": f.lang, "test": f.test, "symbols": outline, "imports": deps, "external": self.graph.externals.get(&n), "imported_by": importers,
+            "stale": f.stale, "diagnostic": f.error.map(|(l, c)| json!({ "line": l, "column": c, "message": format!("syntax error at {rel}:{l}:{c}") })),
+            "history": f.history })
     }
 
     /// External dependencies from the manifests, and which files use them.
@@ -1406,6 +1446,149 @@ impl Index {
             "before": { "line": line, "end": end, "bytes": [range.start, range.end] },
             "after": { "line": line, "end": after_end, "bytes": [range.start, new_end] },
             "patch": patch,
+        }))
+    }
+
+    /// Renames one symbol and the references the index resolves to it: its
+    /// definition, the calls the call graph attributes to it, and the imports
+    /// that bring it in from its file. Other symbols with the same name,
+    /// strings and comments are left alone (they're listed as untouched).
+    /// Every changed file must still parse, or nothing is written.
+    pub fn rename_symbol(&mut self, target: &str, new_name: &str) -> Result<Value> {
+        self.update()?;
+        let valid =
+            |s: &str| s.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') && s.chars().all(|c| c.is_alphanumeric() || c == '_');
+        if !valid(new_name) {
+            anyhow::bail!("`{new_name}` isn't an identifier");
+        }
+        let id = match self.find(target).as_slice() {
+            [one] => *one,
+            [] => anyhow::bail!("no symbol matches `{target}`"),
+            many => anyhow::bail!("`{target}` matches {} symbols; name one by path:line or module::name", many.len()),
+        };
+        let (file, s) = self.sym(id).context("unknown symbol")?;
+        let (file, old, def_line) = (file.to_string(), s.name.clone(), s.line);
+        if old == new_name {
+            anyhow::bail!("`{old}` already has that name");
+        }
+        // Lines per file where the symbol appears: definition, resolved calls, imports.
+        let mut sites: BTreeMap<String, BTreeMap<u32, &'static str>> = BTreeMap::new();
+        sites.entry(file.clone()).or_default().insert(def_line, "definition");
+        for (caller, line) in self.graph.callers.get(&id).into_iter().flatten() {
+            if let Some(p) = self.graph.paths.get(caller.0 as usize) {
+                sites.entry(p.clone()).or_default().entry(*line).or_insert("call");
+            }
+        }
+        let stem = Path::new(&file).file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let stem = if matches!(stem.as_str(), "lib" | "mod" | "index" | "__init__") {
+            Path::new(&file)
+                .parent()
+                .and_then(|p| p.parent().filter(|_| stem == "lib").or(Some(p)))
+                .and_then(|p| p.file_name())
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string()
+        } else {
+            stem
+        };
+        for imp in self.graph.importers.get(&id.0).into_iter().flatten() {
+            let Some(p) = self.graph.paths.get(*imp as usize) else { continue };
+            let Some(f) = self.files().get(p) else { continue };
+            for (spec, line) in &f.imports {
+                if spec.contains(stem.as_str()) {
+                    sites.entry(p.clone()).or_default().entry(*line).or_insert("import");
+                }
+            }
+        }
+        // A clash in any file it touches would change what the code means.
+        for f in sites.keys() {
+            if self.files().get(f).is_some_and(|x| x.syms.iter().any(|s| s.name == new_name && s.parent.is_none())) {
+                anyhow::bail!("{f} already defines `{new_name}`; pick another name");
+            }
+        }
+        // Exact positions: identifier nodes named `old` on those lines.
+        let mut out: Vec<(String, Vec<u8>)> = vec![];
+        let mut changed: Vec<Value> = vec![];
+        let mut patch = String::new();
+        for (rel, lines) in &sites {
+            let src = std::fs::read(self.root.join(rel))?;
+            let lang = lang_of(rel).context("not a supported language")?;
+            let mut parser = tree_sitter::Parser::new();
+            parser.set_language(&language(lang))?;
+            let tree = parser.parse(&src, None).context("parsing")?;
+            let mut hits: Vec<(usize, usize, u32, u32, &str)> = vec![];
+            let mut stack = vec![tree.root_node()];
+            while let Some(n) = stack.pop() {
+                let kind = n.kind();
+                let ident = matches!(
+                    kind,
+                    "identifier" | "field_identifier" | "property_identifier" | "shorthand_property_identifier" | "type_identifier"
+                );
+                if ident && &src[n.byte_range()] == old.as_bytes() {
+                    let row = n.start_position().row as u32 + 1;
+                    if let Some(what) = lines.get(&row) {
+                        // On the definition line, only the definition's own name.
+                        let first_on_line = !hits.iter().any(|h| h.2 == row);
+                        if *what != "definition" || first_on_line {
+                            hits.push((n.start_byte(), n.end_byte(), row, n.start_position().column as u32 + 1, what));
+                        }
+                    }
+                }
+                let mut c = n.walk();
+                let kids: Vec<_> = n.children(&mut c).collect();
+                stack.extend(kids.into_iter().rev());
+            }
+            if hits.is_empty() {
+                continue;
+            }
+            hits.sort_by_key(|h| h.0);
+            let mut new = src.clone();
+            for h in hits.iter().rev() {
+                new.splice(h.0..h.1, new_name.bytes());
+            }
+            if let Some((l, c)) = syntax_error(lang, &new) {
+                anyhow::bail!("{rel} wouldn't parse after the rename (syntax error at {l}:{c}); nothing was written");
+            }
+            let (old_text, new_text) = (String::from_utf8_lossy(&src).into_owned(), String::from_utf8_lossy(&new).into_owned());
+            let (ol, nl): (Vec<&str>, Vec<&str>) = (old_text.lines().collect(), new_text.lines().collect());
+            patch += &format!("--- a/{rel}\n+++ b/{rel}\n");
+            let mut rows: Vec<u32> = hits.iter().map(|h| h.2).collect();
+            rows.dedup();
+            for r in rows {
+                let i = r as usize - 1;
+                patch += &format!("@@ -{r},1 +{r},1 @@\n-{}\n+{}\n", ol.get(i).unwrap_or(&""), nl.get(i).unwrap_or(&""));
+            }
+            for h in &hits {
+                changed.push(json!({ "file": rel, "line": h.2, "column": h.3, "kind": h.4 }));
+            }
+            out.push((rel.clone(), new));
+        }
+        for (rel, bytes) in &out {
+            let path = self.root.join(rel);
+            let tmp = path.with_extension("fermi-edit");
+            std::fs::write(&tmp, bytes)?;
+            std::fs::rename(&tmp, &path)?;
+        }
+        // What still says the old name, and was left alone on purpose.
+        let mut untouched = vec![];
+        for rel in self.files().keys() {
+            let text = std::fs::read_to_string(self.root.join(rel)).unwrap_or_default();
+            for (i, l) in text.lines().enumerate() {
+                let found = l.match_indices(old.as_str()).any(|(at, _)| {
+                    let before = l[..at].chars().last();
+                    let after = l[at + old.len()..].chars().next();
+                    !before.is_some_and(|c| c.is_alphanumeric() || c == '_') && !after.is_some_and(|c| c.is_alphanumeric() || c == '_')
+                });
+                if found {
+                    untouched.push(json!({ "file": rel, "line": i + 1, "text": l.trim() }));
+                }
+            }
+        }
+        self.update()?;
+        let renamed = self.find(&format!("{file}:{def_line}")).first().and_then(|i| self.sym(*i)).is_some_and(|(_, s)| s.name == new_name);
+        Ok(json!({
+            "symbol": format!("{file}:{def_line}"), "from": old, "to": new_name, "renamed": renamed,
+            "sites": changed, "files": out.iter().map(|(r, _)| r).collect::<Vec<_>>(), "untouched": untouched, "patch": patch,
         }))
     }
 
@@ -1629,8 +1812,12 @@ pub mod text {
                 sig: String::new(),
                 test: false,
                 owner: None,
+                stale: false,
             });
             out += &format!("## {} {} ({}–{})\n", r.kind, label(&r), loc(&r), r.end);
+            if let Some(d) = s["diagnostic"]["message"].as_str() {
+                out += &format!("⚠ {d}\n");
+            }
             if let Some(d) = s["doc"].as_str() {
                 out += &format!("Doc: {d}\n");
             }
@@ -1773,7 +1960,32 @@ pub mod text {
         }
         let join = |k: &str| v[k].as_array().into_iter().flatten().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ");
         out += &format!("Imports: {}\nExternal: {}\nImported by: {}\n", join("imports"), join("external"), join("imported_by"));
+        if let Some(d) = v["diagnostic"]["message"].as_str() {
+            out += &format!("⚠ {d}: the outline is from its last valid version\n");
+        }
         out
+    }
+
+    pub fn rename(v: &Value) -> String {
+        let mut out = format!(
+            "Renamed {} to {} ({}): {} site(s) in {}.\n",
+            v["from"].as_str().unwrap_or(""),
+            v["to"].as_str().unwrap_or(""),
+            v["symbol"].as_str().unwrap_or(""),
+            v["sites"].as_array().map_or(0, Vec::len),
+            v["files"].as_array().into_iter().flatten().filter_map(|f| f.as_str()).collect::<Vec<_>>().join(", ")
+        );
+        for s in v["sites"].as_array().into_iter().flatten() {
+            out += &format!("  {}:{}:{} {}\n", s["file"].as_str().unwrap_or(""), s["line"], s["column"], s["kind"].as_str().unwrap_or(""));
+        }
+        let left = v["untouched"].as_array().map_or(&[][..], Vec::as_slice);
+        if !left.is_empty() {
+            out += "Left alone (strings, comments, other symbols with that name):\n";
+            for u in left {
+                out += &format!("  {}:{}  {}\n", u["file"].as_str().unwrap_or(""), u["line"], u["text"].as_str().unwrap_or(""));
+            }
+        }
+        out + v["patch"].as_str().unwrap_or("")
     }
 }
 

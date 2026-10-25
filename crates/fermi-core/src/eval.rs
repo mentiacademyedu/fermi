@@ -87,6 +87,10 @@ fn sha(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
+    sha(bytes)
+}
+
 /// Files under `dir` (relative, `/`-separated, sorted), without `.git` and `target`.
 fn files(dir: &Path) -> Vec<String> {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {

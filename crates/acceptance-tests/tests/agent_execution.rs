@@ -439,3 +439,150 @@ async fn ma_08_verified_integration() {
     );
     c.finish();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ma_05_scoped_delegation() {
+    use fermi_core::memory::{Audience, Memory, NewRecord, Provenance};
+    let mut c = Case::start("MA-05", "T1");
+    c.real(&[
+        "fermi engine",
+        "fermi's MCP bridge in its own process (delegate tool)",
+        "claude CLI adapter and its permission mode",
+        "project memory (audience filter)",
+        "deny_read policy",
+    ]);
+    c.mocked(&["Claude Code CLI for the parent and child agents (fake-cli, scripted)"]);
+    const PRIVATE: &str = "PRIVATE-MEMORY-SENTINEL-9c1";
+    const DENIED: &str = "DENY-READ-SENTINEL-4e7";
+    const PARENT_ONLY: &str = "PARENT-ONLY-SENTINEL-41";
+    const SPEC: &str = "SPEC-PUBLIC-CONTENT-77";
+    // The project: a spec the child may read, a file the policy keeps from agents, one outside it.
+    let proj = c.work.join("proj");
+    std::fs::create_dir_all(proj.join("notes")).unwrap();
+    git(&proj, &["init", "-q"]).unwrap();
+    std::fs::write(proj.join("notes/spec.md"), format!("# Names\n\nNames go through normalize() in util. {SPEC}\n")).unwrap();
+    std::fs::write(proj.join("secret.env"), format!("TOKEN={DENIED}\n")).unwrap();
+    std::fs::write(c.work.join("outside.txt"), "outside the project\n").unwrap();
+
+    let delegate = |prompt: &str, files: &[&str], permission: &str| json!({ "mcp": { "name": "delegate", "arguments": { "prompt": prompt, "files": files, "permission": permission } } });
+    let review = "Review notes/spec.md and say which function normalizes names.";
+    let summary = "Summarize notes/spec.md in one line.";
+    let steps = vec![
+        // The parent: two delegations that must be refused, then two that run.
+        json!({ "match": "Coordinate the names work", "text": "Parent done.", "ops": [
+            delegate(review, &["notes/spec.md", "secret.env"], "plan"),
+            delegate(review, &["../outside.txt"], "plan"),
+            delegate(review, &["notes/spec.md"], "plan"),
+            delegate(summary, &["notes/spec.md"], "bypassPermissions"),
+        ] }),
+        // Child 1 tries to write, which its plan mode must stop.
+        json!({ "match": review, "text": "normalize() in util.", "ops": [
+            { "tool": "Write", "input": { "file_path": "child.txt", "content": "from the child" }, "do": { "write": "child.txt", "content": "from the child" } }
+        ] }),
+        json!({ "match": summary, "text": "Names are normalized by util." }),
+    ];
+    let f = Fermi::new(&c, &[account("cl", "claude", steps)], "\n[security]\ndeny_read = [\"**/secret.env\"]\n").unwrap();
+    let mem = Memory::open(&f.home, &proj).unwrap();
+    let public = mem
+        .record(
+            NewRecord {
+                topic: "names".into(),
+                title: "Names are normalized by util normalize".into(),
+                body: "Use normalize() for every name.".into(),
+                ..Default::default()
+            },
+            "user",
+            Provenance::User,
+        )
+        .unwrap();
+    let private = mem
+        .record(
+            NewRecord {
+                topic: "names".into(),
+                title: "Names service credentials".into(),
+                body: format!("{PRIVATE}: rotate monthly; normalizes names"),
+                audience: Audience::Private,
+                ..Default::default()
+            },
+            "user",
+            Provenance::User,
+        )
+        .unwrap();
+
+    let mut parent = f.task(&format!("Coordinate the names work. {PARENT_ONLY} is for you alone."), &proj);
+    parent.id = Some(41);
+    parent.permission = Some("acceptEdits".into());
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let r = f.engine.run(&parent, &tx).await;
+    drop(tx);
+    let mut events = vec![];
+    while let Some(e) = rx.recv().await {
+        events.push(e);
+    }
+    let calls = f.calls("cl");
+    let children: Vec<&Value> =
+        calls.iter().filter(|x| !x["prompt"].as_str().unwrap_or("").contains("Coordinate the names work")).collect();
+    let dir = f.home.join("delegations").join("41");
+    let mut envelopes: Vec<Value> = std::fs::read_dir(&dir)
+        .map(|d| d.filter_map(|e| std::fs::read(e.ok()?.path()).ok()).filter_map(|b| serde_json::from_slice(&b).ok()).collect())
+        .unwrap_or_default();
+    envelopes.sort_by_key(|e| e["n"].as_u64());
+    let parent_text = r.as_ref().map(|o| o.text.clone()).unwrap_or_default();
+    c.json("calls.json", &json!(calls));
+    c.json("envelopes.json", &json!(envelopes));
+    c.json("parent-events.json", &serde_json::to_value(&events).unwrap());
+    c.text("parent-output.txt", &parent_text);
+
+    let prompt_of = |i: usize| children.get(i).and_then(|x| x["prompt"].as_str()).unwrap_or("").to_string();
+    let args_of = |i: usize| children.get(i).map(|x| x["args"].to_string()).unwrap_or_default();
+    c.check(
+        "outOfScopeFilesRefused",
+        parent_text.contains("mcp delegate failed: secret.env is off limits")
+            && parent_text.contains("mcp delegate failed: ../outside.txt is outside")
+            && children.len() == 2
+            && envelopes.len() == 2,
+        format!("{} child run(s), {} envelope(s); parent saw: {parent_text}", children.len(), envelopes.len()),
+    );
+    let first = prompt_of(0);
+    c.check(
+        "boundedContextDelivered",
+        first.contains(review) && first.contains(SPEC) && first.contains("Names are normalized by util normalize"),
+        "child 1 received its instructions, the file it was given and the agent-visible memory record",
+    );
+    let everything: String = children.iter().map(|x| x.to_string()).chain(envelopes.iter().map(|e| e.to_string())).collect();
+    c.check(
+        "privateSentinelAbsent",
+        ![PRIVATE, DENIED, PARENT_ONLY].iter().any(|s| everything.contains(s))
+            && envelopes.first().is_some_and(|e| e["memory"].as_array().is_some_and(|m| m.contains(&json!(public.record.id))))
+            && !envelopes.iter().any(|e| e["memory"].as_array().is_some_and(|m| m.contains(&json!(private.record.id)))),
+        "no child input or delegation record holds the private memory record, the deny_read file or the parent's own prompt",
+    );
+    c.check(
+        "narrowerScopeEnforced",
+        args_of(0).contains(r#""--permission-mode","plan""#)
+            && !proj.join("child.txt").exists()
+            && envelopes[0]["permission"]["effective"] == "plan",
+        format!("child 1 args {}; child.txt exists: {}", args_of(0), proj.join("child.txt").exists()),
+    );
+    c.check(
+        "neverBroaderThanDelegator",
+        envelopes.get(1).is_some_and(|e| {
+            e["permission"] == json!({ "delegator": "acceptEdits", "requested": "bypassPermissions", "effective": "acceptEdits" })
+        }) && args_of(1).contains(r#""--permission-mode","acceptEdits""#),
+        format!("envelope 2 permission {}", envelopes.get(1).map(|e| e["permission"].clone()).unwrap_or_default()),
+    );
+    c.check(
+        "envelopeRecorded",
+        envelopes.iter().all(|e| e["parent"] == 41 && e["result"]["ok"] == true)
+            && envelopes[0]["files"][0]["path"] == "notes/spec.md"
+            && envelopes[0]["files"][0]["sha256"].as_str()
+                == Some(acceptance_tests::sha256(&std::fs::read(proj.join("notes/spec.md")).unwrap()).as_str()),
+        "delegations/41/<n>.json: instructions, files with hashes, memory ids, permission, result",
+    );
+    c.check(
+        "answersReturned",
+        r.is_ok() && parent_text.contains("normalize() in util.") && parent_text.contains("Names are normalized by util."),
+        "the parent got both children's answers",
+    );
+    c.finish();
+}

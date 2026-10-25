@@ -7,6 +7,7 @@
 //! - Fixtures: pinned folders under `tests/fixtures` copied into a case and
 //!   committed with fixed dates, so every run starts from the same commit.
 
+pub mod provider;
 pub mod web;
 pub mod workers;
 pub use web::{web_fixture, Web};
@@ -381,6 +382,11 @@ pub fn plugin_fixture(name: &str, dest: &Path, vars: &[(&str, &Path)]) -> Result
 /// fermi's MCP bridge as a program of its own (the real `mcp::serve`).
 pub fn fermi_bridge() -> PathBuf {
     sibling("fermi-bridge")
+}
+
+/// One task through the engine in a process of its own (`src/bin/fermi-run.rs`).
+pub fn fermi_run() -> PathBuf {
+    sibling("fermi-run")
 }
 
 pub(crate) fn sibling(bin: &str) -> PathBuf {

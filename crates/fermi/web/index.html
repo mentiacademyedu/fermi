@@ -1813,6 +1813,7 @@ function evNode(ev, cwd) {
       if (ev.utilization != null && ev.utilization >= 0.8) return el("div", "ev warn", `! ${ev.account} at ${Math.round(ev.utilization * 100)}% of its window`);
       return null;
     case "failover": return el("div", "ev warn", `↷ ${ev.account}: ${ev.reason}, trying the next account`);
+    case "retry": return el("div", "ev warn", `⟳ ${ev.account}: ${ev.reason}; attempt ${ev.attempt} in ${ev.wait_secs}s`);
     case "blocked": return el("div", "ev warn", `⚠ needed your approval: ${ev.tool} ${ev.detail}`);
     case "artifact": { const n = el("div", "ev art", `⇒ ${ev.path}`); n.title = "Open"; n.onclick = () => openFile(ev.path); return n; }
     case "log": return ev.line === "cancelled" ? null : el("div", "ev dim", ev.line);

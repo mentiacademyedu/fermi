@@ -29,7 +29,9 @@
 //! like a program the agent started. `do`: `read`, `rm`, `write`+`content`,
 //! `env`, `read_parent_env`, `connect`+`send`, `http`, `replace`+`content` (write
 //! a new file and rename it over the path), `unlock` (make a read-only file and its folder
-//! writable again, as their owner can)).
+//! writable again, as their owner can)), or `mcp` ({name, arguments}: call a
+//! tool of fermi's bridge from `--mcp-config`, as the agent would, and report
+//! its answer).
 
 use serde_json::{json, Value};
 use std::io::{Read, Write};
@@ -559,6 +561,21 @@ fn run_ops(step: &Value, flavor: Flavor) -> (String, Vec<Value>) {
     let mut bridge: Option<Bridge> = None;
     let (mut out, mut denials) = (String::new(), vec![]);
     for (i, op) in step["ops"].as_array().into_iter().flatten().enumerate() {
+        if let Some(call) = op.get("mcp") {
+            if bridge.is_none() {
+                bridge = mcp.as_deref().and_then(Bridge::start);
+            }
+            let r = bridge.as_mut().and_then(|b| b.call("tools/call", call.clone()));
+            let text = r.as_ref().and_then(|r| r["content"][0]["text"].as_str()).unwrap_or("(no bridge)");
+            let failed = r.as_ref().is_none_or(|r| r["isError"] == true);
+            out += &format!(
+                "mcp {}{}: {text}
+",
+                call["name"].as_str().unwrap_or(""),
+                if failed { " failed" } else { "" }
+            );
+            continue;
+        }
         if let (Some(tool), Flavor::Claude) = (op["tool"].as_str(), flavor) {
             let input = op["input"].clone();
             let ok = match claude_decides(tool, &input, &allowed, &disallowed, &mode) {

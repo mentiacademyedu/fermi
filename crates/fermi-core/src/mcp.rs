@@ -63,10 +63,12 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
         "mcp__fermi__code_impact",
         "mcp__fermi__code_file",
         "mcp__fermi__code_replace",
+        "mcp__fermi__code_rename",
         "mcp__fermi__run_checks",
         "mcp__fermi__memory_search",
         "mcp__fermi__memory_get",
         "mcp__fermi__memory_record",
+        "mcp__fermi__delegate",
     ];
     let mut prompt = format!(
         "You are running inside the fermi harness, profile {}. For slides or a presentation, call the fermi create_deck tool: \
@@ -76,7 +78,10 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
          tests, which text search can't. For who calls a function, what it calls, which tests reach it, or what a change could \
          break, use the fermi code tools (code_symbol, code_impact, code_search, code_file) rather than grep: call code_symbol \
          before changing a function, and code_impact after changing code to find what could break and which tests to run. \
-         To rewrite a whole function or type, code_replace swaps exactly that definition and refuses edits that don't parse. \
+         To rewrite a whole function or type, code_replace swaps exactly that definition and refuses edits that don't parse; \
+         to rename one, code_rename changes its definition, its resolved callers and imports, and nothing else. \
+         To hand a self-contained subtask to another agent, call delegate: it gets only your instructions, the files you \
+         list and the project memory meant for agents, with a permission no broader than yours. \
          Before saying you're done, call run_checks: fermi runs the project's build, tests and linters and reports exact \
          failures (file, line, failing tests); fix what it reports.",
         profile.name
@@ -147,6 +152,16 @@ fn tool_list(e: &Engine, profile: &Profile) -> Value {
             "source": { "type": "string", "description": "The complete new definition, from its first keyword to its end" }
         }, "required": ["target", "source"] }
     }));
+    tools.push(json!({
+        "name": "code_rename",
+        "description": "Rename one function, method or type: its definition, the calls the index resolves to it, and the imports \
+            that name it. Strings, comments and other symbols with the same name are left alone and listed; the edit is refused, \
+            and nothing written, if a file wouldn't parse or the new name is already taken.",
+        "inputSchema": { "type": "object", "properties": {
+            "target": { "type": "string", "description": "The definition: a name, Type::name, module::name or path:line" },
+            "to": { "type": "string", "description": "The new name" }
+        }, "required": ["target", "to"] }
+    }));
     if crate::policy::active(&e.cfg.security) {
         tools.push(json!({
             "name": "permission",
@@ -176,6 +191,19 @@ fn tool_list(e: &Engine, profile: &Profile) -> Value {
             "body": { "type": "string", "description": "Reasons, alternatives, details" },
             "sources": { "type": "array", "items": { "type": "string" }, "description": "Files it rests on: path or path:line" }
         }, "required": ["title"] }
+    }));
+    tools.push(json!({
+        "name": "delegate",
+        "description": "Hand a self-contained subtask to another agent and get its answer. It sees only what you give it: \
+            your instructions, the files you list (from this folder; files the security policy keeps from agents are refused) \
+            and the project memory meant for agents. Never this conversation. It runs with the permission you give it \
+            (default plan, read-only), never broader than yours: plan < default < acceptEdits < bypassPermissions.",
+        "inputSchema": { "type": "object", "properties": {
+            "prompt": { "type": "string", "description": "The subtask: what to do and everything it needs to know" },
+            "files": { "type": "array", "items": { "type": "string" }, "description": "Files it may read, relative to this folder" },
+            "permission": { "type": "string", "enum": crate::engine::SCOPES, "description": "What it may do; default plan" },
+            "model": { "type": "string", "description": "A model id; default: routed like any task" }
+        }, "required": ["prompt"] }
     }));
     tools.push(json!({
         "name": "run_checks",
@@ -302,6 +330,9 @@ pub async fn call_tool(e: &Engine, profile: &Profile, cwd: &std::path::Path, nam
             other => anyhow::bail!("unknown tool memory_{other}"),
         });
     }
+    if name == "delegate" {
+        return delegate(e, profile, &cwd, args).await;
+    }
     if name == "run_checks" {
         let only: Vec<String> = args["checks"].as_array().into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect();
         let report = crate::verify::run(&cwd, crate::verify::RunOpts { only: &only, ..Default::default() }).await?;
@@ -348,6 +379,78 @@ pub async fn call_tool(e: &Engine, profile: &Profile, cwd: &std::path::Path, nam
         Some(p) => format!("{}\n(generated by {} on account {})", p.display(), out.model, out.account),
         None => format!("{}\n\n(answered by {} on account {})", out.text, out.model, out.account),
     })
+}
+
+/// Runs a subtask as its own agent with a bounded input: the instructions,
+/// the files given (inside `cwd`, allowed by deny_read), the memory meant for
+/// agents, and a permission no broader than the delegating agent's. What it
+/// was given is kept in `delegations/<parent task>/<n>.json`.
+async fn delegate(e: &Engine, profile: &Profile, cwd: &std::path::Path, args: &Value) -> Result<String> {
+    use crate::engine::SCOPES;
+    let instructions = args["prompt"].as_str().unwrap_or_default().trim().to_string();
+    anyhow::ensure!(!instructions.is_empty(), "delegate needs a prompt: the subtask's instructions");
+    let rank = |m: &str| SCOPES.iter().position(|s| *s == m);
+    let mine = std::env::var("FERMI_PERMISSION_MODE").ok().filter(|m| !m.is_empty()).unwrap_or_else(|| "default".into());
+    let asked = args["permission"].as_str().unwrap_or("plan");
+    let asked_rank = rank(asked).ok_or_else(|| anyhow::anyhow!("unknown permission `{asked}` (use {})", SCOPES.join(", ")))?;
+    let effective = SCOPES[asked_rank.min(rank(&mine).unwrap_or(1))];
+    // Files: from this folder, and not ones the policy keeps from agents. Any
+    // other file refuses the whole delegation, so nothing is half-given.
+    let root = crate::code::canonical(cwd)?;
+    let (mut files, mut given) = (vec![], String::new());
+    for f in args["files"].as_array().into_iter().flatten() {
+        let rel = f.as_str().unwrap_or_default();
+        let path = crate::code::canonical(&cwd.join(rel)).map_err(|_| anyhow::anyhow!("{rel}: no such file"))?;
+        if !path.starts_with(&root) {
+            anyhow::bail!("{rel} is outside this task's folder; a delegated task only gets files from it. Nothing was delegated.");
+        }
+        if crate::policy::denied(&e.cfg.security.deny_read, &path) {
+            anyhow::bail!("{rel} is off limits to agents (deny_read), so it can't be given to another one. Nothing was delegated.");
+        }
+        let body = std::fs::read_to_string(&path).map_err(|err| anyhow::anyhow!("reading {rel}: {err}"))?;
+        files.push(json!({ "path": rel, "bytes": body.len(), "sha256": crate::eval::sha256_hex(body.as_bytes()) }));
+        given += &format!("\n--- {rel} ---\n{body}\n");
+    }
+    let parent: Option<u64> = std::env::var("FERMI_TASK_ID").ok().and_then(|v| v.parse().ok());
+    let mut prompt = instructions.clone();
+    if !given.is_empty() {
+        prompt += &format!("\n\nFiles given with this task:\n{given}");
+    }
+    let mut task = Task::new(prompt, cwd);
+    task.profile = Some(profile.name.clone());
+    task.parent = parent;
+    task.permission = Some(effective.into());
+    task.model = args["model"].as_str().map(str::to_string);
+    // Project memory meant for agents, picked for the subtask (private records never are).
+    let k = e.cfg.memory.brief_size.unwrap_or(5);
+    let mem = crate::memory::Memory::existing(&e.home, cwd);
+    let memory: Vec<String> = mem
+        .as_ref()
+        .map(|m| m.search(crate::memory::Caller::Agent, &instructions, k).iter().map(|h| h.view.record.id.clone()).collect())
+        .unwrap_or_default();
+    if e.cfg.memory.auto_context != Some(false) {
+        task.context = mem.as_ref().and_then(|m| m.brief(&instructions, k));
+    }
+    let dir = e.home.join("delegations").join(parent.map_or("none".to_string(), |p| p.to_string()));
+    std::fs::create_dir_all(&dir)?;
+    let n = std::fs::read_dir(&dir).map(|d| d.count()).unwrap_or(0) + 1;
+    let mut envelope = json!({
+        "n": n, "parent": parent, "at": crate::util::now(), "profile": profile.name,
+        "instructions": instructions, "files": files, "memory": memory,
+        "permission": { "delegator": mine, "requested": asked, "effective": effective },
+        "model": task.model, "input": e.redactor.text(&task.input()),
+    });
+    let file = dir.join(format!("{n}.json"));
+    std::fs::write(&file, serde_json::to_vec_pretty(&envelope)?)?;
+    let (tx, _rx) = mpsc::unbounded_channel();
+    let out = e.run(&task, &tx).await;
+    envelope["result"] = match &out {
+        Ok(o) => json!({ "ok": true, "model": o.model, "account": o.account }),
+        Err(err) => json!({ "ok": false, "error": format!("{err:#}") }),
+    };
+    std::fs::write(&file, serde_json::to_vec_pretty(&envelope)?)?;
+    let o = out?;
+    Ok(format!("{}\n\n(delegated subtask: answered by {} on account {}, permission {effective})", o.text, o.model, o.account))
 }
 
 /// Claude's permission prompt: fermi's policy decides, and actions that need
@@ -420,6 +523,7 @@ fn code_tool(cwd: &std::path::Path, kind: &str, args: &Value, deny: &[String]) -
                 r["patch"].as_str().unwrap_or("")
             )
         }
+        "rename" => text::rename(&idx.rename_symbol(&arg("target"), &arg("to"))?),
         "search" => text::search(&idx.search(&arg("query"), 30)),
         "symbol" => text::symbol(&idx.symbol(&arg("target"))),
         "file" => {
