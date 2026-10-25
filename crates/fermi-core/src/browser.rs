@@ -160,17 +160,22 @@ impl Browser {
         cmd.creation_flags(0x0800_0000);
         #[cfg(unix)]
         cmd.process_group(0);
-        let child = cmd.spawn().with_context(|| format!("starting {}", bin.display()))?;
+        let mut child = cmd.spawn().with_context(|| format!("starting {}", bin.display()))?;
 
         // The browser writes its debugging port to the profile once it's ready.
+        // A cold start on a busy machine can take a while; a browser that
+        // exits is reported at once.
         let port_file = profile.join("DevToolsActivePort");
-        let deadline = Instant::now() + Duration::from_secs(20);
+        let deadline = Instant::now() + Duration::from_secs(60);
         let port: u16 = loop {
             if let Some(p) = std::fs::read_to_string(&port_file).ok().and_then(|t| t.lines().next()?.trim().parse().ok()) {
                 break p;
             }
+            if let Ok(Some(status)) = child.try_wait() {
+                bail!("{} exited while starting ({status})", bin.display());
+            }
             if Instant::now() > deadline {
-                bail!("{} didn't start (no DevToolsActivePort after 20 s)", bin.display());
+                bail!("{} didn't start (no DevToolsActivePort after 60 s)", bin.display());
             }
             tokio::time::sleep(POLL).await;
         };
