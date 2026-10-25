@@ -67,6 +67,9 @@ pub struct TeamRef {
 /// Permission modes a task may ask for.
 pub const PERMISSIONS: [&str; 4] = ["acceptEdits", "bypassPermissions", "plan", "default"];
 
+/// The same modes from narrowest to broadest (a delegated task gets one no broader than its delegator's).
+pub const SCOPES: [&str; 4] = ["plan", "default", "acceptEdits", "bypassPermissions"];
+
 impl Task {
     pub fn new(prompt: impl Into<String>, cwd: impl Into<PathBuf>) -> Self {
         Task {
