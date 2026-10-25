@@ -63,6 +63,7 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
         "mcp__fermi__code_impact",
         "mcp__fermi__code_file",
         "mcp__fermi__code_replace",
+        "mcp__fermi__code_rename",
         "mcp__fermi__run_checks",
         "mcp__fermi__memory_search",
         "mcp__fermi__memory_get",
@@ -76,7 +77,8 @@ pub fn bridge_for(e: &Engine, profile: &Profile) -> Result<Option<Bridge>> {
          tests, which text search can't. For who calls a function, what it calls, which tests reach it, or what a change could \
          break, use the fermi code tools (code_symbol, code_impact, code_search, code_file) rather than grep: call code_symbol \
          before changing a function, and code_impact after changing code to find what could break and which tests to run. \
-         To rewrite a whole function or type, code_replace swaps exactly that definition and refuses edits that don't parse. \
+         To rewrite a whole function or type, code_replace swaps exactly that definition and refuses edits that don't parse; \
+         to rename one, code_rename changes its definition, its resolved callers and imports, and nothing else. \
          Before saying you're done, call run_checks: fermi runs the project's build, tests and linters and reports exact \
          failures (file, line, failing tests); fix what it reports.",
         profile.name
@@ -146,6 +148,16 @@ fn tool_list(e: &Engine, profile: &Profile) -> Value {
             "target": { "type": "string", "description": "The definition: a name, Type::name, module::name or path:line" },
             "source": { "type": "string", "description": "The complete new definition, from its first keyword to its end" }
         }, "required": ["target", "source"] }
+    }));
+    tools.push(json!({
+        "name": "code_rename",
+        "description": "Rename one function, method or type: its definition, the calls the index resolves to it, and the imports \
+            that name it. Strings, comments and other symbols with the same name are left alone and listed; the edit is refused, \
+            and nothing written, if a file wouldn't parse or the new name is already taken.",
+        "inputSchema": { "type": "object", "properties": {
+            "target": { "type": "string", "description": "The definition: a name, Type::name, module::name or path:line" },
+            "to": { "type": "string", "description": "The new name" }
+        }, "required": ["target", "to"] }
     }));
     if crate::policy::active(&e.cfg.security) {
         tools.push(json!({
@@ -420,6 +432,7 @@ fn code_tool(cwd: &std::path::Path, kind: &str, args: &Value, deny: &[String]) -
                 r["patch"].as_str().unwrap_or("")
             )
         }
+        "rename" => text::rename(&idx.rename_symbol(&arg("target"), &arg("to"))?),
         "search" => text::search(&idx.search(&arg("query"), 30)),
         "symbol" => text::symbol(&idx.symbol(&arg("target"))),
         "file" => {

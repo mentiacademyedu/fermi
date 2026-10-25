@@ -182,6 +182,8 @@ enum CodeCmd {
     },
     /// External dependencies and where they're used
     Deps,
+    /// Rename a function, method or type: its definition, resolved callers and imports
+    Rename { target: String, to: String },
 }
 
 /// How to run tasks, for an evaluation.
@@ -976,7 +978,7 @@ fn code_cmd(cmd: CodeCmd) -> Result<()> {
     use fermi_core::code::{self, text, Index};
     let root = code::repo_root(&std::env::current_dir()?);
     let started = std::time::Instant::now();
-    let idx = Index::open(&root)?;
+    let mut idx = Index::open(&root)?;
     let pretty = |v: &serde_json::Value| serde_json::to_string_pretty(v).unwrap_or_default();
     match cmd {
         CodeCmd::Stats => {
@@ -988,6 +990,7 @@ fn code_cmd(cmd: CodeCmd) -> Result<()> {
         CodeCmd::File { path } => println!("{}", text::file(&idx.file(&path))),
         CodeCmd::Impact { base } => println!("{}", text::impact(&idx.impact(&idx.git_changes(base.as_deref())?))),
         CodeCmd::Deps => println!("{}", pretty(&idx.deps())),
+        CodeCmd::Rename { target, to } => println!("{}", text::rename(&idx.rename_symbol(&target, &to)?)),
     }
     Ok(())
 }

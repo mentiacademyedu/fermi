@@ -248,3 +248,166 @@ fn ci_08_symbol_identity() {
     let _: Value = Value::Null;
     c.finish();
 }
+
+fn read(root: &std::path::Path, rel: &str) -> String {
+    std::fs::read_to_string(root.join(rel)).unwrap()
+}
+
+/// Lines that differ between two versions of a file (1-based, same line count).
+fn changed_lines(a: &str, b: &str) -> Vec<usize> {
+    a.lines().zip(b.lines()).enumerate().filter(|(_, (x, y))| x != y).map(|(i, _)| i + 1).collect()
+}
+
+#[test]
+fn ci_04_scope_safe_rename() {
+    let mut c = Case::start("CI-04", "T1");
+    let (fx, mut idx) = open(&mut c);
+    c.real(&["cargo test"]);
+    let files = ["util/src/text.rs", "util/src/num.rs", "util/src/lib.rs", "engine/src/lib.rs", "app/src/main.rs"];
+    let before: Vec<String> = files.iter().map(|f| read(&fx.path, f)).collect();
+    // Refused, and nothing written: an ambiguous name, and a name already taken in the file.
+    let ambiguous = idx.rename_symbol("helper", "text_helper");
+    let taken = idx.rename_symbol(&target("util::text::helper"), "ping");
+    let unchanged = files.iter().zip(&before).all(|(f, b)| read(&fx.path, f) == *b);
+    c.check(
+        "unsafeRenamesRefused",
+        ambiguous.is_err() && taken.is_err() && unchanged,
+        format!("ambiguous: {:?}; taken: {:?}", ambiguous.err().map(|e| e.to_string()), taken.err().map(|e| e.to_string())),
+    );
+    // util::text::helper, not util::num::helper, which shares its name.
+    let res = idx.rename_symbol(&target("util::text::helper"), "text_helper").unwrap();
+    c.json("rename.json", &res);
+    c.text("rename.patch", res["patch"].as_str().unwrap_or(""));
+    let sites: BTreeSet<(String, u64)> =
+        res["sites"].as_array().unwrap().iter().map(|s| (s["file"].as_str().unwrap().to_string(), s["line"].as_u64().unwrap())).collect();
+    let mut want: BTreeSet<(String, u64)> = [("util/src/text.rs".to_string(), def("util::text::helper").1)].into();
+    for (_, file, line) in expected_callers("util::text::helper") {
+        want.insert((file, line));
+    }
+    want.insert(("engine/src/lib.rs".into(), 2)); // use util::text::helper;
+    c.check("allReferencesRenamed", sites == want, format!("renamed at {sites:?}, expected {want:?}"));
+    let after: Vec<String> = files.iter().map(|f| read(&fx.path, f)).collect();
+    let mut diff = json!({});
+    for ((f, b), a) in files.iter().zip(&before).zip(&after) {
+        diff[*f] = json!(changed_lines(b, a));
+    }
+    c.json("changed-lines.json", &diff);
+    // Each changed line is a rename site, and differs only by `helper` becoming `text_helper` once.
+    let only_sites = files.iter().zip(&before).zip(&after).all(|((f, b), a)| {
+        b.lines().count() == a.lines().count()
+            && changed_lines(b, a).into_iter().all(|l| {
+                let (x, y) = (b.lines().nth(l - 1).unwrap(), a.lines().nth(l - 1).unwrap());
+                want.contains(&(f.to_string(), l as u64))
+                    && x.matches("helper").count() == y.matches("helper").count()
+                    && y.matches("text_helper").count() == 1
+            })
+    });
+    c.check("onlySelectedIdentityChanged", only_sites, format!("changed lines {diff}"));
+    c.check(
+        "unrelatedUntouched",
+        after[1] == before[1] && after[2] == before[2] && after[4] == before[4] && after[0].starts_with("/// The text helper.\n"),
+        "util/src/num.rs (the other helper), util/src/lib.rs, app/src/main.rs (the normalize string and comment sentinels) and the doc comment unchanged",
+    );
+    let left: Vec<String> =
+        res["untouched"].as_array().into_iter().flatten().map(|u| format!("{}:{}", u["file"].as_str().unwrap_or(""), u["line"])).collect();
+    c.check(
+        "otherHelperReported",
+        left.contains(&"util/src/num.rs:2".to_string()) && left.contains(&"app/src/main.rs:2".to_string()),
+        format!("left alone and listed: {left:?}"),
+    );
+    // The index follows: one definition under the new name, with the same caller; the other helper keeps its own.
+    let renamed = idx.symbol("util::text::text_helper");
+    let callers_now: BTreeSet<String> = renamed["symbols"][0]["callers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|x| x["caller"]["name"].as_str().map(String::from))
+        .collect();
+    let num = callers(&idx, "util::num::helper");
+    c.check(
+        "indexConsistent",
+        renamed["matches"] == 1 && callers_now == BTreeSet::from(["process".to_string()]) && num == expected_callers("util::num::helper"),
+        format!("text_helper callers {callers_now:?}; util::num::helper callers {num:?}"),
+    );
+    let parses = files.iter().all(|f| fermi_core::code::syntax_error_in(f, read(&fx.path, f).as_bytes()).is_none());
+    let test = std::process::Command::new("cargo")
+        .args(["test", "--offline", "--quiet", "--workspace"])
+        .env("CARGO_TARGET_DIR", c.work.join("target"))
+        .current_dir(&fx.path)
+        .output()
+        .unwrap();
+    c.text("cargo-test.txt", &format!("{}{}", String::from_utf8_lossy(&test.stdout), String::from_utf8_lossy(&test.stderr)));
+    c.check("fixtureStillPasses", parses && test.status.success(), format!("parses: {parses}; cargo test: {}", test.status));
+    source_untouched(&mut c, &fx);
+    c.finish();
+}
+
+#[test]
+fn ci_06_invalid_syntax_handling() {
+    let mut c = Case::start("CI-06", "T1");
+    let (fx, mut idx) = open(&mut c);
+    let rel = "util/src/text.rs";
+    let valid = read(&fx.path, rel);
+    let before = idx.symbol("util::text::ping");
+    // Line 8, ping's body, loses a parenthesis.
+    let bad_line = 8u64;
+    let damaged = valid.replace("    if n == 0 { 0 } else { pong(n - 1) }", "    if n == 0 { 0 } else { pong(n - 1 }");
+    assert_ne!(damaged, valid);
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(fx.path.join(rel), &damaged).unwrap();
+    let stats = idx.update().unwrap();
+    let sym = idx.symbol("util::text::ping");
+    let file = idx.file(rel);
+    let hits = idx.search("pong", 10);
+    let other = idx.symbol("engine::process");
+    c.json("symbol-before.json", &before);
+    c.json("symbol-after.json", &sym);
+    c.json("file-after.json", &file);
+    c.json("search-after.json", &json!(hits));
+    let shown = fermi_core::code::text::symbol(&sym);
+    c.text("symbol-after.txt", &shown);
+    let d = &sym["symbols"][0]["diagnostic"];
+    c.check(
+        "diagnosticLocatesError",
+        stats.parsed == 1
+            && d["file"] == rel
+            && d["line"].as_u64() == Some(bad_line)
+            && file["diagnostic"]["line"].as_u64() == Some(bad_line),
+        format!("diagnostic {d}; file diagnostic {}", file["diagnostic"]),
+    );
+    c.check(
+        "resultsMarkedStale",
+        before["symbols"][0]["stale"] == false
+            && sym["symbols"][0]["stale"] == true
+            && sym["symbols"][0]["symbol"]["stale"] == true
+            && file["stale"] == true
+            && !hits.is_empty()
+            && hits.iter().filter(|h| h.file == rel).all(|h| h.stale),
+        format!(
+            "symbol stale {}, file stale {}, search {:?}",
+            sym["symbols"][0]["stale"],
+            file["stale"],
+            hits.iter().map(|h| (&h.name, h.stale)).collect::<Vec<_>>()
+        ),
+    );
+    c.check(
+        "notPresentedAsCurrent",
+        shown.contains("syntax error") && shown.contains("last valid version") && other["symbols"][0]["stale"] == false,
+        "the text agents see says the results are from the last valid version; other files are current",
+    );
+    let history: Vec<bool> = file["history"].as_array().into_iter().flatten().map(|h| h["valid"] == true).collect();
+    c.check("historyRecorded", history.ends_with(&[true, false]), format!("history (valid?) {history:?}"));
+    // Fixed: current again.
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(fx.path.join(rel), &valid).unwrap();
+    idx.update().unwrap();
+    let fixed = idx.symbol("util::text::ping");
+    c.json("symbol-fixed.json", &fixed);
+    c.check(
+        "recoversWhenFixed",
+        fixed["symbols"][0]["stale"] == false && fixed["symbols"][0]["diagnostic"].is_null() && fixed["matches"] == 1,
+        format!("stale {}, diagnostic {}", fixed["symbols"][0]["stale"], fixed["symbols"][0]["diagnostic"]),
+    );
+    source_untouched(&mut c, &fx);
+    c.finish();
+}
