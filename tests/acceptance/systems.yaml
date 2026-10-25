@@ -15,9 +15,9 @@ cases:
     action: "Connect two mock providers using different API adapters"
     expected: "Both return normalized responses"
     evidence: "Request envelopes and normalized responses."
-    capability: partial
+    capability: implemented
     implementation: "crates/fermi-core/src/providers/*.rs, events.rs"
-    auditNote: "Five adapters (Claude/Codex/Gemini CLIs, Anthropic and OpenAI APIs) normalize into one Event stream and RunResult. The acceptance test covers the three CLI adapters through the fake CLI; the two API adapters need an HTTP mock (not built yet), so the case stays partial."
+    auditNote: "Five adapters (Claude/Codex/Gemini CLIs, Anthropic and OpenAI APIs) normalize into one Event stream and RunResult. The acceptance test covers the three CLI adapters through the fake CLI and the two API adapters against F-PROVIDER mock endpoints (added 2026-10-24); the API adapters carry text only, no tool calls."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_01_adapter_normalization
     executionState: completed
@@ -69,13 +69,13 @@ cases:
     action: "Simulate provider rate limit (HTTP 429)"
     expected: "Backoff/retry policy runs and respects retry limits"
     evidence: "Attempt timeline headers and terminal state."
-    capability: missing
-    implementation: "crates/fermi-core/src/providers/api.rs, engine.rs"
-    auditNote: "429 maps to Limited (Retry-After read) and fails over to the next account; there is no backoff/retry policy or attempt ceiling."
+    capability: implemented
+    implementation: "crates/fermi-core/src/engine.rs (run_inner retry), providers/api.rs (send), config.rs (RetryCfg), clock.rs"
+    auditNote: "An API's HTTP 429 is retried on the same account after its Retry-After (or a doubling backoff), up to [retry] attempts (default 3) and only for waits within max_wait_secs; then the account is marked limited and the task fails over or fails. Waits run on the engine's clock, which tests make manual. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_04_rate_limit_handling
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: AI-05
     title: "Provider outage handling"
     system: model-agnostic-ai-engine
@@ -105,13 +105,13 @@ cases:
     action: "Require tool calling from a model that lacks the capability"
     expected: "System rejects the configuration or uses a documented alternative"
     evidence: "Capability matrix validation error and dispatch count."
-    capability: missing
-    implementation: "crates/fermi-core/src/models.rs (Cap)"
-    auditNote: "Capabilities cover code/reasoning/general/fast/image; tool calling is not modeled or validated before dispatch."
+    capability: implemented
+    implementation: "crates/fermi-core/src/models.rs (tools), engine.rs (plan, pick_account_for), config.rs (require_tools)"
+    auditNote: "Models declare tool calling (`tools`, default yes for the built-ins); a task or profile that needs tools never reaches a model that can't (rejected before dispatch when it's the only choice, otherwise skipped with a log line) or an HTTP API account; a profile requiring tools with no capable model is a config error. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_06_capability_validation
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: AI-07
     title: "Budget exhaustion"
     system: model-agnostic-ai-engine
@@ -141,13 +141,13 @@ cases:
     action: "Test a local model endpoint"
     expected: "Compatible endpoint works without requiring a hosted-provider account"
     evidence: "Local endpoint transcript and network log."
-    capability: partial
-    implementation: "crates/fermi-core/src/providers/api.rs (base_url)"
-    auditNote: "API accounts accept base_url (OpenAI-compatible endpoint), untested against a local model server; uses the Responses API, which local servers may not support."
+    capability: implemented
+    implementation: "crates/fermi-core/src/providers/api.rs (chat, base), config.rs (api_format)"
+    auditNote: "openai API accounts with api_format = \"chat\" speak OpenAI-compatible chat completions (llama.cpp, Ollama, vLLM, LM Studio); with a base_url no key is needed. Tested in its own process with hosted credentials removed and outbound traffic recorded. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/model_providers.rs
     testName: ai_08_local_endpoint_support
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: MA-01
     title: "Concurrent workers"
     system: multi-agent-orchestration
@@ -232,13 +232,13 @@ cases:
     action: "Agent A delegates a subtask to B"
     expected: "B receives bounded context, instructions, and permission scope"
     evidence: "Delegation envelope permission decisions and child trace."
-    capability: missing
-    implementation: ""
-    auditNote: "No delegate tool; agents cannot spawn scoped subtasks."
+    capability: implemented
+    implementation: "crates/fermi-core/src/mcp.rs (delegate)"
+    auditNote: "The bridge's delegate tool runs a subtask as its own agent with only the instructions, the files given (inside the folder, allowed by deny_read; anything else refuses the delegation) and agent-visible memory; its permission is the one asked, never broader than the delegator's. Each envelope is kept in delegations/<parent>/. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_05_scoped_delegation
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: MA-06
     title: "Worker crash isolation"
     system: multi-agent-orchestration
@@ -358,13 +358,13 @@ cases:
     action: "Rename a function in the fixture"
     expected: "Supported references updated without modifying unrelated identifiers"
     evidence: "Rename patch parse result and reference comparison."
-    capability: missing
-    implementation: ""
-    auditNote: "No semantic rename / edit API."
+    capability: implemented
+    implementation: "crates/fermi-core/src/code.rs (rename_symbol), mcp.rs (code_rename)"
+    auditNote: "Renames one resolved symbol: its definition, resolved callers and importing lines, through the syntax tree (identifiers only); refuses ambiguous targets, names already taken and edits that don't parse; lists same-named text it left alone. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_04_scope_safe_rename
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CI-05
     title: "Incremental refresh"
     system: semantic-codebase-intelligence
@@ -394,13 +394,13 @@ cases:
     action: "Introduce a syntax error"
     expected: "Error is surfaced; last valid index is not silently treated as current"
     evidence: "Parser diagnostic freshness flag and revision history."
-    capability: missing
-    implementation: "crates/fermi-core/src/code.rs"
-    auditNote: "tree-sitter parses error-tolerantly; syntax errors are not surfaced and results are not marked stale."
+    capability: implemented
+    implementation: "crates/fermi-core/src/code.rs (update, FileIdx error/stale/history)"
+    auditNote: "A file that stops parsing keeps the symbols of its last valid version, marked stale on every result, with a diagnostic (file, line, column) and a parse history; fixing it clears the flag. Added 2026-10-24."
     testFile: crates/acceptance-tests/tests/code_intelligence.rs
     testName: ci_06_invalid_syntax_handling
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: CI-07
     title: "Dependency impact"
     system: semantic-codebase-intelligence

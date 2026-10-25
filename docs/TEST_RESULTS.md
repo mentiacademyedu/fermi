@@ -4,13 +4,13 @@
 
 | Field | Value |
 | --- | --- |
-| Run | `2026-10-25-82eae66` (deterministic), `2026-10-25-82eae66-security` and `2026-10-25-82eae66-live-workers`, plus the same three on Linux CI for the same commit |
-| Revision | `82eae66` (full SHA in the run summaries); clean working tree |
+| Run | `2026-10-25-cab8247` (deterministic), `2026-10-25-cab8247-security` and `2026-10-25-cab8247-live-workers`, plus the same three on Linux CI for the same commit |
+| Revision | `cab8247` (full SHA in the run summaries); clean working tree |
 | Date | 2026-10-24 |
 | Environment | Windows 11 Home 10.0.26200, Rust 1.96.0 (`rust-toolchain.toml`), local developer machine |
-| Providers | fake CLI only (`crates/acceptance-tests/src/bin/fake-cli.rs`); no live provider calls, no metered usage |
+| Providers | fake CLI (`crates/acceptance-tests/src/bin/fake-cli.rs`) and mock HTTP model endpoints (`src/provider.rs`); no live provider calls, no metered usage |
 | Real tools | git, cargo (check, test, clippy) on fixture copies, the dashboard's HTTP API (VE-08) |
-| Command | `cargo run -p xtask -- acceptance --implemented`, the same with `--profile security --allow-blocked`, and `--system SE --system MA --profile security` on Linux CI |
+| Command | `cargo run -p xtask -- acceptance --implemented --allow-blocked`, the same with `--profile security --allow-blocked`, and `--system SE --system MA --profile security` on Linux CI |
 | Evidence | `tests/reports/<run>/<case>/<attempt>/` (result.json, manifest.json with SHA-256, artifacts); summaries and reports published in `docs/acceptance-runs/` |
 | CI | GitHub Actions on Ubuntu runs the same gates on every push |
 
@@ -21,27 +21,27 @@
 | Formatting | `cargo fmt --all -- --check` | passed |
 | Static analysis | `cargo clippy --workspace --all-targets --locked -- -D warnings` | passed |
 | Unit tests | `cargo test --workspace --locked --lib --bins` | passed: 56 (fermi-core 43, fermi lib 12, fermi bin 1) |
-| Acceptance, deterministic | `xtask acceptance --implemented` | 79 passed, 1 blocked (LR-02 needs Docker), runner exit 0 (Linux CI: 80 of 80, with Chrome and Docker) |
+| Acceptance, deterministic | `xtask acceptance --implemented` | 85 passed, 1 blocked (LR-02 needs Docker), runner exit 0 (Linux CI: 86 of 86, with Chrome and Docker) |
 | Acceptance, security (Windows) | `xtask acceptance --implemented --profile security --allow-blocked` | 16 passed, 5 blocked (PL-07, SE-01/04/05 need Linux Landlock; LR-02 needs Docker), runner exit 0 |
 | Acceptance, security (Linux CI) | `xtask acceptance --system SE --system MA --system PL --system EV --system LR --profile security` on Ubuntu | passed: all 16 (SE-01 … SE-08, MA-06, MA-07, PL-04, PL-07, EV-06, LR-02, LR-06, LR-07) on the real OS sandbox and Docker; 5 of these blocked on Windows (`docs/acceptance-runs/linux-ci-security/`) |
 | Acceptance, live (workers only) | `xtask acceptance --system LR --profile live --allow-billable --allow-blocked` (no provider is called) | Windows: 4 passed, LR-03 blocked (Docker); Linux CI: all 5 passed |
-| Coverage | `cargo llvm-cov --workspace --locked` | 65.4% of product lines (see `TEST_COVERAGE.md`) |
+| Coverage | `cargo llvm-cov --workspace --locked` (Linux CI; the local Windows run was stopped for low memory) | 66.6% of product lines (see `TEST_COVERAGE.md`) |
 
 ## Acceptance outcomes
 
 | Outcome | Cases |
 | --- | --- |
-| passed | 85 on Windows: the 80 before, plus LR-04 … LR-08. PL-07, SE-01, SE-04, SE-05 (Landlock), LR-02 and LR-03 (Docker) pass on Linux CI (they are blocked on Windows), so 91 counting the Linux runs |
+| passed | 91 on Windows: the 85 before, plus AI-04, AI-06, AI-08, MA-05, CI-04 and CI-06. PL-07, SE-01, SE-04, SE-05 (Landlock), LR-02 and LR-03 (Docker) pass on Linux CI (they are blocked on Windows), so 97 counting the Linux runs |
 | failed | 0 |
 | skipped | 0 |
 | blocked | 6 on Windows (PL-07, SE-01, SE-04, SE-05: the OS sandbox needs Linux Landlock; LR-02, LR-03: no Docker here); 0 on Linux CI |
-| not_implemented | 15 (no executable test; the capability is missing or only partly present, see `ACCEPTANCE_MATRIX.md`) |
+| not_implemented | 9 (the end-to-end workflows other than E2E-08: no executable test; the capability is missing or only partly present, see `ACCEPTANCE_MATRIX.md`) |
 
-**Overall acceptance: 91 / 106 passed** (85.8%), counting the Linux CI runs for the six cases that need Landlock or Docker (85 / 106 on the Windows run, with those six blocked). Execution coverage: 91 / 106.
+**Overall acceptance: 97 / 106 passed** (91.5%), counting the Linux CI runs for the six cases that need Landlock or Docker (91 / 106 on the Windows run, with those six blocked). Execution coverage: 97 / 106.
 
-Every pass has a `result.json` whose checks all passed and whose artifacts match their recorded hashes. Each test declares what was real and what was mocked: model output is mocked (fake CLI); the engine, hub, team scheduler, code index, verification service, git, worktrees, compilers, test runners, files and processes are real.
+Every pass has a `result.json` whose checks all passed and whose artifacts match their recorded hashes. Each test declares what was real and what was mocked: model output is mocked (fake CLI, or mock HTTP endpoints for the API adapters); the engine, hub, team scheduler, code index, verification service, git, worktrees, compilers, test runners, files and processes are real.
 
-**Nine systems meet their completion gate (8 / 8): System 4 (persistent project memory), System 5 (integrated verification engine), System 7 (composable plugin system — PL-07 on Linux CI with the real OS sandbox, as its gate requires), System 8 (agent observability), System 9 (cost and performance optimization), System 10 (security and isolation — all eight on Linux CI with the real OS sandbox), System 12 (evaluation and self-improvement), and System 6 (browser and application control — real headless Edge on Windows and Chrome on Linux CI; the gate's evidence is fermi's own JSON traces, screenshots and browser logs rather than Playwright's trace format), and System 11 (local and remote execution — worker processes everywhere, and a worker in a Docker container on Linux CI for the container and remote cases).** One end-to-end workflow passes (E2E-08).
+**All twelve systems meet their completion gate (8 / 8).** Systems 1, 2 and 3 joined with this run: System 1 (model-agnostic AI engine — all five adapters, the three CLIs through the fake CLI and the two HTTP APIs against mock endpoints, 429 retries on a manual clock, tool-capability checks and a local OpenAI-compatible endpoint), System 2 (multi-agent orchestration — scoped delegation through the real bridge process) and System 3 (semantic codebase intelligence — scope-safe rename and stale results for files with syntax errors, against the F-CODE ground truth). **The others: System 4 (persistent project memory), System 5 (integrated verification engine), System 7 (composable plugin system — PL-07 on Linux CI with the real OS sandbox, as its gate requires), System 8 (agent observability), System 9 (cost and performance optimization), System 10 (security and isolation — all eight on Linux CI with the real OS sandbox), System 12 (evaluation and self-improvement), and System 6 (browser and application control — real headless Edge on Windows and Chrome on Linux CI; the gate's evidence is fermi's own JSON traces, screenshots and browser logs rather than Playwright's trace format), and System 11 (local and remote execution — worker processes everywhere, and a worker in a Docker container on Linux CI for the container and remote cases).** One end-to-end workflow passes (E2E-08).
 
 ### Controls
 
@@ -73,15 +73,19 @@ Every pass has a `result.json` whose checks all passed and whose artifacts match
 | Negative: cancelling a job no longer stops the run it started | `negative-control-worker-cancel` | LR-07 failed (the child process lived on and the folder stayed), runner exit 1 |
 | Negative: reconnecting refetches every event | `negative-control-reconnect` | LR-05 failed (a duplicated tool event), runner exit 1 |
 | Positive: both restored | `2026-10-25-82eae66` | all LR cases passed (LR-02 and LR-03 on Linux CI, with Docker) |
+| Negative: no attempt ceiling for rate-limited retries | `negative-control-gaps` | AI-04 failed (a fourth call was made and answered; no terminal failure), runner exit 1 |
+| Negative: delegated files no longer checked against deny_read | `negative-control-gaps` | MA-05 failed (the deny_read sentinel reached the child agent's input) |
+| Negative: a file with a syntax error isn't marked stale | `negative-control-gaps` | CI-06 failed (its last valid symbols were presented as current) |
+| Positive: all restored | `2026-10-25-cab8247` | AI-04, MA-05 and CI-06 passed, on Windows and on Linux CI |
 | In-test control (OB-08): a tampered recording | each OB-08 run | the replay reports the difference and the state hashes differ |
 
 ### Defects
 
-No product defect is open. Product defects found and fixed so far: CLI outages without failover (D-004), orphaned processes after cancel (D-005), four code-index gaps (D-006); plus gate and environment issues D-001, D-002, D-003, D-007. Design gaps in the merge gate, in redaction and in protecting evaluation assets on Windows, an egress-proxy regression, a worker cancellation that left the job running, and a history race (a late save overwriting a resumed task) were caught before release. Details in `KNOWN_DEFECTS.md`.
+No product defect is open. Product defects found and fixed so far: CLI outages without failover (D-004), orphaned processes after cancel (D-005), four code-index gaps (D-006); plus gate and environment issues D-001, D-002, D-003, D-007. Design gaps in the merge gate, in redaction and in protecting evaluation assets on Windows, an egress-proxy regression, a worker cancellation that left the job running, a history race, and a browser cold start slower than its launch wait on a busy CI runner (a late save overwriting a resumed task) were caught before release. Details in `KNOWN_DEFECTS.md`.
 
 ## Readiness verdict
 
-**Not ready.** 90 of 96 system cases (counting Linux CI for the six cases that need Landlock or Docker) and 1 of 10 end-to-end workflows pass. The cases that exist pass reliably; the gap is missing capability, not failing behavior.
+**Not ready.** All 96 system cases pass (counting Linux CI for the six cases that need Landlock or Docker), but only 1 of 10 end-to-end workflows does. The cases that exist pass reliably; what remains is the end-to-end workflows.
 
 ## Verified status of the 12 systems
 
@@ -89,9 +93,9 @@ No product defect is open. Product defects found and fixed so far: CLI outages w
 
 | System | Passed | Status | Basis |
 | --- | --- | --- | --- |
-| 1 Model-agnostic AI engine | 5 / 8 | partly verified (mock-only) | normalization (three CLI adapters), common interface, model switching, outage failover, budget exhaustion. Missing: 429 backoff, capability validation; API adapters untested (no HTTP mock) |
-| 2 Multi-agent orchestration | 7 / 8 | partly verified (mock-only) | concurrency (20 repetitions), dependencies, independent and conflicting edits, crash isolation, cancellation, verified integration. Missing: scoped delegation |
-| 3 Semantic codebase intelligence | 6 / 8 | partly verified (real, against F-CODE ground truth) | indexing, lookup, callers, incremental refresh, impact, identity. Missing: semantic rename, parse-error reporting |
+| 1 Model-agnostic AI engine | 8 / 8 | **verified** (real adapters, engine, routing and config; model output from the fake CLI or mock HTTP endpoints, time from a manual clock) | normalization (five adapters), common interface, model switching, rate-limit retries within a ceiling, outage failover, tool-capability validation, budget exhaustion, a local endpoint with no hosted account |
+| 2 Multi-agent orchestration | 8 / 8 | **verified** (real hub, team scheduler, git worktrees, bridge process and permission modes; agents mock-only) | concurrency (20 repetitions), dependencies, independent and conflicting edits, scoped delegation, crash isolation, cancellation, verified integration. MA-04 sends conflicts to a debugger agent rather than the user (audited partial) |
+| 3 Semantic codebase intelligence | 8 / 8 | **verified** (real, against the F-CODE ground truth; the renamed fixture still passes cargo test) | indexing, lookup, callers, scope-safe rename, incremental refresh, invalid syntax, impact, identity |
 | 4 Persistent project memory | 8 / 8 | **verified** (real store, restarts, HTTP API and agent tools; the agent's behavior and Claude's read-deny enforcement are mocked in PM-07) | durable decisions, fresh-session retrieval, versioning, stale sources, retrieval of paraphrases (lexical v1, not embeddings), contradictions, untrusted content, project isolation |
 | 5 Integrated verification engine | 8 / 8 | **verified** (real compilers, test runners, linter and scanner; agent turns mock-only) | diagnostics, test feedback, repair loop, lint, advisories, structured edits, bounded repairs, completion gate |
 | 6 Browser and application control | 8 / 8 | **verified** (real headless browsers over the DevTools protocol, the F-WEB site over HTTP, the MCP bridge in and out of process; what the agent decides to call is scripted by the test) | local site launch, form submission, navigation chain, screenshot artifact, console error capture, network failure detection, mobile layout assertions, dynamic readiness |
@@ -119,3 +123,4 @@ No product defect is open. Product defects found and fixed so far: CLI outages w
 | 2026-10-24-f56fd58 | `f56fd58`, clean | 61 / 61 deterministic, 64 / 106 on Windows, 68 with Linux CI; superseded by evaluation |
 | 2026-10-24-c3b1f83 | `c3b1f83`, clean | 68 / 68 deterministic, 72 / 106 on Windows, 76 with Linux CI; superseded by browser control |
 | 2026-10-24-45735d6 | `45735d6`, clean | 76 / 76 deterministic, 80 / 106 on Windows, 84 with Linux CI; superseded by workers |
+| 2026-10-25-82eae66 | `82eae66`, clean | 79 passed and 1 blocked deterministic, 85 / 106 on Windows, 91 with Linux CI; superseded by the System 1–3 gaps |

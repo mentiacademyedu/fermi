@@ -24,7 +24,7 @@ Status: **implemented** for the deterministic profile (T0–T2 without a browser
 | --- | --- |
 | F-CODE | built: 3-crate Rust workspace (`util`, `engine`, `app`) with duplicate `helper` functions in separate modules, a call cycle (`ping`/`pong`), cross-crate imports, a test, and sentinel strings in a comment and a string literal. Ground truth: `manifest.json`, `symbols.json`, `references.json`, `dependency-graph.json`, `expected/engine-lib-greet.rs`. |
 | F-CODE (verification) | `repo/.fermi/checks.toml` pins the checks (offline `cargo check` and `cargo test`, `max_repairs = 3`); `repo/Cargo.lock` and `.gitignore` keep runs reproducible. `advisories/` is a pinned two-record OSV dataset; `expected/vulnerable-Cargo.lock` pins an affected `smallvec`; `expected/util-text-helper-edit.rs` is the oracle for the structured edit. |
-| F-PROVIDER | `cost-cases.json`: a pinned price table and usage with costs worked out by hand (the CO-01 oracle, including zero tokens and rounding boundaries). Price tables, budgets and models for the other cost cases are declared in each test's config. |
+| F-PROVIDER | `cost-cases.json`: a pinned price table and usage with costs worked out by hand (the CO-01 oracle, including zero tokens and rounding boundaries). Price tables, budgets and models for the other cost cases are declared in each test's config. `src/provider.rs` is a mock model endpoint (Anthropic Messages, OpenAI Responses, OpenAI-compatible chat completions) that answers scripted replies in order, including 429s with Retry-After, and logs every request (path, credentials sent, body, and the time on the engine's manual clock); it stands in for the hosted APIs and for a local model server. An outbound recorder (an HTTP proxy that lets nothing through) shows whether a process tried to reach anything else. |
 | F-MEMORY | `records.json`: ten decisions with sources, six paraphrase queries with the expected record, two contradictory notes. The two project scopes are separate F-CODE copies; the private record, planted comment, secret file and canaries are created by each test. |
 | F-SECURITY | built inline: canary files outside the task root, a synthetic controller secret, disposable sentinels, two task scopes, and real local endpoints (allowed and forbidden) for the network cases. |
 | F-WORKER | built inline in the tests as fake-CLI scenarios (outages, limits, crashes, barriers, children, scripted repairs, scripted usage including cached tokens); for the execution cases, `src/workers.rs` starts `fermi worker` as its own process (the `fermi-worker` test binary) or in a Docker container (`ubuntu:24.04`, Linux CI), and a TCP proxy that refuses connections or loses answers. |
@@ -39,13 +39,15 @@ crates/acceptance-tests/
   src/lib.rs                    # Case (evidence), Fermi (engine with fake accounts), fixtures, git, process helpers
   src/bin/fake-cli.rs           # deterministic Claude/Codex/Gemini CLI stand-in
   src/bin/fake-plugin.rs        # deterministic plugin / MCP server
-  tests/model_providers.rs      # AI-01 02 03 05
-  tests/agent_execution.rs      # MA-01 02 03 04 06 07 08
+  src/bin/fermi-run.rs          # one task through the engine in its own process (AI-08)
+  src/provider.rs               # F-PROVIDER mock endpoints and the outbound recorder
+  tests/model_providers.rs      # AI-01 … AI-08 (AI-07 is in cost.rs)
+  tests/agent_execution.rs      # MA-01 … MA-08
   tests/verification.rs         # VE-01 … VE-08
   tests/cost.rs                 # CO-01 … CO-08, AI-07, E2E-08
   tests/memory.rs               # PM-01 … PM-08
   tests/security.rs             # SE-01 … SE-08
-  tests/code_intelligence.rs    # CI-01 02 03 05 07 08
+  tests/code_intelligence.rs    # CI-01 … CI-08
   tests/observability.rs        # OB-01 … OB-08
   tests/plugins.rs              # PL-01 … PL-08
   tests/evaluation.rs           # EV-01 … EV-08
@@ -53,7 +55,6 @@ crates/acceptance-tests/
   src/web.rs                    # the F-WEB fixture server
   src/workers.rs                # worker processes, Docker workers and an outage proxy (LR)
   tests/execution.rs            # LR-01 … LR-08 (LR-02/03 need Docker; blocked where it is missing)
-  tests/execution.rs            # LR-01
 xtask/src/main.rs               # acceptance runner
 tests/acceptance/systems.yaml   # registry of all 106 IDs, with test mappings and published status
 tests/acceptance/phase1_audit.py  # writes ACCEPTANCE_MATRIX.md (and the registry with --registry)
@@ -108,4 +109,4 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 
 ## Next
 
-Build the missing systems in an agreed order, each with its eight cases. Done: project memory (System 4), the verification engine (System 5), the plugin system (System 7), agent observability (System 8), cost and performance (System 9, with AI-07 and E2E-08), security and isolation (System 10), evaluation (System 12), browser control (System 6) and local and remote execution (System 11). Next suggested: the remaining gaps in Systems 1 to 3 (AI-04/06/08, MA-05, CI-04/06), then the end-to-end workflows. The OS sandbox (PL-07, SE-01/04/05) is Linux-only and the container cases (LR-02/03) need Docker, so Linux CI runs the security profile for SE, MA, PL, EV and LR and the live profile for the LR workers; on Windows those six report blocked.
+Build the missing systems in an agreed order, each with its eight cases. Done: project memory (System 4), the verification engine (System 5), the plugin system (System 7), agent observability (System 8), cost and performance (System 9, with AI-07 and E2E-08), security and isolation (System 10), evaluation (System 12), browser control (System 6), local and remote execution (System 11) and the remaining cases of Systems 1 to 3 (AI-04/06/08, MA-05, CI-04/06), so every system is at its gate. Next suggested: the end-to-end workflows (E2E-01 … E2E-07, E2E-09, E2E-10). The OS sandbox (PL-07, SE-01/04/05) is Linux-only and the container cases (LR-02/03) need Docker, so Linux CI runs the security profile for SE, MA, PL, EV and LR and the live profile for the LR workers; on Windows those six report blocked.

@@ -106,6 +106,14 @@ Found and fixed while writing the tests; listed so the history is complete.
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
 
+## Found while building the System 1–3 gaps (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Test environment, caught on Linux CI | BA-01 failed once on the branch: Chrome's cold start on a busy runner took longer than the 20 s fermi waited for its debugging port (the rerun passed) | fermi waits up to 60 s and reports at once a browser that exits while starting |
+| Test implementation | MA-05 first expected the child's input to start with its instructions, but the memory brief comes first (as for every task), and expected memory on every delegation although the second subtask matches none | the assertions check what the child received, wherever it is, and memory where it applies |
+| Test implementation | CI-06 first read `stale` and `diagnostic` at the top of the symbol result; they are per symbol | the test reads them per symbol |
+
 ## Found while building System 11 (no open defects)
 
 | Kind | Issue | Fix |

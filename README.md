@@ -178,7 +178,19 @@ code:
 Agents (Claude, through fermi's bridge) get `code_symbol`, `code_impact`,
 `code_search` and `code_file` tools and are told to use them; team agents get
 the base of their branch for `code_impact`. You get the *Code map* page and
-`fermi code stats|search|show|file|impact|deps`. The index is incremental
+`fermi code stats|search|show|file|impact|deps|rename`.
+
+- **Rename** (`code_rename` for agents, `fermi code rename <target> <new>`):
+  one symbol, chosen by name, `Type::name`, `module::name` or `path:line`, is
+  renamed at its definition, at the calls the index resolves to it and in the
+  imports that name it, through the syntax tree. Strings, comments and other
+  symbols with the same name are left alone and listed. An ambiguous target, a
+  name already taken or an edit that wouldn't parse is refused, and nothing is
+  written.
+- **Syntax errors**: a file that stops parsing keeps the symbols of its last
+  valid version, and every result from it says so (`stale`, with the file,
+  line and column of the error) until the file parses again.
+ The index is incremental
 (only changed files are parsed again), parallel, respects `.gitignore`, skips
 vendored code, and is cached in `~/.fermi/index`; fermi's own repository
 re-indexes in well under a second.
@@ -208,6 +220,14 @@ A team run puts several agents with roles on one goal in a git repository
    must be checked out and clean) or discard. Merging needs the checks to have
    passed on exactly the commit being merged; your branch isn't touched before
    that.
+
+Outside team runs, an agent can hand a self-contained subtask to another one
+with the `delegate` tool. The other agent gets only what it's given: the
+instructions, the files listed (from the task's folder, never ones the security
+policy keeps from agents) and the project memory meant for agents, never the
+delegating conversation. It runs with the permission it's given (read-only
+`plan` by default), never broader than the delegating agent's. What each
+delegation received is kept in `~/.fermi/delegations/<task>/`.
 
 Agents that hit an approval show it on their card; with *Let them run commands*
 they don't ask. Worktrees live in `~/.fermi/teams/<run>/wt` and are removed on
@@ -596,8 +616,45 @@ Built in, shown with their versions in the TUI and dashboard:
 | Gemini | Gemini Pro (latest), Gemini 3.8 Flash | Gemini 3.5 Flash-Lite |
 
 Override or add models with `[[models]]` in the config (capabilities, tier,
-CLI/API names). Reasoning effort (`low` … `max`) can be set per task or as a
-profile default; it's passed to Claude and Codex (Gemini ignores it).
+CLI/API names, whether it can call tools). Reasoning effort (`low` … `max`)
+can be set per task or as a profile default; it's passed to Claude and Codex
+(Gemini ignores it).
+
+A model declared with `tools = false` never gets a task that needs tools
+(editing files, running commands): a task marked that way, or any task of a
+profile with `require_tools = true`, skips it, or is refused before anything
+is sent when it's the only choice. Such tasks also skip API-key accounts,
+which send plain text.
+
+**Local models.** Any server with an OpenAI-compatible chat completions API
+(llama.cpp, Ollama, vLLM, LM Studio) works as an account; no hosted account
+or key is needed:
+
+```toml
+[[accounts]]
+id = "local"
+provider = "openai"
+auth = "api"
+base_url = "http://localhost:11434/v1"
+api_format = "chat"
+
+[[models]]
+id = "openai:qwen-local"
+caps = ["code", "general"]
+api = "qwen2.5-coder"
+tools = false
+```
+
+**Rate limits.** An API call answered with HTTP 429 is retried on the same
+account after the provider's Retry-After (or a doubling backoff), at most
+`attempts` calls in all; a longer wait moves on to the next account:
+
+```toml
+[retry]
+attempts = 3        # calls to one account for one task, the first included
+backoff_secs = 1    # when the provider doesn't say how long to wait
+max_wait_secs = 60
+```
 
 Auto routing is rule-based (no extra model call, no added latency): image
 requests go to an image model, heavy work (refactor, debug, architecture)
