@@ -2,7 +2,7 @@
 
 Phase 1 audit of fermi (called APEX in the spec) against `docs/FERMI_ADE_Verification_and_Acceptance_Testing`.
 
-Published run `2026-10-25-cab8247` on revision `cab824771bd3`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-25-cab8247/REPORT.md`.
+Published run `2026-10-25-ee16092` on revision `ee160928ad63`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-25-ee16092/REPORT.md`.
 
 *Result* is the published acceptance outcome: `passed` or `failed` from an executed test with validated evidence; `not_implemented` when no test exists (usually because the capability is missing); `not_run` when a test exists but wasn't in the published run.
 *Capability* is an audit finding from reading the code; it is not verification.
@@ -25,8 +25,8 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | 10 Security and isolation | 8 | 8 | 0 | 0 | 5 / 8 |
 | 11 Local and remote execution | 8 | 8 | 0 | 0 | 6 / 8 |
 | 12 Evaluation and self-improvement | 8 | 8 | 0 | 0 | 8 / 8 |
-| End-to-end workflows | 10 | 1 | 6 | 3 | 1 / 10 |
-| **Total** | **106** | **96** | **7** | **3** | **91 / 106** |
+| End-to-end workflows | 10 | 10 | 0 | 0 | 9 / 10 |
+| **Total** | **106** | **105** | **1** | **0** | **99 / 106** |
 
 ## 1 Model-agnostic AI engine
 
@@ -188,14 +188,14 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| E2E-01 | User creates coding task > model selected > file changed > tests run | T2 | **not_implemented** | — | partial | dashboard + engine | Task, model routing and file changes work; no fermi-run test step or verified-change gate. |
-| E2E-02 | User starts three coding tasks in parallel | T2 T3 | **not_implemented** | — | partial | crates/fermi-core/src/team.rs | Team runs isolate agents in worktrees; plain parallel tasks share the workspace folder. |
-| E2E-03 | Browser agent develops and tests a simple UI | T2 | **not_implemented** | — | missing | — | Needs agent browser control (System 6). |
-| E2E-04 | Provider fails halfway through execution | T2 T3 | **not_implemented** | — | partial | crates/fermi-core/src/engine.rs | Limits and auth failures restart on the next account; mid-run outage has no bounded retry or checkpoint. |
-| E2E-05 | User cancels task during a tool operation | T2 T3 | **not_implemented** | — | partial | crates/fermi-core/src/hub.rs (cancel) | Cancel aborts the run and kills the CLI process; grandchildren are not tracked. |
-| E2E-06 | User closes desktop during remote execution | T2 T4 | **not_implemented** | — | missing | — | Needs remote execution (System 11). |
-| E2E-07 | Plugin attempts forbidden operation | T2 T3 | **not_implemented** | — | missing | — | Needs a plugin sandbox (System 7). |
+| E2E-01 | User creates coding task > model selected > file changed > tests run | T2 | **passed** | e2e_01_coding_task_to_tested_change | implemented | crates/fermi/src/server.rs (/api/tasks), crates/fermi-core/src/verify.rs (run_task), trace.rs (export timeline) | A task submitted from the dashboard is routed, edits files, and is completed only after fermi's own checks pass; the trace links the request, route, model call, edit, each check's command and the tested revision, and the outcome. Added 2026-10-25. |
+| E2E-02 | User starts three coding tasks in parallel | T2 T3 | **passed** | e2e_02_three_parallel_coding_tasks | implemented | crates/fermi-core/src/workspace.rs, hub.rs (submit, diff, delete), crates/fermi/src/server.rs (isolate, /api/tasks/{id}/diff) | A task can run isolated: its own git worktree and branch from the repository's commit, so tasks started together on one repository can't touch each other's files; its changes stay there for review and go away with the task. Added 2026-10-25. |
+| E2E-03 | Browser agent develops and tests a simple UI | T2 | **passed** | e2e_03_browser_agent_builds_and_tests_ui | implemented | crates/fermi-core/src/browser.rs, mcp.rs (browser tools), hub.rs | An agent writes a page, opens it in fermi's headless browser through the bridge, tries invalid and valid input and saves a screenshot; independent interaction tests then pass on the same file. Added 2026-10-25. |
+| E2E-04 | Provider fails halfway through execution | T2 T3 | **passed** | e2e_04_provider_fails_halfway | implemented | crates/fermi-core/src/engine.rs (hand_over), trace.rs (Ops), providers/*.rs (RunResult.tools) | When a call fails over after running tools, the work stays and the next account is told which tool calls already ran and what the folder holds, so it continues instead of repeating side effects; attempts stay within the profile's accounts and [retry]; if every account fails the task ends failed, never complete. Added 2026-10-25. |
+| E2E-05 | User cancels task during a tool operation | T2 T3 | **passed** | e2e_05_cancel_during_tool_operation | implemented | crates/fermi-core/src/hub.rs (cancel), providers/proc.rs (kill_tree), state.rs (busy), billing.rs (Reservation) | Cancelling from the dashboard stops the CLI and everything it started, gives back the account's slot and settles the budget reservation; the task stays cancelled. Fixed 2026-10-25: a cancelled call kept its account counted as busy. |
+| E2E-06 | User closes desktop during remote execution | T2 T4 | **passed** | e2e_06_close_desktop_during_remote_execution | implemented | crates/fermi-core/src/remote.rs, hub.rs (shutdown, reattach), crates/fermi/src/server.rs (create_task) | A task sent to a worker from the dashboard keeps running when the window closes; reopening reattaches to the job, restores its events and trace and applies the change once. Fixed 2026-10-25: the dashboard refused tasks for a profile whose accounts are on workers. |
+| E2E-07 | Plugin attempts forbidden operation | T2 T3 | **blocked** | e2e_07_plugin_forbidden_operation | implemented | crates/fermi-core/src/plugins.rs (scope, log), mcp.rs, sandbox.rs | A plugin tool called from an agent task with a forbidden path is refused before it runs; the refusal and its reason are in the task's trace and in the plugin log under the task's id; the plugin's own read of the sentinel is stopped by the Linux sandbox. Added 2026-10-25. |
 | E2E-08 | Agent completes task exceeding budget | T2 T3 | **passed** | e2e_08_task_exceeding_budget | implemented | crates/fermi-core/src/billing.rs, engine.rs, crates/fermi/src/server.rs | After an in-flight call settles over its estimate, new calls are refused; the overrun and remaining allowance show in the task and the dashboard. Added 2026-10-24. |
-| E2E-09 | User compares two models on identical task | T2 T4 | **not_implemented** | — | partial | crates/fermi-core/src/team.rs, hub.rs | Two models can be run separately; no paired comparison with isolation and a shared oracle. |
-| E2E-10 | Agent finishes a multi-file refactor | T2 | **not_implemented** | — | partial | crates/fermi-core/src/code.rs, team.rs | Impact analysis and agent edits exist; no mandatory-check gate on the final revision. |
+| E2E-09 | User compares two models on identical task | T2 T4 | **passed** | e2e_09_compare_two_models | implemented | crates/fermi-core/src/eval.rs (run, compare), crates/fermi/src/server.rs (/api/evals/compare) | Two models run the same frozen task at once, each in a fresh folder of its own, scored by the same evaluator; neither sees the other's files, prompts or memory, and the comparison shows model, score, latency and cost. Added 2026-10-25. |
+| E2E-10 | Agent finishes a multi-file refactor | T2 | **passed** | e2e_10_multi_file_refactor | implemented | crates/fermi-core/src/code.rs (rename_symbol, impact), workspace.rs, verify.rs | A refactor across the three packages runs as an isolated, verified task: the agent checks callers and impact through the bridge, renames the symbol and its references (leaving unrelated names alone), the checks pass on the exact revision under review, and the full diff is available. Added 2026-10-25. |
 
