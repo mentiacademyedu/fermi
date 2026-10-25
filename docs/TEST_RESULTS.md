@@ -25,7 +25,7 @@
 | Acceptance, security (Windows) | `xtask acceptance --implemented --profile security --allow-blocked` | 16 passed, 5 blocked (PL-07, SE-01/04/05 need Linux Landlock; LR-02 needs Docker), runner exit 0 |
 | Acceptance, security (Linux CI) | `xtask acceptance --system SE --system MA --system PL --system EV --system LR --profile security` on Ubuntu | passed: all 16 (SE-01 … SE-08, MA-06, MA-07, PL-04, PL-07, EV-06, LR-02, LR-06, LR-07) on the real OS sandbox and Docker; 5 of these blocked on Windows (`docs/acceptance-runs/linux-ci-security/`) |
 | Acceptance, live (workers only) | `xtask acceptance --system LR --profile live --allow-billable --allow-blocked` (no provider is called) | Windows: 4 passed, LR-03 blocked (Docker); Linux CI: all 5 passed |
-| Coverage | `cargo llvm-cov --workspace --locked` (Linux CI; the local Windows run was stopped for low memory) | 66.6% of product lines (see `TEST_COVERAGE.md`) |
+| Coverage | `cargo llvm-cov --workspace --locked` | 66.5% of product lines on Windows, 66.6% on Linux CI (see `TEST_COVERAGE.md`) |
 
 ## Acceptance outcomes
 

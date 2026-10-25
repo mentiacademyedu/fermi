@@ -15,23 +15,23 @@ All 96 capabilities audited as *implemented* have a passing test (six of them on
 
 ## Code coverage
 
-`cargo llvm-cov --workspace --locked` on Linux CI at `cab8247` (unit and acceptance tests together; the `lcov.info` of run 40153065374). Earlier figures were measured on Windows; this one is from Linux, where the Landlock sandbox code runs too (the local Windows measurement at this commit was stopped when the machine ran low on memory):
+`cargo llvm-cov --workspace --locked` on Windows at `cab8247` (unit and acceptance tests together). The Linux-only sandbox code (Landlock) isn't exercised here; Linux CI's `lcov.info` for the same commit (run 40153065374) gives 66.6% of product lines:
 
 | Scope | Lines | Functions |
 | --- | --- | --- |
-| fermi-core (…, verification, billing, memory, security, decks) | 77.9% (10130 / 13012) | 75.8% |
-| fermi (CLI, TUI, server, setup, skills, slides) | 36.7% (1797 / 4900) | 34.6% |
-| **Product total** | **66.6% (11927 / 17912)** | **63.7%** |
+| fermi-core (…, verification, billing, memory, security, decks) | 77.6% (10080 / 12986) | 75.7% |
+| fermi (CLI, TUI, server, setup, skills, slides) | 36.9% (1805 / 4889) | 34.7% |
+| **Product total** | **66.5% (11885 / 17875)** | **63.7%** |
 
 Excluded from the product total: `crates/acceptance-tests` (the harness), `xtask` (the runner) and `crates/fermi-desktop` (the Tauri shell, no tests). CI produces `lcov.info` on Ubuntu on every push and uploads it as an artifact.
 
-Earlier measurements (Windows): 54.1% at `faa705c`, 59.1% at `19f85c1`, 61.9% at `e72c2c7`, 62.9% at `02130df`, 63.9% at `d0302dc`, 64.7% at `f56fd58`, 65.7% at `c3b1f83`, 66.4% at `45735d6`, 65.4% at `82eae66`. New code is well covered: `providers/api.rs` 86% (0% before the mock endpoints), `engine.rs` 91%, `clock.rs` 87%, `code.rs` 79%, `remote.rs` 92% (the worker side, `worker.rs` and `worker_http.rs`, runs in separate processes the tests stop by killing them, so its coverage isn't recorded; LR-02 … LR-08 exercise it), `browser.rs` 83%, `sandbox.rs` 89%.
+Earlier measurements: 54.1% at `faa705c`, 59.1% at `19f85c1`, 61.9% at `e72c2c7`, 62.9% at `02130df`, 63.9% at `d0302dc`, 64.7% at `f56fd58`, 65.7% at `c3b1f83`, 66.4% at `45735d6`, 65.4% at `82eae66`. New code is well covered: `providers/api.rs` 70% (0% before the mock endpoints; 86% on Linux, where AI-08's separate process is recorded too), `engine.rs` 90%, `clock.rs` 87%, `code.rs` 79%, `remote.rs` 92% (the worker side, `worker.rs` and `worker_http.rs`, runs in separate processes the tests stop by killing them, so its coverage isn't recorded; LR-02 … LR-08 exercise it), `browser.rs` 83%, `sandbox.rs` 89%.
 
 ### Notable gaps
 
 | Area | Lines covered | Why |
 | --- | --- | --- |
-| `fermi/src/server.rs` (dashboard API) | 28% | only the task, team, state, checks and memory endpoints used by VE-08, E2E-08 and PM-01/PM-08 are exercised |
+| `fermi/src/server.rs` (dashboard API) | 29% | only the task, team, state, checks and memory endpoints used by VE-08, E2E-08 and PM-01/PM-08 are exercised |
 | `fermi/src/main.rs` (CLI commands) | 0% | no CLI tests |
 | `providers/image.rs` (image generation) | 0% | the mock endpoints don't serve images |
 | `mcp.rs` (bridge tools) | 27% | the bridge runs as its own process in most tests (MA-05, BA, PL), whose coverage isn't recorded; in process, only `run_checks`, the memory and browser tools are called |
