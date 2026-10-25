@@ -49,6 +49,35 @@ pub fn messages_ok(text: &str) -> Reply {
     }
 }
 
+/// An OpenAI Responses answer.
+pub fn responses_ok(text: &str) -> Reply {
+    Reply {
+        status: 200,
+        headers: vec![],
+        body: json!({
+            "id": "resp_mock", "object": "response", "status": "completed", "model": "mock",
+            "output": [{ "type": "message", "role": "assistant", "content": [{ "type": "output_text", "text": text }] }],
+            "usage": { "input_tokens": 12, "output_tokens": 7, "input_tokens_details": { "cached_tokens": 0 } }
+        }),
+    }
+}
+
+impl Reply {
+    /// Sets the token counts, in the answer's own format.
+    pub fn usage(mut self, input: u64, output: u64) -> Self {
+        let u = &mut self.body["usage"];
+        if u.get("prompt_tokens").is_some() {
+            u["prompt_tokens"] = json!(input);
+            u["completion_tokens"] = json!(output);
+            u["total_tokens"] = json!(input + output);
+        } else {
+            u["input_tokens"] = json!(input);
+            u["output_tokens"] = json!(output);
+        }
+        self
+    }
+}
+
 /// An OpenAI-compatible chat completion.
 pub fn chat_ok(text: &str) -> Reply {
     Reply {

@@ -53,8 +53,16 @@ fn lifecycle(kinds: &Value) -> Vec<String> {
 #[tokio::test(flavor = "multi_thread")]
 async fn ai_01_adapter_normalization() {
     let mut c = Case::start("AI-01", "T1");
-    c.real(&["fermi engine", "claude, codex and gemini CLI adapters", "process spawning and stream parsing"]);
-    c.mocked(&["Claude Code, Codex and Gemini CLIs (fake-cli with scripted output)"]);
+    c.real(&[
+        "fermi engine",
+        "claude, codex and gemini CLI adapters",
+        "Anthropic and OpenAI HTTP API adapters",
+        "process spawning and stream parsing",
+    ]);
+    c.mocked(&[
+        "Claude Code, Codex and Gemini CLIs (fake-cli with scripted output)",
+        "Anthropic and OpenAI APIs (F-PROVIDER mock endpoints)",
+    ]);
     // Equivalent scripted output, emitted in each CLI's own stream format.
     let step = json!({ "text": "The answer is 42.", "tools": [{ "name": "Bash", "input": { "command": "ls src" } }], "usage": { "input": 120, "output": 30 } });
     let f = Fermi::new(
@@ -113,6 +121,68 @@ async fn ai_01_adapter_normalization() {
             format!("{} call(s) to account {acct}, flavor {:?}", calls.len(), calls.first().map(|x| x["flavor"].clone())),
         );
     }
+
+    // The two HTTP API adapters (Anthropic Messages, OpenAI Responses), each
+    // against an endpoint answering the same in its own wire format. They
+    // send text and get text back: no tool calls to compare.
+    use acceptance_tests::provider::{messages_ok, mock_api, responses_ok};
+    let anthropic = mock_api(vec![messages_ok("The answer is 42.").usage(120, 30)], None).await;
+    let openai = mock_api(vec![responses_ok("The answer is 42.").usage(120, 30)], None).await;
+    let home = c.work.join("api-home");
+    std::fs::create_dir_all(&home).unwrap();
+    let cfg = format!(
+        "[[accounts]]
+id = \"an\"
+provider = \"claude\"
+auth = \"api\"
+base_url = \"{}\"
+
+         [[accounts]]
+id = \"oa\"
+provider = \"openai\"
+auth = \"api\"
+base_url = \"{}\"
+",
+        anthropic.base, openai.base
+    );
+    let api = fermi_core::Engine::new(fermi_core::config::Config::parse(&cfg).unwrap(), home, 0);
+    let mut via_api = vec![];
+    for (acct, model) in [("an", "claude:sonnet"), ("oa", "openai:gpt")] {
+        let mut task = Task::new("What is the answer?", &cwd);
+        task.account = Some(acct.into());
+        task.model = Some(model.into());
+        let (out, events) = run_collect(&api, &task).await;
+        let o = out.as_ref().ok();
+        via_api.push(json!({
+            "account": acct, "model": model, "text": o.map(|o| o.text.clone()),
+            "finish": if events.iter().any(|e| matches!(e, Event::Done { ok: true, .. })) { "ok" } else { "failed" },
+            "usage": o.map(|o| json!({ "input": o.usage.input, "output": o.usage.output })),
+            "eventKinds": kinds(&events), "error": out.as_ref().err().map(|e| e.to_string()),
+        }));
+    }
+    c.json("api-normalized-responses.json", &json!(via_api));
+    c.json("api-request-envelopes.json", &json!({ "an": anthropic.requests(), "oa": openai.requests() }));
+    for n in &via_api {
+        let same = ["text", "finish", "usage"].iter().all(|k| n[k] == canonical[k]);
+        c.check(&format!("normalized:{}", n["account"].as_str().unwrap()), same, format!("{n}"));
+    }
+    let api_cycles: Vec<Vec<String>> = via_api.iter().map(|n| lifecycle(&n["eventKinds"])).collect();
+    c.check("sameLifecycle:api", api_cycles.len() == 2 && api_cycles[0] == api_cycles[1], format!("{api_cycles:?}"));
+    let (an, oa) = (anthropic.requests(), openai.requests());
+    c.check(
+        "rightAdapter:api",
+        an.len() == 1
+            && an[0]["path"] == "/v1/messages"
+            && an[0]["body"]["model"] == "claude-sonnet-5-5"
+            && oa.len() == 1
+            && oa[0]["path"] == "/v1/responses"
+            && oa[0]["body"]["model"] == "gpt-6-astra",
+        format!(
+            "anthropic {:?}, openai {:?}",
+            an.first().map(|r| (&r["path"], &r["body"]["model"])),
+            oa.first().map(|r| (&r["path"], &r["body"]["model"]))
+        ),
+    );
     c.finish();
 }
 
