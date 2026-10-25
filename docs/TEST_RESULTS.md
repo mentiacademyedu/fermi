@@ -4,8 +4,8 @@
 
 | Field | Value |
 | --- | --- |
-| Run | `2026-10-24-45735d6` (deterministic) and `2026-10-24-45735d6-security`, plus the Linux CI security run on the same commit |
-| Revision | `45735d6` (full SHA in the run summaries); clean working tree |
+| Run | `2026-10-25-82eae66` (deterministic), `2026-10-25-82eae66-security` and `2026-10-25-82eae66-live-workers`, plus the same three on Linux CI for the same commit |
+| Revision | `82eae66` (full SHA in the run summaries); clean working tree |
 | Date | 2026-10-24 |
 | Environment | Windows 11 Home 10.0.26200, Rust 1.96.0 (`rust-toolchain.toml`), local developer machine |
 | Providers | fake CLI only (`crates/acceptance-tests/src/bin/fake-cli.rs`); no live provider calls, no metered usage |
@@ -21,26 +21,27 @@
 | Formatting | `cargo fmt --all -- --check` | passed |
 | Static analysis | `cargo clippy --workspace --all-targets --locked -- -D warnings` | passed |
 | Unit tests | `cargo test --workspace --locked --lib --bins` | passed: 56 (fermi-core 43, fermi lib 12, fermi bin 1) |
-| Acceptance, deterministic | `xtask acceptance --implemented` | passed: 76 of 76 executed cases, runner exit 0 (Linux CI: 76 of 76 too, with Chrome) |
-| Acceptance, security (Windows) | `xtask acceptance --implemented --profile security --allow-blocked` | 14 passed, 4 blocked (PL-07, SE-01/04/05 need Linux Landlock), runner exit 0 |
-| Acceptance, security (Linux CI) | `xtask acceptance --system SE --system MA --system PL --system EV --profile security` on Ubuntu | passed: all 13 (SE-01 … SE-08, MA-06, MA-07, PL-04, PL-07, EV-06) on the real OS sandbox; 4 of these blocked on Windows (`docs/acceptance-runs/linux-ci-security/`) |
-| Coverage | `cargo llvm-cov --workspace --locked` | 66.4% of product lines (see `TEST_COVERAGE.md`) |
+| Acceptance, deterministic | `xtask acceptance --implemented` | 79 passed, 1 blocked (LR-02 needs Docker), runner exit 0 (Linux CI: 80 of 80, with Chrome and Docker) |
+| Acceptance, security (Windows) | `xtask acceptance --implemented --profile security --allow-blocked` | 16 passed, 5 blocked (PL-07, SE-01/04/05 need Linux Landlock; LR-02 needs Docker), runner exit 0 |
+| Acceptance, security (Linux CI) | `xtask acceptance --system SE --system MA --system PL --system EV --system LR --profile security` on Ubuntu | passed: all 16 (SE-01 … SE-08, MA-06, MA-07, PL-04, PL-07, EV-06, LR-02, LR-06, LR-07) on the real OS sandbox and Docker; 5 of these blocked on Windows (`docs/acceptance-runs/linux-ci-security/`) |
+| Acceptance, live (workers only) | `xtask acceptance --system LR --profile live --allow-billable --allow-blocked` (no provider is called) | Windows: 4 passed, LR-03 blocked (Docker); Linux CI: all 5 passed |
+| Coverage | `cargo llvm-cov --workspace --locked` | 65.4% of product lines (see `TEST_COVERAGE.md`) |
 
 ## Acceptance outcomes
 
 | Outcome | Cases |
 | --- | --- |
-| passed | 80 on Windows: the 72 before, plus BA-01 … BA-08. PL-07, SE-01, SE-04 and SE-05 pass on Linux CI (they are blocked on Windows), so 84 counting the Linux security run |
+| passed | 85 on Windows: the 80 before, plus LR-04 … LR-08. PL-07, SE-01, SE-04, SE-05 (Landlock), LR-02 and LR-03 (Docker) pass on Linux CI (they are blocked on Windows), so 91 counting the Linux runs |
 | failed | 0 |
 | skipped | 0 |
-| blocked | 4 on Windows (PL-07, SE-01, SE-04, SE-05: the OS sandbox needs Linux Landlock); 0 on Linux CI |
-| not_implemented | 22 (no executable test; the capability is missing or only partly present, see `ACCEPTANCE_MATRIX.md`) |
+| blocked | 6 on Windows (PL-07, SE-01, SE-04, SE-05: the OS sandbox needs Linux Landlock; LR-02, LR-03: no Docker here); 0 on Linux CI |
+| not_implemented | 15 (no executable test; the capability is missing or only partly present, see `ACCEPTANCE_MATRIX.md`) |
 
-**Overall acceptance: 84 / 106 passed** (79.2%), counting the Linux CI security run for the four OS-sandbox cases (80 / 106 on the Windows run, with those four blocked). Execution coverage: 84 / 106.
+**Overall acceptance: 91 / 106 passed** (85.8%), counting the Linux CI runs for the six cases that need Landlock or Docker (85 / 106 on the Windows run, with those six blocked). Execution coverage: 91 / 106.
 
 Every pass has a `result.json` whose checks all passed and whose artifacts match their recorded hashes. Each test declares what was real and what was mocked: model output is mocked (fake CLI); the engine, hub, team scheduler, code index, verification service, git, worktrees, compilers, test runners, files and processes are real.
 
-**Eight systems meet their completion gate (8 / 8): System 4 (persistent project memory), System 5 (integrated verification engine), System 7 (composable plugin system — PL-07 on Linux CI with the real OS sandbox, as its gate requires), System 8 (agent observability), System 9 (cost and performance optimization), System 10 (security and isolation — all eight on Linux CI with the real OS sandbox), System 12 (evaluation and self-improvement), and System 6 (browser and application control — real headless Edge on Windows and Chrome on Linux CI; the gate's evidence is fermi's own JSON traces, screenshots and browser logs rather than Playwright's trace format).** One end-to-end workflow passes (E2E-08).
+**Nine systems meet their completion gate (8 / 8): System 4 (persistent project memory), System 5 (integrated verification engine), System 7 (composable plugin system — PL-07 on Linux CI with the real OS sandbox, as its gate requires), System 8 (agent observability), System 9 (cost and performance optimization), System 10 (security and isolation — all eight on Linux CI with the real OS sandbox), System 12 (evaluation and self-improvement), and System 6 (browser and application control — real headless Edge on Windows and Chrome on Linux CI; the gate's evidence is fermi's own JSON traces, screenshots and browser logs rather than Playwright's trace format), and System 11 (local and remote execution — worker processes everywhere, and a worker in a Docker container on Linux CI for the container and remote cases).** One end-to-end workflow passes (E2E-08).
 
 ### Controls
 
@@ -69,15 +70,18 @@ Every pass has a `result.json` whose checks all passed and whose artifacts match
 | Negative: clicks no longer wait for the element to be enabled and uncovered | `negative-control-browser-readiness` | BA-08 failed (the premature click on the disabled Confirm was reported as done), runner exit 1 |
 | Negative: an HTTP error status no longer fails `browser_open` | `negative-control-browser-status` | BA-01 failed (the 404 page was reported as opened), runner exit 1 |
 | Positive: both restored | `2026-10-24-45735d6` | all BA cases passed, on Windows and on Linux CI |
+| Negative: cancelling a job no longer stops the run it started | `negative-control-worker-cancel` | LR-07 failed (the child process lived on and the folder stayed), runner exit 1 |
+| Negative: reconnecting refetches every event | `negative-control-reconnect` | LR-05 failed (a duplicated tool event), runner exit 1 |
+| Positive: both restored | `2026-10-25-82eae66` | all LR cases passed (LR-02 and LR-03 on Linux CI, with Docker) |
 | In-test control (OB-08): a tampered recording | each OB-08 run | the replay reports the difference and the state hashes differ |
 
 ### Defects
 
-No product defect is open. Product defects found and fixed so far: CLI outages without failover (D-004), orphaned processes after cancel (D-005), four code-index gaps (D-006); plus gate and environment issues D-001, D-002, D-003, D-007. Design gaps in the merge gate, in redaction and in protecting evaluation assets on Windows, an egress-proxy regression, and a history race (a late save overwriting a resumed task) were caught before release. Details in `KNOWN_DEFECTS.md`.
+No product defect is open. Product defects found and fixed so far: CLI outages without failover (D-004), orphaned processes after cancel (D-005), four code-index gaps (D-006); plus gate and environment issues D-001, D-002, D-003, D-007. Design gaps in the merge gate, in redaction and in protecting evaluation assets on Windows, an egress-proxy regression, a worker cancellation that left the job running, and a history race (a late save overwriting a resumed task) were caught before release. Details in `KNOWN_DEFECTS.md`.
 
 ## Readiness verdict
 
-**Not ready.** 83 of 96 system cases (counting Linux CI for the four OS-sandbox cases) and 1 of 10 end-to-end workflows pass. The cases that exist pass reliably; the gap is missing capability, not failing behavior.
+**Not ready.** 90 of 96 system cases (counting Linux CI for the six cases that need Landlock or Docker) and 1 of 10 end-to-end workflows pass. The cases that exist pass reliably; the gap is missing capability, not failing behavior.
 
 ## Verified status of the 12 systems
 
@@ -95,7 +99,7 @@ No product defect is open. Product defects found and fixed so far: CLI outages w
 | 8 Agent observability | 8 / 8 | **verified** (real adapters parsing each CLI's stream format, hub, history, redaction, tapes and replay; model output mock-only) | complete operation trace, invocation detail, usage fidelity, failure diagnostics, trace persistence, resume correlation, secret redaction, deterministic replay |
 | 9 Cost and performance optimization | 8 / 8 | **verified** (exact arithmetic against a hand-worked oracle; ledger, routing and attribution with mock usage) | price tables and cost, cache discounts, economy and quality routing, shared reservations, versioned prices, context warnings, usage attribution |
 | 10 Security and isolation | 8 / 8 on Linux CI (5 / 8 on Windows) | **verified** (real OS sandbox on Linux via Landlock; fermi's policy, approvals, environment allowlist and egress proxy on every platform) | forbidden reads, secret isolation, destructive-action gating, network restrictions, cross-task isolation, repository-injection resistance, scoped approvals, alternate-route denial |
-| 11 Local and remote execution | 1 / 8 | partly verified (mock-only model, real cargo test) | local execution |
+| 11 Local and remote execution | 8 / 8 on Linux CI (6 / 8 on Windows) | **verified** (real worker processes, a real worker in a Docker container, authenticated HTTP, process kills; model output from the fake CLI) | local execution, container equivalence, remote dispatch, desktop-independent jobs, connection recovery, worker death, remote cancellation, runtime compatibility |
 | 12 Evaluation and self-improvement | 8 / 8 | **verified** (real evaluator scoring with cargo on pristine copies, protected assets enforced by the OS, real dashboard API; the candidate models and the proposing agent are test doubles) | five-task smoke evaluation, cross-model reports, known failure detection, configuration comparison, reproducible setup, protected evaluation assets, dataset history, evaluated improvement proposals |
 | End-to-end workflows | 1 / 10 | partly verified | E2E-08 (task exceeding a budget); 6 partial, 3 missing |
 
@@ -114,3 +118,4 @@ No product defect is open. Product defects found and fixed so far: CLI outages w
 | 2026-10-24-d0302dc | `d0302dc`, clean | 54 / 54 deterministic, 57 / 106 on Windows, 60 with Linux CI; superseded by the plugin system |
 | 2026-10-24-f56fd58 | `f56fd58`, clean | 61 / 61 deterministic, 64 / 106 on Windows, 68 with Linux CI; superseded by evaluation |
 | 2026-10-24-c3b1f83 | `c3b1f83`, clean | 68 / 68 deterministic, 72 / 106 on Windows, 76 with Linux CI; superseded by browser control |
+| 2026-10-24-45735d6 | `45735d6`, clean | 76 / 76 deterministic, 80 / 106 on Windows, 84 with Linux CI; superseded by workers |

@@ -27,7 +27,7 @@ Status: **implemented** for the deterministic profile (T0–T2 without a browser
 | F-PROVIDER | `cost-cases.json`: a pinned price table and usage with costs worked out by hand (the CO-01 oracle, including zero tokens and rounding boundaries). Price tables, budgets and models for the other cost cases are declared in each test's config. |
 | F-MEMORY | `records.json`: ten decisions with sources, six paraphrase queries with the expected record, two contradictory notes. The two project scopes are separate F-CODE copies; the private record, planted comment, secret file and canaries are created by each test. |
 | F-SECURITY | built inline: canary files outside the task root, a synthetic controller secret, disposable sentinels, two task scopes, and real local endpoints (allowed and forbidden) for the network cases. |
-| F-WORKER | built inline in the tests as fake-CLI scenarios (outages, limits, crashes, barriers, children, scripted repairs, scripted usage including cached tokens). |
+| F-WORKER | built inline in the tests as fake-CLI scenarios (outages, limits, crashes, barriers, children, scripted repairs, scripted usage including cached tokens); for the execution cases, `src/workers.rs` starts `fermi worker` as its own process (the `fermi-worker` test binary) or in a Docker container (`ubuntu:24.04`, Linux CI), and a TCP proxy that refuses connections or loses answers. |
 | F-PLUGIN | `tests/fixtures/F-PLUGIN/`: eight sample plugins (manifests whose program is the harness's `fake-plugin`, an MCP server over stdio that can speak either protocol era, crash, hang, report tool errors, read files and play scripted adapter replies). |
 | F-EVAL | `tests/fixtures/F-EVAL/smoke`: dataset version 1, five small Rust crates with stubs, protected visible tests and hidden tests (score 5 each); `solutions/` holds the correct and the known-wrong implementations the fake candidate applies. |
 | F-WEB | `tests/fixtures/F-WEB/site`: eight small pages (home, a three-page tour, a form, an error page, a failing-data page, a responsive page and a delayed modal), served with a small API by `acceptance_tests::web_fixture` (`src/web.rs`) on a free port; the server keeps what it receives and a log of every request. |
@@ -51,6 +51,8 @@ crates/acceptance-tests/
   tests/evaluation.rs           # EV-01 … EV-08
   tests/browser.rs              # BA-01 … BA-08 (a headless Chromium-based browser; blocked where none is installed)
   src/web.rs                    # the F-WEB fixture server
+  src/workers.rs                # worker processes, Docker workers and an outage proxy (LR)
+  tests/execution.rs            # LR-01 … LR-08 (LR-02/03 need Docker; blocked where it is missing)
   tests/execution.rs            # LR-01
 xtask/src/main.rs               # acceptance runner
 tests/acceptance/systems.yaml   # registry of all 106 IDs, with test mappings and published status
@@ -106,4 +108,4 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 
 ## Next
 
-Build the missing systems in an agreed order, each with its eight cases. Done: project memory (System 4), the verification engine (System 5), the plugin system (System 7), agent observability (System 8), cost and performance (System 9, with AI-07 and E2E-08), security and isolation (System 10), evaluation (System 12) and browser control (System 6). Next suggested: local and remote execution (System 11), then the remaining gaps in Systems 1 to 3 and the end-to-end workflows. The OS sandbox (PL-07, SE-01/04/05) is Linux-only, so a Linux CI step runs the security profile for SE, MA, PL and EV; on Windows those four report blocked.
+Build the missing systems in an agreed order, each with its eight cases. Done: project memory (System 4), the verification engine (System 5), the plugin system (System 7), agent observability (System 8), cost and performance (System 9, with AI-07 and E2E-08), security and isolation (System 10), evaluation (System 12), browser control (System 6) and local and remote execution (System 11). Next suggested: the remaining gaps in Systems 1 to 3 (AI-04/06/08, MA-05, CI-04/06), then the end-to-end workflows. The OS sandbox (PL-07, SE-01/04/05) is Linux-only and the container cases (LR-02/03) need Docker, so Linux CI runs the security profile for SE, MA, PL, EV and LR and the live profile for the LR workers; on Windows those six report blocked.

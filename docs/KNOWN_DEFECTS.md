@@ -106,6 +106,14 @@ Found and fixed while writing the tests; listed so the history is complete.
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
 
+## Found while building System 11 (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Product defect, caught by LR-07 before release | cancelling a job on a worker stopped the job's own task, but the engine run it had started kept going: the agent's CLI and the processes under it lived on, and the job's folder couldn't be freed | the job's task owns its run and aborts it when dropped; the negative control (the guard removed) fails LR-07 |
+| Test harness, caught on Linux CI | LR-03 saved the worker's artifact manifest as evidence under the name `manifest.json`, overwriting the case's own evidence manifest, so the runner saw "an artifact changed after the test" (LR-03 is blocked on Windows, so only CI ran it) | the evidence is `worker-manifest.json`; `Case::text` now refuses the reserved names `manifest.json` and `result.json` |
+| Test implementation | the outage proxy counted submissions only on the first request of each connection, but the HTTP client reuses connections | it counts every request line |
+
 ## Found while building System 6 (no open defects)
 
 | Kind | Issue | Fix |

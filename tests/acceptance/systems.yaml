@@ -1474,13 +1474,13 @@ cases:
     action: "Execute same fixture in a container worker"
     expected: "Equivalent accepted result"
     evidence: "Container image digest results and equivalence comparison."
-    capability: missing
-    implementation: ""
-    auditNote: "No container workers."
+    capability: implemented
+    implementation: "crates/fermi-core/src/worker.rs, remote.rs, crates/fermi/src/worker_http.rs"
+    auditNote: "The same worker runs in a container (fermi worker in ubuntu:24.04); its result is applied and compared with a local run of the same fixture."
     testFile: crates/acceptance-tests/tests/execution.rs
     testName: lr_02_container_equivalence
     executionState: not_run
-    status: not_implemented
+    status: blocked
   - id: LR-03
     title: "Remote dispatch"
     system: local-and-remote-execution
@@ -1492,13 +1492,13 @@ cases:
     action: "Dispatch to a remote worker"
     expected: "Task executes and returns artifacts"
     evidence: "Dispatch acknowledgement worker identity and artifact checksums."
-    capability: missing
-    implementation: ""
-    auditNote: "No remote workers."
+    capability: implemented
+    implementation: "crates/fermi-core/src/remote.rs (Client, run)"
+    auditNote: "Tasks dispatch to a worker over authenticated HTTP: a handshake, an idempotent job, then artifacts downloaded and checked against the worker's checksums and the patch applied."
     testFile: crates/acceptance-tests/tests/execution.rs
     testName: lr_03_remote_dispatch
     executionState: not_run
-    status: not_implemented
+    status: blocked
   - id: LR-04
     title: "Desktop-independent jobs"
     system: local-and-remote-execution
@@ -1510,13 +1510,13 @@ cases:
     action: "Close desktop UI during an active persistent job"
     expected: "Job continues on its execution service"
     evidence: "Service events checkpoint and reconnected task view."
-    capability: missing
-    implementation: "crates/fermi-core/src/hub.rs"
-    auditNote: "Tasks run inside the UI process and are marked interrupted when it closes."
+    capability: implemented
+    implementation: "crates/fermi-core/src/hub.rs (shutdown, reattach), worker.rs"
+    auditNote: "Jobs run in the worker, not the window: closing it detaches, and the next window reattaches, catching up from the last event seen."
     testFile: crates/acceptance-tests/tests/execution.rs
     testName: lr_04_desktop_independent_jobs
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: LR-05
     title: "Connection recovery"
     system: local-and-remote-execution
@@ -1528,13 +1528,13 @@ cases:
     action: "Disconnect and reconnect to worker"
     expected: "Correct task state is restored"
     evidence: "Disconnect timeline service state and restored event sequence."
-    capability: partial
-    implementation: "crates/fermi/web/index.html (WebSocket reconnect), hub.rs (Scanner)"
-    auditNote: "Dashboard clients reconnect and re-sync from the shared history; no worker-side event log."
+    capability: implemented
+    implementation: "crates/fermi-core/src/remote.rs (follow)"
+    auditNote: "Events are numbered on the worker; a client that loses its connection waits (up to heartbeat_secs) and resumes after the last event it saw, without resubmitting."
     testFile: crates/acceptance-tests/tests/execution.rs
     testName: lr_05_connection_recovery
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: LR-06
     title: "Remote worker death"
     system: local-and-remote-execution
@@ -1546,13 +1546,13 @@ cases:
     action: "Kill remote worker unexpectedly"
     expected: "Task is marked interrupted and recovered according to retry policy"
     evidence: "Heartbeat events retry history and side-effect ledger."
-    capability: missing
-    implementation: ""
-    auditNote: "No remote workers or heartbeats beyond local stale detection."
+    capability: implemented
+    implementation: "crates/fermi-core/src/remote.rs (run, follow), worker.rs (Service::open)"
+    auditNote: "A worker silent past heartbeat_secs is lost: the attempt is interrupted and retried on the next worker, at most [remote] retries times; only a finished job's result is applied, and a restarted worker marks its lost jobs interrupted."
     testFile: crates/acceptance-tests/tests/execution.rs
     testName: lr_06_remote_worker_death
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: LR-07
     title: "Remote cancellation"
     system: local-and-remote-execution
@@ -1564,13 +1564,13 @@ cases:
     action: "Cancel a remote job"
     expected: "Running process stops and allocated resources are released"
     evidence: "Cancellation receipt process inventory and cleanup report."
-    capability: missing
-    implementation: ""
-    auditNote: "No remote cancellation."
+    capability: implemented
+    implementation: "crates/fermi-core/src/worker.rs (cancel), remote.rs (CancelOnDrop)"
+    auditNote: "Cancelling stops the job's run and every process it started and frees its folder; the controller keeps asking until the worker confirms, so lost acknowledgements are reconciled."
     testFile: crates/acceptance-tests/tests/execution.rs
     testName: lr_07_remote_cancellation
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: LR-08
     title: "Runtime compatibility"
     system: local-and-remote-execution
@@ -1582,13 +1582,13 @@ cases:
     action: "Run incompatible worker/runtime versions"
     expected: "Handshake rejects unsupported versions"
     evidence: "Handshake versions rejection diagnostics and dispatch count."
-    capability: missing
-    implementation: ""
-    auditNote: "No worker protocol versioning."
+    capability: implemented
+    implementation: "crates/fermi-core/src/worker.rs (PROTOCOL, admit), remote.rs (hello)"
+    auditNote: "Both sides check the worker protocol version before any job runs; incompatible workers and clients are refused with both versions named."
     testFile: crates/acceptance-tests/tests/execution.rs
     testName: lr_08_runtime_compatibility
-    executionState: not_run
-    status: not_implemented
+    executionState: completed
+    status: passed
   - id: EV-01
     title: "Five-task smoke evaluation"
     system: evaluation-and-self-improvement

@@ -2,7 +2,7 @@
 
 Phase 1 audit of fermi (called APEX in the spec) against `docs/FERMI_ADE_Verification_and_Acceptance_Testing`.
 
-Published run `2026-10-24-45735d6` on revision `45735d666886`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-24-45735d6/REPORT.md`.
+Published run `2026-10-25-82eae66` on revision `82eae663148c`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-25-82eae66/REPORT.md`.
 
 *Result* is the published acceptance outcome: `passed` or `failed` from an executed test with validated evidence; `not_implemented` when no test exists (usually because the capability is missing); `not_run` when a test exists but wasn't in the published run.
 *Capability* is an audit finding from reading the code; it is not verification.
@@ -23,10 +23,10 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | 8 Agent observability | 8 | 8 | 0 | 0 | 8 / 8 |
 | 9 Cost and performance optimization | 8 | 8 | 0 | 0 | 8 / 8 |
 | 10 Security and isolation | 8 | 8 | 0 | 0 | 5 / 8 |
-| 11 Local and remote execution | 8 | 1 | 1 | 6 | 1 / 8 |
+| 11 Local and remote execution | 8 | 8 | 0 | 0 | 6 / 8 |
 | 12 Evaluation and self-improvement | 8 | 8 | 0 | 0 | 8 / 8 |
 | End-to-end workflows | 10 | 1 | 6 | 3 | 1 / 10 |
-| **Total** | **106** | **82** | **10** | **14** | **80 / 106** |
+| **Total** | **106** | **89** | **9** | **8** | **85 / 106** |
 
 ## 1 Model-agnostic AI engine
 
@@ -163,13 +163,13 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | ID | Case | Tiers | Result | Test | Capability | Where | Audit note |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | LR-01 | Local execution | T1 T2 | **passed** | lr_01_local_execution | implemented | crates/fermi-core/src/engine.rs, hub.rs | Tasks run locally and record changed files and artifacts. |
-| LR-02 | Container equivalence | T1 T3 | **not_implemented** | — | missing | — | No container workers. |
-| LR-03 | Remote dispatch | T4 | **not_implemented** | — | missing | — | No remote workers. |
-| LR-04 | Desktop-independent jobs | T2 T4 | **not_implemented** | — | missing | crates/fermi-core/src/hub.rs | Tasks run inside the UI process and are marked interrupted when it closes. |
-| LR-05 | Connection recovery | T1 T4 | **not_implemented** | — | partial | crates/fermi/web/index.html (WebSocket reconnect), hub.rs (Scanner) | Dashboard clients reconnect and re-sync from the shared history; no worker-side event log. |
-| LR-06 | Remote worker death | T3 T4 | **not_implemented** | — | missing | — | No remote workers or heartbeats beyond local stale detection. |
-| LR-07 | Remote cancellation | T3 T4 | **not_implemented** | — | missing | — | No remote cancellation. |
-| LR-08 | Runtime compatibility | T0 T1 | **not_implemented** | — | missing | — | No worker protocol versioning. |
+| LR-02 | Container equivalence | T1 T3 | **blocked** | lr_02_container_equivalence | implemented | crates/fermi-core/src/worker.rs, remote.rs, crates/fermi/src/worker_http.rs | The same worker runs in a container (fermi worker in ubuntu:24.04); its result is applied and compared with a local run of the same fixture. |
+| LR-03 | Remote dispatch | T4 | **blocked** | lr_03_remote_dispatch | implemented | crates/fermi-core/src/remote.rs (Client, run) | Tasks dispatch to a worker over authenticated HTTP: a handshake, an idempotent job, then artifacts downloaded and checked against the worker's checksums and the patch applied. |
+| LR-04 | Desktop-independent jobs | T2 T4 | **passed** | lr_04_desktop_independent_jobs | implemented | crates/fermi-core/src/hub.rs (shutdown, reattach), worker.rs | Jobs run in the worker, not the window: closing it detaches, and the next window reattaches, catching up from the last event seen. |
+| LR-05 | Connection recovery | T1 T4 | **passed** | lr_05_connection_recovery | implemented | crates/fermi-core/src/remote.rs (follow) | Events are numbered on the worker; a client that loses its connection waits (up to heartbeat_secs) and resumes after the last event it saw, without resubmitting. |
+| LR-06 | Remote worker death | T3 T4 | **passed** | lr_06_remote_worker_death | implemented | crates/fermi-core/src/remote.rs (run, follow), worker.rs (Service::open) | A worker silent past heartbeat_secs is lost: the attempt is interrupted and retried on the next worker, at most [remote] retries times; only a finished job's result is applied, and a restarted worker marks its lost jobs interrupted. |
+| LR-07 | Remote cancellation | T3 T4 | **passed** | lr_07_remote_cancellation | implemented | crates/fermi-core/src/worker.rs (cancel), remote.rs (CancelOnDrop) | Cancelling stops the job's run and every process it started and frees its folder; the controller keeps asking until the worker confirms, so lost acknowledgements are reconciled. |
+| LR-08 | Runtime compatibility | T0 T1 | **passed** | lr_08_runtime_compatibility | implemented | crates/fermi-core/src/worker.rs (PROTOCOL, admit), remote.rs (hello) | Both sides check the worker protocol version before any job runs; incompatible workers and clients are refused with both versions named. |
 
 ## 12 Evaluation and self-improvement
 

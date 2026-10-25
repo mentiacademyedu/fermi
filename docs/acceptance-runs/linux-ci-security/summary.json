@@ -9,7 +9,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 264,
+      "durationMs": 393,
       "id": "MA-06",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -23,7 +23,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 417,
+      "durationMs": 499,
       "id": "MA-07",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -37,7 +37,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3296,
+      "durationMs": 3394,
       "id": "PL-04",
       "status": "passed",
       "system": "composable-harness-and-plugins"
@@ -51,7 +51,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 195,
+      "durationMs": 294,
       "id": "PL-07",
       "status": "passed",
       "system": "composable-harness-and-plugins"
@@ -65,7 +65,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 238,
+      "durationMs": 327,
       "id": "SE-01",
       "status": "passed",
       "system": "security-and-isolation"
@@ -79,7 +79,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 241,
+      "durationMs": 325,
       "id": "SE-02",
       "status": "passed",
       "system": "security-and-isolation"
@@ -93,7 +93,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 281,
+      "durationMs": 395,
       "id": "SE-03",
       "status": "passed",
       "system": "security-and-isolation"
@@ -107,7 +107,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 229,
+      "durationMs": 323,
       "id": "SE-04",
       "status": "passed",
       "system": "security-and-isolation"
@@ -121,7 +121,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 277,
+      "durationMs": 369,
       "id": "SE-05",
       "status": "passed",
       "system": "security-and-isolation"
@@ -135,7 +135,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 321,
+      "durationMs": 375,
       "id": "SE-06",
       "status": "passed",
       "system": "security-and-isolation"
@@ -149,7 +149,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 200,
+      "durationMs": 286,
       "id": "SE-07",
       "status": "passed",
       "system": "security-and-isolation"
@@ -163,7 +163,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1324,
+      "durationMs": 2501,
       "id": "SE-08",
       "status": "passed",
       "system": "security-and-isolation"
@@ -177,15 +177,57 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1405,
+      "durationMs": 5350,
+      "id": "LR-02",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 6128,
+      "id": "LR-06",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2184,
+      "id": "LR-07",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1835,
       "id": "EV-06",
       "status": "passed",
       "system": "evaluation-and-self-improvement"
     }
   ],
-  "commitSha": "45735d666886b336bfec77ca626118dcc47fd282",
+  "commitSha": "82eae663148c842f48cf65e21309ad9105ac3c88",
   "dirtyTree": false,
   "os": "linux",
   "profile": "security",
-  "runId": "ci-40143590237-1-security"
+  "runId": "ci-40147627496-1-security"
 }
