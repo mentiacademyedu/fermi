@@ -95,7 +95,8 @@ pub async fn until(timeout: Duration, mut f: impl FnMut() -> bool) -> bool {
 // ── a proxy that can lose the connection ────────────────────────────────────
 
 pub const PASS: u8 = 0;
-/// Accepts and closes at once: the worker looks unreachable.
+/// Accepts and closes at once, and stops forwarding on connections already
+/// open: the worker looks unreachable.
 pub const REFUSE: u8 = 1;
 /// Forwards the request, then closes without the answer: a lost acknowledgement.
 pub const DROP_ANSWERS: u8 = 2;
@@ -147,6 +148,10 @@ pub async fn proxy(target: &str) -> Proxy {
                             Ok(0) | Err(_) => break,
                             Ok(n) => n,
                         };
+                        // A cut severs open connections too (a pooled one, or a request in flight).
+                        if m.load(Ordering::SeqCst) == REFUSE {
+                            break;
+                        }
                         // A connection may carry several requests: count each request line.
                         let text = String::from_utf8_lossy(&buf[..n]);
                         for line in text.lines().filter(|l| l.starts_with("POST /v1/jobs") && l.ends_with("HTTP/1.1")) {
@@ -168,8 +173,10 @@ pub async fn proxy(target: &str) -> Proxy {
                             Ok(0) | Err(_) => break,
                             Ok(n) => n,
                         };
-                        if m.load(Ordering::SeqCst) == DROP_ANSWERS {
-                            break; // the worker answered; the client never hears it
+                        match m.load(Ordering::SeqCst) {
+                            DROP_ANSWERS => break, // the worker answered; the client never hears it
+                            REFUSE => break,       // the connection was cut meanwhile
+                            _ => {}
                         }
                         if cw.write_all(&buf[..n]).await.is_err() {
                             break;
