@@ -21,6 +21,7 @@ pub mod plugins;
 pub mod policy;
 pub mod providers;
 pub mod redact;
+pub mod remote;
 pub mod router;
 pub mod sandbox;
 pub mod sessions;
@@ -29,6 +30,7 @@ pub mod team;
 pub mod trace;
 pub mod util;
 pub mod verify;
+pub mod worker;
 
 pub use config::{Account, Auth, Config, Mode, Profile, Provider};
 pub use engine::{Engine, Outcome, Task};

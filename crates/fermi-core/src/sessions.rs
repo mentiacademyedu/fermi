@@ -652,6 +652,7 @@ pub fn to_rec(engine: &Engine, found: &Found, id: u64) -> Result<TaskRec> {
         events,
         attempt: 1,
         stamps: vec![],
+        remote: None,
     })
 }
 

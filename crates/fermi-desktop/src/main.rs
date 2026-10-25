@@ -34,9 +34,10 @@ fn main() {
 
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
-            // Stop running tasks (and their CLI processes) with the window.
+            // Stop local tasks (and their CLI processes) with the window; tasks on
+            // workers keep running there and the next window picks them up.
             if let Some(hub) = handle.try_state::<Arc<Hub>>() {
-                hub.cancel_all();
+                hub.shutdown();
             }
         }
     });

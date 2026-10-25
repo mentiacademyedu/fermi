@@ -8,6 +8,7 @@
 //!   committed with fixed dates, so every run starts from the same commit.
 
 pub mod web;
+pub mod workers;
 pub use web::{web_fixture, Web};
 
 use anyhow::{bail, Context, Result};
@@ -152,6 +153,11 @@ impl Case {
     }
 
     pub fn text(&mut self, name: &str, s: &str) {
+        // The case's own evidence files: an artifact must never overwrite them.
+        assert!(
+            !matches!(name, "manifest.json" | "result.json"),
+            "{name} is reserved for the case's evidence; name the artifact differently"
+        );
         let p = self.dir.join(name);
         if let Some(d) = p.parent() {
             let _ = std::fs::create_dir_all(d);
@@ -377,7 +383,7 @@ pub fn fermi_bridge() -> PathBuf {
     sibling("fermi-bridge")
 }
 
-fn sibling(bin: &str) -> PathBuf {
+pub(crate) fn sibling(bin: &str) -> PathBuf {
     let exe = std::env::current_exe().expect("test binary path");
     let name = format!("{bin}{}", std::env::consts::EXE_SUFFIX);
     exe.ancestors()
@@ -515,6 +521,34 @@ pub fn alive(pid: u32) -> bool {
         // A zombie (exited, not yet reaped) isn't running.
         std::fs::read_to_string(format!("/proc/{pid}/stat"))
             .is_ok_and(|st| st.rsplit(')').next().is_some_and(|rest| !rest.trim_start().starts_with('Z')))
+    }
+}
+
+/// Kills a process and every process under it.
+pub fn kill_tree(pid: u32) {
+    #[cfg(windows)]
+    let _ = std::process::Command::new("taskkill").args(["/T", "/F", "/PID", &pid.to_string()]).output();
+    #[cfg(not(windows))]
+    {
+        // Children first found through /proc (they may lead their own process groups).
+        fn children(pid: u32) -> Vec<u32> {
+            let mut out = vec![];
+            for e in std::fs::read_dir("/proc").into_iter().flatten().filter_map(|e| e.ok()) {
+                let Ok(p) = e.file_name().to_string_lossy().parse::<u32>() else { continue };
+                let stat = std::fs::read_to_string(format!("/proc/{p}/stat")).unwrap_or_default();
+                let ppid = stat.rsplit(')').next().and_then(|r| r.split_whitespace().nth(1)).and_then(|x| x.parse::<u32>().ok());
+                if ppid == Some(pid) {
+                    out.push(p);
+                    out.extend(children(p));
+                }
+            }
+            out
+        }
+        let all = children(pid);
+        let _ = std::process::Command::new("kill").args(["-9", &pid.to_string()]).output();
+        for c in all {
+            let _ = std::process::Command::new("kill").args(["-9", &c.to_string()]).output();
+        }
     }
 }
 

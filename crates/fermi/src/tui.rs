@@ -225,6 +225,8 @@ fn push_event(t: &mut TaskView, ev: Event) {
             t.lines.push((Kind::Bad, format!("  ✗ {status}{} {first}", code.map(|c| format!(" ({c})")).unwrap_or_default())))
         }
         Event::ToolResult { .. } | Event::Call { .. } => {}
+        Event::Remote { worker, job, seq: 0 } => t.lines.push((Kind::Meta, format!("▸ on worker {worker} (job {job})"))),
+        Event::Remote { .. } => {}
         Event::Limit { account, utilization, blocked, .. } => {
             if blocked {
                 t.lines.push((Kind::Warn, format!("! {account} is rate limited")));

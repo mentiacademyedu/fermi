@@ -154,6 +154,10 @@ pub struct Profile {
     /// How auto mode orders models: by task fit (auto), cost (economy) or declared quality (quality).
     #[serde(default)]
     pub routing: Routing,
+    /// Run this profile's tasks on these workers (`[[workers]]` names), the
+    /// first first; a retry after a worker is lost goes to the next.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub workers: Vec<String>,
 }
 
 /// Model ordering policy for a profile (see `router::policy`).
@@ -219,6 +223,42 @@ pub struct Config {
     pub plugins: PluginsCfg,
     #[serde(default)]
     pub browser: BrowserCfg,
+    /// Execution services that run tasks away from this process (see `remote`).
+    #[serde(default)]
+    pub workers: Vec<WorkerCfg>,
+    #[serde(default)]
+    pub remote: RemoteCfg,
+}
+
+/// A worker: `fermi worker` running here, in a container or on another machine.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct WorkerCfg {
+    pub name: String,
+    /// e.g. `http://build-box:8787`
+    pub url: String,
+    /// The token it was started with, or the variable that holds it.
+    #[serde(default)]
+    pub token: Option<String>,
+    #[serde(default)]
+    pub token_env: Option<String>,
+}
+
+impl WorkerCfg {
+    pub fn token(&self) -> String {
+        self.token.clone().or_else(|| self.token_env.as_deref().and_then(|v| std::env::var(v).ok())).unwrap_or_default()
+    }
+}
+
+/// How fermi follows tasks on workers.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct RemoteCfg {
+    /// A worker unreachable this long (seconds, default 30) is taken for lost:
+    /// the attempt is interrupted and retried. Shorter outages are waited out.
+    #[serde(default)]
+    pub heartbeat_secs: Option<u64>,
+    /// Retries after a lost worker (default 1).
+    #[serde(default)]
+    pub retries: Option<u32>,
 }
 
 /// The browser agents drive (see `browser`).
@@ -432,6 +472,7 @@ impl Config {
                 gemini_args: vec![],
                 budget: None,
                 routing: Routing::Auto,
+                workers: vec![],
             });
         }
         bail!("no profile matches {} and no default_profile is set (use -p <profile>)", cwd.display())

@@ -1477,8 +1477,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No container workers."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/execution.rs
+    testName: lr_02_container_equivalence
     executionState: not_run
     status: not_implemented
   - id: LR-03
@@ -1495,8 +1495,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No remote workers."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/execution.rs
+    testName: lr_03_remote_dispatch
     executionState: not_run
     status: not_implemented
   - id: LR-04
@@ -1513,8 +1513,8 @@ cases:
     capability: missing
     implementation: "crates/fermi-core/src/hub.rs"
     auditNote: "Tasks run inside the UI process and are marked interrupted when it closes."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/execution.rs
+    testName: lr_04_desktop_independent_jobs
     executionState: not_run
     status: not_implemented
   - id: LR-05
@@ -1531,8 +1531,8 @@ cases:
     capability: partial
     implementation: "crates/fermi/web/index.html (WebSocket reconnect), hub.rs (Scanner)"
     auditNote: "Dashboard clients reconnect and re-sync from the shared history; no worker-side event log."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/execution.rs
+    testName: lr_05_connection_recovery
     executionState: not_run
     status: not_implemented
   - id: LR-06
@@ -1549,8 +1549,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No remote workers or heartbeats beyond local stale detection."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/execution.rs
+    testName: lr_06_remote_worker_death
     executionState: not_run
     status: not_implemented
   - id: LR-07
@@ -1567,8 +1567,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No remote cancellation."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/execution.rs
+    testName: lr_07_remote_cancellation
     executionState: not_run
     status: not_implemented
   - id: LR-08
@@ -1585,8 +1585,8 @@ cases:
     capability: missing
     implementation: ""
     auditNote: "No worker protocol versioning."
-    testFile: null
-    testName: null
+    testFile: crates/acceptance-tests/tests/execution.rs
+    testName: lr_08_runtime_compatibility
     executionState: not_run
     status: not_implemented
   - id: EV-01
