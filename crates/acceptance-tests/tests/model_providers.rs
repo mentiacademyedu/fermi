@@ -1,6 +1,7 @@
 //! System 1: model-agnostic AI engine, with deterministic fake CLIs.
 
 use acceptance_tests::{account, fixture, repo_root, wait_task, Case, Fermi};
+use fermi_core::engine::Task;
 use fermi_core::events::Event;
 use fermi_core::hub::{FollowUp, TaskStatus};
 use serde_json::{json, Value};
@@ -23,6 +24,7 @@ fn kinds(events: &[Event]) -> Vec<&'static str> {
             Event::Remote { .. } => "remote",
             Event::Limit { .. } => "limit",
             Event::Failover { .. } => "failover",
+            Event::Retry { .. } => "retry",
             Event::Blocked { .. } => "blocked",
             Event::Artifact { .. } => "artifact",
             Event::Log { .. } => "log",
@@ -291,5 +293,258 @@ async fn ai_05_provider_outage_handling() {
         "Failover event names the failed account",
     );
     c.check("onlyPermittedProvider", f.calls("z").is_empty(), "the account outside the profile was never called");
+    c.finish();
+}
+
+/// Runs a task on an engine, returning the result and every event.
+async fn run_collect(
+    engine: &fermi_core::Engine,
+    task: &fermi_core::engine::Task,
+) -> (anyhow::Result<fermi_core::engine::Outcome>, Vec<Event>) {
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+    let r = engine.run(task, &tx).await;
+    drop(tx);
+    let mut ev = vec![];
+    while let Some(e) = rx.recv().await {
+        ev.push(e);
+    }
+    (r, ev)
+}
+
+/// An engine whose one account calls the HTTP API at `base` (no key: a mock),
+/// with a three-attempt retry ceiling and a manual clock.
+fn api_engine(c: &Case, name: &str, base: &str, clock: &fermi_core::clock::Clock) -> fermi_core::Engine {
+    let home = c.work.join(name);
+    std::fs::create_dir_all(&home).unwrap();
+    let cfg = format!(
+        "default_profile = \"p\"\n\n[retry]\nattempts = 3\nbackoff_secs = 1\nmax_wait_secs = 60\n\n\
+         [[accounts]]\nid = \"api\"\nprovider = \"claude\"\nauth = \"api\"\nbase_url = \"{base}\"\n\n\
+         [[profiles]]\nname = \"p\"\naccounts = [\"api\"]\nmode = \"single\"\nmodels = [\"claude:sonnet\"]\n"
+    );
+    std::fs::write(home.join("config.toml"), &cfg).unwrap();
+    let mut e = fermi_core::Engine::new(fermi_core::config::Config::parse(&cfg).unwrap(), home, 0);
+    e.clock = clock.clone();
+    e
+}
+
+fn retries(ev: &[Event]) -> Vec<(u32, u64)> {
+    ev.iter()
+        .filter_map(|e| match e {
+            Event::Retry { attempt, wait_secs, .. } => Some((*attempt, *wait_secs)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ai_04_rate_limit_handling() {
+    use acceptance_tests::provider::{messages_ok, mock_api, rate_limited};
+    use fermi_core::clock::Clock;
+    let mut c = Case::start("AI-04", "T1");
+    c.real(&["fermi engine retry policy", "Anthropic Messages adapter (HTTP)", "HTTP client"]);
+    c.mocked(&["provider API (F-PROVIDER mock endpoint answering scripted 429s)", "time (a manual clock: waits advance it)"]);
+
+    // Recoverable: a 429 without Retry-After (back off 1s), one asking for 2s, then an answer.
+    let clock = Clock::manual();
+    let api = mock_api(vec![rate_limited(None), rate_limited(Some(2)), messages_ok("Recovered.")], Some(clock.clone())).await;
+    let e = api_engine(&c, "recoverable", &api.base, &clock);
+    let (r, ev) = run_collect(&e, &Task::new("Say something.", &c.work)).await;
+    let reqs = api.requests();
+    let at: Vec<u64> = reqs.iter().map(|q| q["at"].as_u64().unwrap()).collect();
+    c.json("recoverable-attempts.json", &json!({ "requests": reqs, "sleeps": clock.sleeps(), "events": ev }));
+    c.check(
+        "recoversWithinCeiling",
+        r.as_ref().is_ok_and(|o| o.text == "Recovered.") && reqs.len() == 3,
+        format!("{} requests; result {:?}", reqs.len(), r.as_ref().map(|o| o.text.clone()).map_err(|e| e.to_string())),
+    );
+    c.check(
+        "attemptTimesObeyPolicy",
+        at == [0, 1, 3] && clock.sleeps() == [1, 2] && retries(&ev) == [(2, 1), (3, 2)],
+        format!("attempts at t={at:?}s (backoff 1s, then Retry-After 2s); waits {:?}; retry events {:?}", clock.sleeps(), retries(&ev)),
+    );
+
+    // Exhausted: every call is limited; a fourth answer is ready but must never be asked for.
+    let clock = Clock::manual();
+    let api = mock_api(
+        vec![rate_limited(Some(30)), rate_limited(Some(30)), rate_limited(Some(30)), messages_ok("Too late.")],
+        Some(clock.clone()),
+    )
+    .await;
+    let e = api_engine(&c, "exhausted", &api.base, &clock);
+    let (r, ev) = run_collect(&e, &Task::new("Say something.", &c.work)).await;
+    let after_first = api.requests().len();
+    // The next task doesn't start another retry loop: the account is marked limited (for the 30s asked).
+    let (r2, ev2) = run_collect(&e, &Task::new("Say something else.", &c.work)).await;
+    let reqs = api.requests();
+    c.json("exhausted-attempts.json", &json!({ "requests": reqs, "sleeps": clock.sleeps(), "events": ev, "next_task_events": ev2 }));
+    let err = r.as_ref().err().map(|e| e.to_string()).unwrap_or_default();
+    c.check(
+        "attemptsNeverExceedCeiling",
+        after_first == 3 && api.left() == 1 && clock.sleeps() == [30, 30] && retries(&ev) == [(2, 30), (3, 30)],
+        format!("{after_first} requests, {} scripted answer(s) unused, waits {:?}", api.left(), clock.sleeps()),
+    );
+    let done_fail = ev.iter().filter(|e| matches!(e, Event::Done { ok: false, .. })).count() == 1;
+    c.check("terminalFailure", r.is_err() && err.contains("3 attempts") && done_fail, format!("error: {err}"));
+    c.check(
+        "noRetryLoop",
+        r2.is_err() && reqs.len() == 3 && retries(&ev2).is_empty(),
+        format!("next task: {:?}; requests still {}", r2.err().map(|e| e.to_string()), reqs.len()),
+    );
+
+    // A Retry-After past max_wait_secs isn't waited out.
+    let clock = Clock::manual();
+    let api = mock_api(vec![rate_limited(Some(3600)), messages_ok("Never.")], Some(clock.clone())).await;
+    let e = api_engine(&c, "long-wait", &api.base, &clock);
+    let (r, ev) = run_collect(&e, &Task::new("Say something.", &c.work)).await;
+    c.json("long-wait.json", &json!({ "requests": api.requests(), "sleeps": clock.sleeps(), "events": ev }));
+    c.check(
+        "longWaitNotTaken",
+        api.requests().len() == 1 && clock.sleeps().is_empty() && r.as_ref().is_err_and(|e| e.to_string().contains("max_wait_secs")),
+        format!("{:?}", r.err().map(|e| e.to_string())),
+    );
+    c.finish();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ai_06_capability_validation() {
+    let mut c = Case::start("AI-06", "T1");
+    c.real(&["fermi config validation", "fermi engine routing", "claude CLI adapter"]);
+    c.mocked(&["Claude Code CLI (fake-cli)"]);
+    // T0: a profile that needs tools but only has a model that can't call them is rejected.
+    let model = "[[models]]\nid = \"claude:haiku\"\ncaps = [\"code\", \"general\", \"fast\"]\ntier = 1\ncli = \"haiku\"\ntools = false\n";
+    let profile = |models: &str| {
+        format!("[[accounts]]\nid = \"cl\"\nprovider = \"claude\"\n\n[[profiles]]\nname = \"p\"\naccounts = [\"cl\"]\nmode = \"pinned\"\nmodels = [{models}]\nrequire_tools = true\n\n{model}")
+    };
+    let bad = fermi_core::config::Config::parse(&profile("\"claude:haiku\""));
+    let good = fermi_core::config::Config::parse(&profile("\"claude:haiku\", \"claude:sonnet\""));
+    c.json(
+        "config-validation.json",
+        &json!({ "only_haiku": bad.as_ref().err().map(|e| e.to_string()), "haiku_and_sonnet_ok": good.is_ok() }),
+    );
+    c.check(
+        "configurationRejected",
+        bad.as_ref().is_err_and(|e| e.to_string().contains("tool calling")) && good.is_ok(),
+        format!("{:?}", bad.err().map(|e| e.to_string())),
+    );
+
+    let step = json!({ "text": "Fixed.", "tools": [{ "name": "Edit", "input": { "file_path": "README.md" } }] });
+    let f = Fermi::new(&c, &[account("cl", "claude", vec![step.clone(), step.clone(), step])], &format!("\n{model}")).unwrap();
+    let prompt = "Fix the typo in README.md";
+    // Control: without the need for tools, auto routing picks the light model.
+    let (r0, ev0) = run_collect(&f.engine, &f.task(prompt, &c.work)).await;
+    let routed = |ev: &[Event]| {
+        ev.iter().find_map(|e| match e {
+            Event::Routed { model, .. } => Some(model.clone()),
+            _ => None,
+        })
+    };
+    c.check(
+        "controlPicksModelWithoutTools",
+        r0.is_ok() && routed(&ev0).as_deref() == Some("claude:haiku"),
+        format!("without tools: {:?}", routed(&ev0)),
+    );
+    // Forced onto the model that can't call tools: rejected before dispatch.
+    let calls_before = f.calls("cl").len();
+    let mut forced = f.task(prompt, &c.work);
+    forced.tools = true;
+    forced.model = Some("claude:haiku".into());
+    let (r1, ev1) = run_collect(&f.engine, &forced).await;
+    let calls_after = f.calls("cl").len();
+    c.json("rejected-events.json", &serde_json::to_value(&ev1).unwrap());
+    c.check(
+        "rejectedBeforeDispatch",
+        r1.as_ref().is_err_and(|e| e.to_string().contains("can't call tools")) && calls_after == calls_before,
+        format!("{:?}; CLI calls {calls_before} -> {calls_after}", r1.as_ref().err().map(|e| e.to_string())),
+    );
+    c.check(
+        "noFabricatedToolResult",
+        !ev1.iter().any(|e| matches!(e, Event::Tool { .. } | Event::ToolResult { .. } | Event::Text { .. } | Event::Routed { .. })),
+        format!("events of the rejected task: {:?}", kinds(&ev1)),
+    );
+    // Routed automatically: the documented alternative, a model that can call tools, and the skip is shown.
+    let mut auto = f.task(prompt, &c.work);
+    auto.tools = true;
+    let (r2, ev2) = run_collect(&f.engine, &auto).await;
+    c.json("alternative-events.json", &serde_json::to_value(&ev2).unwrap());
+    c.json("calls.json", &json!(f.calls("cl")));
+    let chosen = routed(&ev2).unwrap_or_default();
+    let spec = f.engine.catalog.iter().find(|m| m.id == chosen);
+    let last_args = f.calls("cl").last().map(|c| c["args"].to_string()).unwrap_or_default();
+    c.check(
+        "alternativeUsedAndObservable",
+        r2.is_ok()
+            && spec.is_some_and(|m| m.tool_calling())
+            && chosen != "claude:haiku"
+            && !last_args.contains("\"haiku\"")
+            && ev2.iter().any(|e| matches!(e, Event::Log { line } if line.contains("skipped claude:haiku"))),
+        format!("routed to {chosen}; CLI args {last_args}"),
+    );
+    c.finish();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ai_08_local_endpoint_support() {
+    use acceptance_tests::provider::{chat_ok, egress_recorder, mock_api};
+    let mut c = Case::start("AI-08", "T1");
+    c.real(&["fermi engine in its own process", "OpenAI-compatible chat completions adapter (HTTP)", "config loading"]);
+    c.mocked(&["local model server (F-PROVIDER mock endpoint speaking chat completions)"]);
+    let local = mock_api(vec![chat_ok("Hello from the local model.")], None).await;
+    let egress = egress_recorder().await;
+    let home = c.work.join("fermi-home");
+    std::fs::create_dir_all(&home).unwrap();
+    // The only account is the local endpoint: no hosted account, no key.
+    let cfg = format!(
+        "default_profile = \"local\"\n\n[[accounts]]\nid = \"local\"\nprovider = \"openai\"\nauth = \"api\"\nbase_url = \"{}/v1\"\napi_format = \"chat\"\n\n\
+         [[models]]\nid = \"openai:qwen-local\"\nlabel = \"Qwen 2.5 Coder (local)\"\ncaps = [\"code\", \"general\"]\napi = \"qwen2.5-coder\"\ntools = false\n\n\
+         [[profiles]]\nname = \"local\"\naccounts = [\"local\"]\nmode = \"single\"\nmodels = [\"openai:qwen-local\"]\n",
+        local.base
+    );
+    std::fs::write(home.join("config.toml"), &cfg).unwrap();
+    c.text("config.toml", &cfg);
+    let mut cmd = std::process::Command::new(acceptance_tests::fermi_run());
+    cmd.args(["--profile", "local", "--cwd"]).arg(&c.work).arg("Say hello.").env("FERMI_HOME", &home);
+    // No hosted credentials, and anything bound outside goes through the recorder.
+    for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "NO_PROXY", "no_proxy"] {
+        cmd.env_remove(k);
+    }
+    for k in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"] {
+        cmd.env(k, &egress.url);
+    }
+    cmd.env("NO_PROXY", "127.0.0.1,localhost");
+    let out = tokio::task::spawn_blocking(move || cmd.output().unwrap()).await.unwrap();
+    let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+    c.text("fermi-run.jsonl", &stdout);
+    c.text("fermi-run.stderr.txt", &String::from_utf8_lossy(&out.stderr));
+    let lines: Vec<Value> = stdout.lines().filter_map(|l| serde_json::from_str(l).ok()).collect();
+    let outcome = lines.iter().find_map(|l| l.get("outcome")).cloned().unwrap_or(Value::Null);
+    let reqs = local.requests();
+    let outside = egress.log.lock().unwrap().clone();
+    c.json("endpoint-log.json", &json!(reqs));
+    c.json("outbound-records.json", &json!({ "through_proxy": outside }));
+    c.check(
+        "normalizedResult",
+        out.status.success()
+            && outcome["text"] == "Hello from the local model."
+            && outcome["account"] == "local"
+            && outcome["model"] == "openai:qwen-local"
+            && outcome["input"] == 21
+            && outcome["output"] == 9
+            && lines.iter().any(|l| l["type"] == "text")
+            && lines.iter().any(|l| l["type"] == "done" && l["ok"] == true),
+        format!("outcome {outcome}"),
+    );
+    c.check(
+        "endpointCalled",
+        reqs.len() == 1
+            && reqs[0]["path"] == "/v1/chat/completions"
+            && reqs[0]["body"]["model"] == "qwen2.5-coder"
+            && reqs[0]["body"]["messages"][0]["content"].as_str().is_some_and(|s| s.contains("Say hello.")),
+        format!("{} request(s): {:?}", reqs.len(), reqs.first().map(|r| (&r["method"], &r["path"]))),
+    );
+    c.check(
+        "noHostedAccountOrRequest",
+        reqs[0]["credentials"] == json!([]) && outside.is_empty() && !cfg.contains("api_key_env"),
+        format!("credentials sent: {}; requests through the outbound recorder: {outside:?}", reqs[0]["credentials"]),
+    );
     c.finish();
 }

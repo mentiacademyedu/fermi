@@ -19,8 +19,18 @@ pub(crate) fn api_key(a: &Account) -> Result<String> {
     std::env::var(var).with_context(|| format!("env var {var} is not set (account `{}`)", a.id))
 }
 
+/// The key, if the account has one: a local endpoint (base_url, no api_key_env) needs none.
+fn key_if_any(a: &Account) -> Result<Option<String>> {
+    match (&a.api_key_env, &a.base_url) {
+        (None, Some(_)) => Ok(None),
+        _ => api_key(a).map(Some),
+    }
+}
+
+/// The base URL without a trailing `/v1`, which the paths below add.
 pub(crate) fn base(a: &Account, default: &str) -> String {
-    a.base_url.as_deref().unwrap_or(default).trim_end_matches('/').to_string()
+    let b = a.base_url.as_deref().unwrap_or(default).trim_end_matches('/');
+    b.strip_suffix("/v1").unwrap_or(b).to_string()
 }
 
 /// Sends a request; maps 429 to Limited and other failures to Failed.
@@ -28,8 +38,10 @@ pub(crate) async fn send(req: reqwest::RequestBuilder) -> Result<std::result::Re
     let resp = req.send().await?;
     let status = resp.status();
     if status.as_u16() == 429 {
-        let retry = resp.headers().get("retry-after").and_then(|h| h.to_str().ok()).and_then(|s| s.parse::<u64>().ok()).map(|s| now() + s);
-        return Ok(Err(RunResult::limited(retry)));
+        let secs = resp.headers().get("retry-after").and_then(|h| h.to_str().ok()).and_then(|s| s.trim().parse::<u64>().ok());
+        let mut r = RunResult::limited(secs.map(|s| now() + s));
+        r.retry_in = Some(secs.unwrap_or(0));
+        return Ok(Err(r));
     }
     let body = resp.text().await?;
     if !status.is_success() {
@@ -46,14 +58,17 @@ fn api_model<'a>(ctx: &'a RunCtx<'_>) -> Result<&'a str> {
 }
 
 pub async fn anthropic(ctx: &RunCtx<'_>) -> Result<RunResult> {
-    let key = api_key(ctx.account)?;
+    let key = key_if_any(ctx.account)?;
     let url = format!("{}/v1/messages", base(ctx.account, "https://api.anthropic.com"));
     let body = json!({
         "model": api_model(ctx)?,
         "max_tokens": 16000,
         "messages": [{ "role": "user", "content": ctx.task.input() }],
     });
-    let req = http().post(url).header("x-api-key", key).header("anthropic-version", "2023-06-01").json(&body);
+    let mut req = http().post(url).header("anthropic-version", "2023-06-01").json(&body);
+    if let Some(k) = key {
+        req = req.header("x-api-key", k);
+    }
     let v = match send(req).await? {
         Ok(v) => v,
         Err(r) => return Ok(r),
@@ -89,13 +104,20 @@ pub async fn anthropic(ctx: &RunCtx<'_>) -> Result<RunResult> {
 }
 
 pub async fn openai(ctx: &RunCtx<'_>) -> Result<RunResult> {
-    let key = api_key(ctx.account)?;
+    if ctx.account.api_format == Some(crate::config::ApiFormat::Chat) {
+        return chat(ctx).await;
+    }
+    let key = key_if_any(ctx.account)?;
     let url = format!("{}/v1/responses", base(ctx.account, "https://api.openai.com"));
     let mut body = json!({ "model": api_model(ctx)?, "input": ctx.task.input() });
     if let Some(e) = ctx.effort() {
         body["reasoning"] = json!({ "effort": e });
     }
-    let v = match send(http().post(url).bearer_auth(key).json(&body)).await? {
+    let mut req = http().post(url).json(&body);
+    if let Some(k) = key {
+        req = req.bearer_auth(k);
+    }
+    let v = match send(req).await? {
         Ok(v) => v,
         Err(r) => return Ok(r),
     };
@@ -116,6 +138,42 @@ pub async fn openai(ctx: &RunCtx<'_>) -> Result<RunResult> {
         output: u["output_tokens"].as_u64().unwrap_or(0),
         reported: Usage::present(u, &[("input_tokens", Usage::INPUT), ("output_tokens", Usage::OUTPUT)])
             | Usage::present(&u["input_tokens_details"], &[("cached_tokens", Usage::CACHED)]),
+        ..Default::default()
+    };
+    Ok(RunResult::ok(text, usage))
+}
+
+/// OpenAI-compatible chat completions, the API local model servers offer.
+async fn chat(ctx: &RunCtx<'_>) -> Result<RunResult> {
+    let key = key_if_any(ctx.account)?;
+    let url = format!("{}/v1/chat/completions", base(ctx.account, "https://api.openai.com"));
+    let body = json!({
+        "model": api_model(ctx)?,
+        "messages": [{ "role": "user", "content": ctx.task.input() }],
+        "stream": false,
+    });
+    let mut req = http().post(url).json(&body);
+    if let Some(k) = key {
+        req = req.bearer_auth(k);
+    }
+    let v = match send(req).await? {
+        Ok(v) => v,
+        Err(r) => return Ok(r),
+    };
+    let Some(text) = v["choices"][0]["message"]["content"].as_str().map(str::to_string) else {
+        return Ok(RunResult::failed(
+            format!("the endpoint's answer has no choices[0].message.content: {}", v.to_string().chars().take(300).collect::<String>()),
+            false,
+        ));
+    };
+    emit(ctx.tx, Event::Text { text: text.clone() });
+    let u = &v["usage"];
+    let usage = Usage {
+        input: u["prompt_tokens"].as_u64().unwrap_or(0),
+        cached_input: u["prompt_tokens_details"]["cached_tokens"].as_u64().unwrap_or(0),
+        output: u["completion_tokens"].as_u64().unwrap_or(0),
+        reported: Usage::present(u, &[("prompt_tokens", Usage::INPUT), ("completion_tokens", Usage::OUTPUT)])
+            | Usage::present(&u["prompt_tokens_details"], &[("cached_tokens", Usage::CACHED)]),
         ..Default::default()
     };
     Ok(RunResult::ok(text, usage))

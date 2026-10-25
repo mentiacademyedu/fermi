@@ -38,6 +38,11 @@ pub struct ModelSpec {
     /// Human name with version, e.g. "Claude Opus 5.5".
     #[serde(default)]
     pub label: Option<String>,
+    /// Whether it can call tools (edit files, run commands). Unset = yes:
+    /// the built-in models all can. Declare `tools = false` for a model that
+    /// can't, such as many small local ones.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tools: Option<bool>,
 }
 
 /// Reasoning effort levels understood by both `claude --effort` and Codex's
@@ -50,6 +55,9 @@ impl ModelSpec {
     }
     pub fn has(&self, cap: Cap) -> bool {
         self.caps.contains(&cap)
+    }
+    pub fn tool_calling(&self) -> bool {
+        self.tools.unwrap_or(true)
     }
     pub fn image_only(&self) -> bool {
         !self.caps.is_empty() && self.caps.iter().all(|c| *c == Cap::Image)
@@ -70,7 +78,16 @@ impl ModelSpec {
 
 #[allow(clippy::too_many_arguments)]
 fn m(id: &str, label: &str, caps: &[Cap], tier: u8, auto: bool, cli: Option<&str>, api: &str) -> ModelSpec {
-    ModelSpec { id: id.into(), caps: caps.to_vec(), tier, auto, cli: cli.map(Into::into), api: Some(api.into()), label: Some(label.into()) }
+    ModelSpec {
+        id: id.into(),
+        caps: caps.to_vec(),
+        tier,
+        auto,
+        cli: cli.map(Into::into),
+        api: Some(api.into()),
+        label: Some(label.into()),
+        tools: None,
+    }
 }
 
 /// Built-in catalog. Order breaks ties in auto mode. Users override or extend

@@ -235,6 +235,9 @@ fn push_event(t: &mut TaskView, ev: Event) {
             }
         }
         Event::Failover { account, reason } => t.lines.push((Kind::Warn, format!("↷ {account}: {reason} — trying next"))),
+        Event::Retry { account, attempt, wait_secs, reason } => {
+            t.lines.push((Kind::Warn, format!("⟳ {account}: {reason}; attempt {attempt} in {wait_secs}s")))
+        }
         Event::Blocked { tool, detail, .. } => t.lines.push((Kind::Warn, format!("⚠ needed approval: {tool} {detail}"))),
         Event::Artifact { path } => t.lines.push((Kind::Good, format!("⇒ {path}"))),
         Event::Log { line } => t.lines.push((Kind::Dim, line)),

@@ -133,11 +133,14 @@ pub struct RunResult {
     pub artifacts: Vec<PathBuf>,
     /// The provider session this run used, when the adapter knows it.
     pub session: Option<String>,
+    /// A short rate limit (an API's HTTP 429) worth retrying on the same
+    /// account: the seconds the provider asked to wait (0 = it didn't say).
+    pub retry_in: Option<u64>,
 }
 
 impl RunResult {
     fn new(status: Status, text: String, usage: Usage) -> Self {
-        RunResult { status, text, usage, artifacts: vec![], session: None }
+        RunResult { status, text, usage, artifacts: vec![], session: None, retry_in: None }
     }
     pub fn ok(text: String, usage: Usage) -> Self {
         Self::new(Status::Ok, text, usage)

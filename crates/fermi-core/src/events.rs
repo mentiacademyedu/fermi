@@ -89,6 +89,14 @@ pub enum Event {
     Log {
         line: String,
     },
+    /// A rate-limited call (HTTP 429) is retried on the same account after
+    /// `wait_secs`; `attempt` is the call about to be made (2 = first retry).
+    Retry {
+        account: String,
+        attempt: u32,
+        wait_secs: u64,
+        reason: String,
+    },
     /// What a call is expected to use and cost, before it's sent (`billing::Estimate`).
     Estimate {
         estimate: serde_json::Value,
