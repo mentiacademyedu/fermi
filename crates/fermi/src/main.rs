@@ -142,6 +142,21 @@ enum Cmd {
         #[arg(long)]
         no_open: bool,
     },
+    /// Run tasks for other fermi instances: an execution service (see `[[workers]]`)
+    Worker {
+        /// Address to listen on
+        #[arg(long, default_value = "127.0.0.1:8787")]
+        listen: String,
+        /// The token clients must send (default: FERMI_WORKER_TOKEN)
+        #[arg(long)]
+        token: Option<String>,
+        /// This worker's name (default: the computer's)
+        #[arg(long)]
+        name: Option<String>,
+        /// Where jobs are kept (default: ~/.fermi/worker)
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
     /// MCP bridge server (started by Claude sessions)
     #[command(hide = true)]
     Mcp {
@@ -424,6 +439,19 @@ async fn real_main() -> Result<ExitCode> {
             server::run(Engine::load()?, port, !no_open).await?
         }
         Cmd::Mcp { profile } => fermi_core::mcp::serve(Engine::load()?, profile).await?,
+        Cmd::Worker { listen, token, name, dir } => {
+            let engine = Engine::load()?;
+            let token = token.or_else(|| std::env::var("FERMI_WORKER_TOKEN").ok()).unwrap_or_default();
+            let name = name
+                .or_else(|| std::env::var("COMPUTERNAME").ok())
+                .or_else(|| std::env::var("HOSTNAME").ok())
+                .unwrap_or_else(|| "worker".into());
+            let dir = dir.unwrap_or_else(|| engine.home.join("worker"));
+            fermi::worker_http::serve(engine, &listen, &token, &name, &dir, |addr| {
+                eprintln!("fermi worker {name} listening on http://{addr} (protocol {})", fermi_core::worker::protocol());
+            })
+            .await?;
+        }
     }
     Ok(ExitCode::SUCCESS)
 }
@@ -836,6 +864,10 @@ async fn run(t: Target) -> Result<ExitCode> {
     let job = tokio::spawn({
         let engine = engine.clone();
         async move {
+            if task.worker.is_some() || fermi_core::remote::workers_for(&engine, &task).is_ok_and(|w| !w.is_empty()) {
+                let _ = fermi_core::remote::run(&engine, &task, &tx).await;
+                return;
+            }
             match task.verify.clone() {
                 Some(v) => fermi_core::verify::run_task(&engine, task, &v, &tx).await,
                 None => {
@@ -883,6 +915,8 @@ async fn run(t: Target) -> Result<ExitCode> {
                 eprintln!("{}", paint("31", format!("    ✗ {status}{} {first}", code.map(|c| format!(" ({c})")).unwrap_or_default())))
             }
             Event::ToolResult { .. } | Event::Call { .. } => {}
+            Event::Remote { worker, job, seq: 0 } => eprintln!("{}", paint("33", format!("  ▸ on worker {worker} (job {job})"))),
+            Event::Remote { .. } => {}
             Event::Limit { account, utilization, blocked, .. } => {
                 if blocked {
                     eprintln!("{}", paint("31", format!("  ! {account} is rate limited")));

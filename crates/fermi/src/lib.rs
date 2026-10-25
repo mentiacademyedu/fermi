@@ -10,3 +10,4 @@ pub mod skills;
 pub mod slides;
 pub mod term;
 pub mod trending;
+pub mod worker_http;

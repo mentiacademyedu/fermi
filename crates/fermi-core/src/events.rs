@@ -121,6 +121,13 @@ pub enum Event {
         ok: bool,
         summary: String,
     },
+    /// The task runs on a worker as `job`; `seq` is the last of the job's
+    /// events received here (0 when it was dispatched).
+    Remote {
+        worker: String,
+        job: String,
+        seq: u64,
+    },
 }
 
 impl Event {

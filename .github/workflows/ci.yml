@@ -41,9 +41,17 @@ jobs:
 
       # The security profile (T3) on Linux, where the OS sandbox (Landlock) is real.
       - name: Acceptance (security profile)
-        run: cargo run --locked -p xtask -- acceptance --system SE --system MA --system PL --system EV --profile security --allow-blocked
+        run: cargo run --locked -p xtask -- acceptance --system SE --system MA --system PL --system EV --system LR --profile security --allow-blocked
         env:
           ACCEPTANCE_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}-security
+
+      # The worker cases of the live profile (T4): a real worker in a Docker
+      # container and real worker processes. No provider is called (the CLIs
+      # are the fake one), so nothing is billed despite the runner's flag.
+      - name: Acceptance (live profile, execution workers only)
+        run: cargo run --locked -p xtask -- acceptance --system LR --profile live --allow-billable --allow-blocked
+        env:
+          ACCEPTANCE_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}-live-workers
 
       - uses: taiki-e/install-action@cargo-llvm-cov
 

@@ -49,6 +49,8 @@ pub struct Task {
     pub parent: Option<u64>,
     /// Which run of the hub task this is (1 = the first; follow-ups and resumes count up).
     pub attempt: u32,
+    /// Run on this worker (`[[workers]]`) instead of here; None = the profile's workers, if any.
+    pub worker: Option<String>,
 }
 
 /// Which team run and plan task an agent's conversation belongs to.
@@ -81,6 +83,7 @@ impl Task {
             id: None,
             parent: None,
             attempt: 1,
+            worker: None,
         }
     }
 

@@ -23,3 +23,7 @@ png = "0.18"
 [[bin]]
 name = "fermi-bridge"
 path = "src/bin/fermi-bridge.rs"
+
+[[bin]]
+name = "fermi-worker"
+path = "src/bin/fermi-worker.rs"

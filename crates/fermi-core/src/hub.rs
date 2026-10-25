@@ -90,6 +90,16 @@ pub struct TaskRec {
     /// Sequence number, time and attempt of each event (see `trace::Stamp`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub stamps: Vec<Stamp>,
+    /// The worker job this task runs as (see `remote`), and the last of its events seen.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote: Option<RemoteRef>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RemoteRef {
+    pub worker: String,
+    pub job: String,
+    pub seq: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -131,6 +141,7 @@ impl TaskRec {
             events: vec![],
             attempt: task.attempt.max(1),
             stamps: vec![],
+            remote: None,
         };
         rec.started = at / 1000;
         rec.updated = at / 1000;
@@ -215,11 +226,16 @@ impl TaskRec {
                 self.ended = Some(at / 1000);
                 finished = true;
             }
+            Event::Remote { worker, job, seq } => {
+                self.remote = Some(RemoteRef { worker: worker.clone(), job: job.clone(), seq: *seq });
+            }
             _ => {}
         }
-        // Session ids are bookkeeping, and streamed chunks are superseded by
-        // the finished `Text`: neither belongs in the saved history.
-        if !matches!(ev, Event::Session { .. } | Event::Delta { .. }) {
+        // Session ids are bookkeeping, streamed chunks are superseded by the
+        // finished `Text`, and a worker's progress marks only move `remote`:
+        // none of them belongs in the saved history (a dispatch does).
+        let progress = matches!(ev, Event::Remote { seq, .. } if *seq > 0);
+        if !matches!(ev, Event::Session { .. } | Event::Delta { .. }) && !progress {
             self.push_at(ev.clone(), at);
         }
         finished
@@ -238,8 +254,9 @@ impl TaskRec {
     }
 
     /// Running according to the file, but nobody has touched it in a while.
+    /// A task on a worker isn't: its job runs on without any window.
     pub fn is_stale(&self, at: u64) -> bool {
-        self.status == TaskStatus::Running && at.saturating_sub(self.updated) > STALE_SECS
+        self.status == TaskStatus::Running && self.remote.is_none() && at.saturating_sub(self.updated) > STALE_SECS
     }
 
     fn mark_interrupted(&mut self) {
@@ -648,6 +665,7 @@ impl Hub {
             via: via.to_string(),
             last_save: Mutex::new(HashMap::new()),
         });
+        hub.reattach();
         // Once a second: heartbeat our running tasks and pick up other programs' changes.
         let weak = Arc::downgrade(&hub);
         tokio::spawn(async move {
@@ -775,7 +793,10 @@ impl Hub {
             }
             let task = continuation(&engine, t, prompt, &opts);
             // Unknown model, no account for it in the profile…: say so now.
-            engine.plan(&task)?;
+            // Tasks on workers are routed by the worker's own accounts.
+            if crate::remote::workers_for(&engine, &task).map_or(true, |w| w.is_empty()) && task.worker.is_none() {
+                engine.plan(&task)?;
+            }
             task
         };
         {
@@ -867,10 +888,15 @@ impl Hub {
 
     fn launch(self: &Arc<Self>, id: u64, mut task: Task) {
         task.id = Some(id); // usage and budget entries name the task
-        let (tx, mut rx) = mpsc::unbounded_channel::<Event>();
+        let (tx, rx) = mpsc::unbounded_channel::<Event>();
         let engine = self.engine();
         crate::trace::save_task(&engine, &task);
+        let on_worker = task.worker.is_some() || crate::remote::workers_for(&engine, &task).is_ok_and(|w| !w.is_empty());
         let runner = tokio::spawn(async move {
+            if on_worker {
+                let _ = crate::remote::run(&engine, &task, &tx).await;
+                return;
+            }
             match task.verify.clone() {
                 Some(v) => crate::verify::run_task(&engine, task, &v, &tx).await,
                 None => {
@@ -878,8 +904,12 @@ impl Hub {
                 }
             }
         });
-        self.handles.lock().unwrap().insert(id, runner.abort_handle());
+        self.follow_events(id, runner.abort_handle(), rx);
+    }
 
+    /// Records a run's events into its task.
+    fn follow_events(self: &Arc<Self>, id: u64, abort: AbortHandle, mut rx: mpsc::UnboundedReceiver<Event>) {
+        self.handles.lock().unwrap().insert(id, abort);
         let hub = self.clone();
         tokio::spawn(async move {
             while let Some(ev) = rx.recv().await {
@@ -888,6 +918,45 @@ impl Hub {
             hub.handles.lock().unwrap().remove(&id);
             hub.save(id); // final state, even if the last write was throttled
         });
+    }
+
+    /// Picks up following tasks that run on workers (a window reopened).
+    fn reattach(self: &Arc<Self>) {
+        let engine = self.engine();
+        let mine: Vec<TaskRec> =
+            self.tasks.lock().unwrap().iter().filter(|t| t.status == TaskStatus::Running && t.remote.is_some()).cloned().collect();
+        for t in mine {
+            let Some(r) = t.remote.clone() else { continue };
+            let mut task = Task::new(&t.prompt, t.cwd.clone());
+            task.id = Some(t.id);
+            task.attempt = t.attempt;
+            task.profile = t.profile.clone();
+            let (tx, rx) = mpsc::unbounded_channel::<Event>();
+            let engine = engine.clone();
+            let runner = tokio::spawn(async move {
+                if let Err(e) = crate::remote::resume(&engine, &task, &r.worker, &r.job, r.seq, &tx).await {
+                    crate::events::emit(&tx, Event::Done { ok: false, summary: format!("{e:#}") });
+                }
+            });
+            self.follow_events(t.id, runner.abort_handle(), rx);
+        }
+    }
+
+    /// The window is closing: tasks on workers keep running there (the next
+    /// window picks them up); everything else is cancelled.
+    pub fn shutdown(&self) {
+        let ids: Vec<u64> = self.handles.lock().unwrap().keys().copied().collect();
+        for id in ids {
+            if self.get(id).is_some_and(|t| t.remote.is_some()) {
+                crate::remote::detach(id);
+                if let Some(h) = self.handles.lock().unwrap().remove(&id) {
+                    h.abort();
+                }
+                self.save(id);
+            } else {
+                self.cancel(id);
+            }
+        }
     }
 
     fn record(&self, id: u64, ev: Event) {

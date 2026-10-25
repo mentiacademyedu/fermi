@@ -415,6 +415,21 @@ fn git(dir: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
+/// Commits a folder as it is (fixed identity and date), to diff against later.
+pub fn git_baseline(work: &Path) -> Result<()> {
+    git(work, &["init", "-q", "-b", "main"])?;
+    git(work, &["config", "core.autocrlf", "false"])?;
+    git(work, &["add", "-A"])?;
+    git(work, &["commit", "-q", "--allow-empty", "-m", "baseline"])?;
+    Ok(())
+}
+
+/// Everything changed since [`git_baseline`], as a patch.
+pub fn git_patch(work: &Path) -> Result<String> {
+    git(work, &["add", "-A"])?;
+    git(work, &["diff", "--cached", "--binary", "HEAD"])
+}
+
 fn copy_dir(src: &Path, dst: &Path) -> Result<()> {
     for rel in files(src) {
         let to = dst.join(&rel);
@@ -568,10 +583,7 @@ async fn run_task(engine: &Engine, ds: &Dataset, t: &EvalTask, cfg: &EvalConfig,
     let work = tdir.join("work");
     std::fs::create_dir_all(&work)?;
     copy_dir(&ds.dir.join(&t.fixture), &work)?;
-    git(&work, &["init", "-q", "-b", "main"])?;
-    git(&work, &["config", "core.autocrlf", "false"])?;
-    git(&work, &["add", "-A"])?;
-    git(&work, &["commit", "-q", "-m", "fixture"])?;
+    git_baseline(&work)?;
     let before = protected_hash(&work, &t.protected);
     for p in &t.protected {
         protect(&work.join(p), true);
@@ -638,8 +650,7 @@ async fn run_task(engine: &Engine, ds: &Dataset, t: &EvalTask, cfg: &EvalConfig,
     };
 
     // The candidate's change, as evidence.
-    git(&work, &["add", "-A"])?;
-    let patch = git(&work, &["diff", "--cached", "HEAD"])?;
+    let patch = git_patch(&work)?;
     std::fs::write(tdir.join("patch.diff"), &patch)?;
 
     // Scoring, by the evaluator, in its own folder: pristine fixture, the

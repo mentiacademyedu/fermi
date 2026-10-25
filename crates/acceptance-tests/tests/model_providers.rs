@@ -20,6 +20,7 @@ fn kinds(events: &[Event]) -> Vec<&'static str> {
             Event::Tool { .. } => "tool",
             Event::ToolResult { .. } => "tool_result",
             Event::Call { .. } => "call",
+            Event::Remote { .. } => "remote",
             Event::Limit { .. } => "limit",
             Event::Failover { .. } => "failover",
             Event::Blocked { .. } => "blocked",

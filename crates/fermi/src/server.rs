@@ -109,11 +109,12 @@ pub struct Server {
 }
 
 impl Server {
-    /// Serves until `shutdown` resolves, then cancels running tasks.
+    /// Serves until `shutdown` resolves, then cancels running tasks (tasks on
+    /// workers keep running there; the next window picks them up).
     pub async fn serve(self, shutdown: impl std::future::Future<Output = ()> + Send + 'static) -> Result<()> {
         let hub = self.hub.clone();
         axum::serve(self.listener, self.app).with_graceful_shutdown(shutdown).await?;
-        hub.cancel_all();
+        hub.shutdown();
         Ok(())
     }
 }

@@ -479,6 +479,47 @@ no_sandbox = false     # some containers need true
 enabled = true         # false hides the tools
 ```
 
+## Workers
+
+Run tasks somewhere else: a build box, a container, a bigger machine. A
+worker is fermi running as a service with its own accounts:
+
+```bash
+FERMI_WORKER_TOKEN=… fermi worker --listen 0.0.0.0:8787 --name build-box
+```
+
+```toml
+[[workers]]
+name = "build-box"
+url = "http://build-box:8787"
+token_env = "FERMI_WORKER_TOKEN"
+
+[[profiles]]
+name = "heavy"
+accounts = []
+workers = ["build-box", "spare-box"]   # tasks of this profile run there
+
+[remote]
+heartbeat_secs = 30   # silent this long = the worker is lost
+retries = 1           # then try the next worker, at most this many times
+```
+
+- fermi sends the task's folder (without `.git`, `target`, `node_modules`) and
+  follows the job's numbered events; when it finishes, the artifacts are
+  downloaded, checked against the worker's checksums, and its patch is applied
+  to your folder, once.
+- **Jobs don't need the window.** Closing the dashboard or the desktop app
+  leaves tasks on workers running; the next fermi window to open follows them
+  again from the last event it saw.
+- **Connections drop.** Short outages are waited out and nothing is resent
+  or repeated; a worker silent past `heartbeat_secs` counts as lost, and the
+  task is retried on the next worker. Only a finished job's result is applied.
+- **Cancelling** stops the job and everything it started on the worker and
+  frees its folder; fermi keeps asking until the worker confirms.
+- Both sides check the worker protocol version and the token before any job
+  runs. A worker in a container works the same way (the acceptance tests run
+  one in `ubuntu:24.04`).
+
 ## Evaluations
 
 Measure which model and configuration does best on the same tasks, and keep
@@ -583,6 +624,8 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   plugins.rs       plugin manifests, registry, sandboxed MCP client, model adapters
   eval.rs          evaluation datasets, runs, scoring, comparisons, gated improvements
   browser.rs       headless browser for agents (DevTools protocol), traces, screenshots
+  worker.rs        the worker service: jobs, numbered events, artifacts, cancellation
+  remote.rs        running tasks on workers: dispatch, follow, retry, apply results
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
   slides.rs        .pptx parts in and out (the dashboard renders and edits the XML)

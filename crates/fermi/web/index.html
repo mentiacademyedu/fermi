@@ -1807,6 +1807,7 @@ function evNode(ev, cwd) {
       if (ev.status === "ok") return null;
       return el("div", "ev tool-fail", `✗ ${ev.status === "no_result" ? "no result came back" : ev.status}${ev.code && ev.code !== ev.status ? ` (${ev.code})` : ""} ${(ev.output || "").split("\n").find((l) => l.trim() && !/^Exit code /.test(l)) || ""}`);
     case "call": return null;
+    case "remote": return ev.seq === 0 ? el("div", "ev meta", `▸ on worker ${ev.worker} (job ${ev.job})`) : null;
     case "limit":
       if (ev.blocked) return el("div", "ev warn", `! ${ev.account} hit its usage limit`);
       if (ev.utilization != null && ev.utilization >= 0.8) return el("div", "ev warn", `! ${ev.account} at ${Math.round(ev.utilization * 100)}% of its window`);
