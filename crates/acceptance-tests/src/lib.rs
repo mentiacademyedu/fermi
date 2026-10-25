@@ -153,6 +153,11 @@ impl Case {
     }
 
     pub fn text(&mut self, name: &str, s: &str) {
+        // The case's own evidence files: an artifact must never overwrite them.
+        assert!(
+            !matches!(name, "manifest.json" | "result.json"),
+            "{name} is reserved for the case's evidence; name the artifact differently"
+        );
         let p = self.dir.join(name);
         if let Some(d) = p.parent() {
             let _ = std::fs::create_dir_all(d);

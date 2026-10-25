@@ -179,7 +179,7 @@ async fn lr_03_remote_dispatch() {
     let job = rec.remote.as_ref().map(|r| r.job.clone()).unwrap_or_default();
     let dir = fermi_core::remote::dir(&f.home, rec.id).join(&job);
     let manifest: Value = serde_json::from_slice(&std::fs::read(dir.join("manifest.json")).unwrap_or_default()).unwrap_or_default();
-    c.json("manifest.json", &manifest);
+    c.json("worker-manifest.json", &manifest);
     let sums_ok = manifest["files"].as_array().is_some_and(|fs| {
         !fs.is_empty()
             && fs.iter().all(|x| {
