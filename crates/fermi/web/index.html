@@ -850,6 +850,7 @@ select[aria-expanded=true] { border-color: var(--accent); }
             <label class="chip new-only" title="Profile"><span data-i="layers"></span><select id="f-profile"></select></label>
             <label class="chip new-only" title="Account"><span data-i="key"></span><select id="f-account"></select></label>
             <label class="chip new-only" title="After the agent finishes, fermi runs the project's build and tests itself; failures go back to the agent to fix"><span data-i="shieldCheck"></span><select id="f-verify"></select></label>
+            <label class="chip new-only" title="Run in a git worktree and branch of its own, so tasks started together on this repository can't touch each other's files. Its changes stay there for review (Trace → Changes)."><span data-i="branch"></span><input type="checkbox" id="f-isolate"> Isolated</label>
             <span class="spacer"></span>
             <span class="route reply-only" id="reply-route"></span>
             <label class="chip bold new-reply" title="Model (you can switch it in the middle of a conversation)"><select id="f-model"></select></label>
@@ -2150,6 +2151,7 @@ $("#composer").onsubmit = async (e) => {
         prompt, cwd: w ? w.path : (S.state.home || S.state.cwd),
         profile: $("#f-profile").value, model: $("#f-model").value, account: $("#f-account").value,
         effort: $("#f-effort").value, permission: $("#f-perm").value, verify: verifyOpts($("#f-verify").value),
+        isolate: $("#f-isolate").checked,
       });
       if (!S.tasks.has(r.id)) S.tasks.set(r.id, { id: r.id, prompt, cwd: w ? w.path : S.state.home, status: "running", started: nowS() });
       S.logs.set(r.id, S.logs.get(r.id) || [{ type: "user", text: prompt }]);
@@ -2242,8 +2244,23 @@ $("#trace-task").onclick = async () => {
   const ops = tr.operations || [];
   const tools = ops.filter((o) => o.kind === "tool"), calls = ops.filter((o) => o.kind === "model_call");
   $("#trace-sub").textContent = `${calls.length} model call${calls.length === 1 ? "" : "s"} · ${tools.length} tool invocation${tools.length === 1 ? "" : "s"}` +
-    `${tr.failures?.length ? ` · ${tr.failures.length} not ok` : ""} · ${tr.attempts || 1} attempt${tr.attempts > 1 ? "s" : ""} · ${tr.events} events`;
+    `${tr.failures?.length ? ` · ${tr.failures.length} not ok` : ""} · ${tr.attempts || 1} attempt${tr.attempts > 1 ? "s" : ""} · ${tr.events} events` +
+    `${tr.tested_revision ? ` · checks ${tr.tested_revision.passed ? "passed" : "failed"} at ${tr.tested_revision.fingerprint}` : ""}`;
   const list = $("#trace-list"); list.replaceChildren();
+  if (tr.workspace) {
+    // An isolated task: its changes against the commit it started from.
+    const d = el("details", "op-tool"), s = el("summary"), pre = el("pre", null, "Loading…");
+    s.append(el("span", "op-name", "Changes"), el("span", "op-detail", `${tr.workspace.branch} · ${tr.workspace.path}`));
+    d.append(s, pre); list.append(d);
+    api(`/api/tasks/${tr.task}/diff`).then((v) => {
+      pre.textContent = `${v.files.map((f) => `${f.status}  ${f.path}`).join("
+") || "No changes."}
+
+fingerprint ${v.fingerprint}
+
+${v.patch}`;
+    }, (e) => { pre.textContent = e.message; });
+  }
   const num = (u, k) => (u && u[k] != null ? u[k] : "?");
   for (const o of ops) {
     const d = el("details", o.kind === "model_call" ? "op-call" : "op-tool");

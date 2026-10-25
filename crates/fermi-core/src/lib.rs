@@ -32,6 +32,7 @@ pub mod trace;
 pub mod util;
 pub mod verify;
 pub mod worker;
+pub mod workspace;
 
 pub use config::{Account, Auth, Config, Mode, Profile, Provider};
 pub use engine::{Engine, Outcome, Task};

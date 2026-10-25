@@ -206,7 +206,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         }
     }
     close(&mut call, &mut ops, &mut closed);
-    ops.finish();
+    let tools = ops.finish();
 
     let (success, stderr) = p.finish().await?;
     let mut res = if blocked {
@@ -220,6 +220,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         RunResult::ok(text, usage)
     };
     res.usage = usage;
+    res.tools = tools;
     Ok(res)
 }
 

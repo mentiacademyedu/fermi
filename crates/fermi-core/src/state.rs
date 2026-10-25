@@ -124,6 +124,13 @@ impl Store {
         *self.running.lock().unwrap().entry(id.to_string()).or_default() += 1;
     }
 
+    /// Counts a call as running on `id` until the guard is dropped, so a
+    /// cancelled run (its future dropped mid-call) gives the slot back too.
+    pub fn busy<'a>(&'a self, id: &'a str) -> Busy<'a> {
+        self.begin(id);
+        Busy { store: self, id }
+    }
+
     pub fn end(&self, id: &str) {
         if let Some(n) = self.running.lock().unwrap().get_mut(id) {
             *n = n.saturating_sub(1);
@@ -146,5 +153,17 @@ impl Store {
                 let _ = writeln!(f, "{line}");
             }
         }
+    }
+}
+
+/// A call running on an account (see [`Store::busy`]).
+pub struct Busy<'a> {
+    store: &'a Store,
+    id: &'a str,
+}
+
+impl Drop for Busy<'_> {
+    fn drop(&mut self) {
+        self.store.end(self.id);
     }
 }

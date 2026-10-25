@@ -54,6 +54,8 @@ pub struct Task {
     pub attempt: u32,
     /// Run on this worker (`[[workers]]`) instead of here; None = the profile's workers, if any.
     pub worker: Option<String>,
+    /// Run in a git worktree of its own (see `workspace`). The hub honors it.
+    pub isolate: bool,
 }
 
 /// Which team run and plan task an agent's conversation belongs to.
@@ -91,6 +93,7 @@ impl Task {
             parent: None,
             attempt: 1,
             worker: None,
+            isolate: false,
         }
     }
 
@@ -323,6 +326,9 @@ impl Engine {
         };
         let who = crate::billing::Attribution::of(task);
         let mut attempt = 0u32;
+        // What interrupted calls had already done, for the account that takes over.
+        let mut carried: Vec<String> = vec![];
+        let mut handed: Option<Task> = None;
 
         for model in &plan.models {
             let Some(provider) = model.provider() else { continue };
@@ -333,6 +339,7 @@ impl Engine {
                 'call: loop {
                     tries += 1;
                     attempt += 1;
+                    let task = handed.as_ref().unwrap_or(task);
                     // Before sending: the estimate, the context window, the budget.
                     let at = now();
                     let est = crate::billing::estimate(&self.cfg, model, task, at);
@@ -398,10 +405,10 @@ impl Engine {
                     );
 
                     let started = Instant::now();
-                    self.store.begin(&acct.id);
+                    let busy = self.store.busy(&acct.id);
                     let ctx = RunCtx { engine: self, profile, account: &acct, model, task, tx };
                     let res = providers::run(&ctx).await.unwrap_or_else(|e| RunResult::failed(format!("{e:#}"), false));
-                    self.store.end(&acct.id);
+                    drop(busy);
 
                     let status = match &res.status {
                         Status::Ok => "ok",
@@ -501,10 +508,16 @@ impl Engine {
                                 _ => "usage limit reached".to_string(),
                             };
                             emit(tx, Event::Failover { account: acct.id.clone(), reason: reason.clone() });
+                            if let Some(next) = self.hand_over(task, &acct.id, &reason, &res.tools, &mut carried, tx) {
+                                handed = Some(next);
+                            }
                             last_err = Some(format!("{}: {reason}", acct.id));
                         }
                         Status::Failed { msg, retry: true } => {
                             emit(tx, Event::Failover { account: acct.id.clone(), reason: msg.clone() });
+                            if let Some(next) = self.hand_over(task, &acct.id, &msg, &res.tools, &mut carried, tx) {
+                                handed = Some(next);
+                            }
                             last_err = Some(format!("{}: {msg}", acct.id));
                         }
                         Status::Failed { msg, retry: false } => bail!("{msg}"),
@@ -517,6 +530,72 @@ impl Engine {
             Some(e) => bail!("all accounts in profile `{}` failed; last: {e}", profile.name),
             None => bail!("no usable account in profile `{}`: {}", profile.name, self.why_unavailable(&plan)),
         }
+    }
+
+    /// A call that failed over after running tools left work behind (edits,
+    /// commands with side effects). That work stays, and the next account is
+    /// told what was done, so it continues instead of starting over and
+    /// repeating it. Returns the task for the next call (None: nothing to tell).
+    fn hand_over(&self, task: &Task, account: &str, reason: &str, tools: &[String], carried: &mut Vec<String>, tx: &Tx) -> Option<Task> {
+        if tools.is_empty() && carried.is_empty() {
+            return None;
+        }
+        if !tools.is_empty() {
+            carried.push(format!(
+                "On account {account}, interrupted ({}), it had already run:
+{}",
+                reason.lines().next().unwrap_or(reason),
+                tools.iter().map(|t| format!("- {t}")).collect::<Vec<_>>().join(
+                    "
+"
+                )
+            ));
+            emit(
+                tx,
+                Event::Log {
+                    line: format!(
+                        "kept the work of the interrupted call on {account} ({} tool call{}); the next account continues from it",
+                        tools.len(),
+                        if tools.len() == 1 { "" } else { "s" }
+                    ),
+                },
+            );
+        }
+        let root = crate::code::repo_root(&task.cwd);
+        let changes = std::process::Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(["status", "--short", "--untracked-files=all"])
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim_end().to_string())
+            .unwrap_or_default();
+        let note = format!(
+            "An earlier attempt at this task stopped partway, after doing some of the work.
+{}
+
+{}             Its changes were kept. Continue from where it stopped: look at the current state first, and don't repeat              steps whose effects are already there (edits made, commands or requests already sent).",
+            carried.join("
+
+"),
+            if changes.is_empty() { String::new() } else { format!("Uncommitted changes in the folder now:
+{changes}
+
+") }
+        );
+        let mut next = task.clone();
+        next.context = Some(match &task.context {
+            // The note replaces the previous one (it lists every interruption so far).
+            Some(c) if c.starts_with("An earlier attempt at this task stopped partway") => note,
+            Some(c) => format!(
+                "{c}
+
+{note}"
+            ),
+            None => note,
+        });
+        Some(next)
     }
 
     fn why_unavailable(&self, plan: &Plan) -> String {

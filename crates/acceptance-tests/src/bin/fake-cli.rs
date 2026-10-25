@@ -31,7 +31,8 @@
 //! a new file and rename it over the path), `unlock` (make a read-only file and its folder
 //! writable again, as their owner can)), or `mcp` ({name, arguments}: call a
 //! tool of fermi's bridge from `--mcp-config`, as the agent would, and report
-//! its answer).
+//! its answer; the Claude flavor also streams each such call as a tool use and
+//! its result, with the bridge's real answer).
 
 use serde_json::{json, Value};
 use std::io::{Read, Write};
@@ -97,6 +98,11 @@ fn main() {
         let _ = writeln!(f, "{rec}");
         n
     });
+    // `claude auth status` (the dashboard checking the login) answers as Claude Code does; it plays no step.
+    if args.first().map(String::as_str) == Some("auth") {
+        out(json!({ "loggedIn": true, "authMethod": "claude.ai" }));
+        return;
+    }
     let step = steps
         .iter()
         .find(|s| s["match"].as_str().is_some_and(|m| prompt.contains(m)))
@@ -191,7 +197,7 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
             text += &std::fs::read_to_string(path).unwrap_or_default();
         }
     }
-    let (op_text, op_denials) = run_ops(step, flavor);
+    let (op_text, op_denials, bridged) = run_ops(step, flavor);
     text += &op_text;
     // Model calls: `calls` as given, or the plain `tools` as one call.
     let calls: Vec<Value> = match step["calls"].as_array() {
@@ -246,6 +252,16 @@ fn run(flavor: Flavor, home: &Path, step: &Value, n: usize) {
     match flavor {
         Flavor::Claude => {
             out(json!({ "type": "system", "subtype": "init", "session_id": session }));
+            // Calls to fermi's bridge, as Claude Code reports MCP tools: a tool use, then the server's answer.
+            for (i, b) in bridged.iter().enumerate() {
+                let id = format!("toolu_mcp_{n}_{}", i + 1);
+                let m = json!({ "id": format!("msg_{n}_mcp_{}", i + 1), "type": "message", "role": "assistant", "model": "claude-fake",
+                    "content": [{ "type": "tool_use", "id": id, "name": format!("mcp__fermi__{}", b["name"].as_str().unwrap_or("")), "input": b["arguments"] }] });
+                out(json!({ "type": "assistant", "parent_tool_use_id": null, "message": m }));
+                out(json!({ "type": "user", "parent_tool_use_id": null, "message": { "role": "user", "content": [
+                    { "type": "tool_result", "tool_use_id": id, "content": b["text"], "is_error": b["failed"] }
+                ] } }));
+            }
             // One API response per call, one line per content block (sharing the
             // message id, as Claude Code streams them); then the tools run.
             for c in &calls {
@@ -552,14 +568,17 @@ impl Drop for Bridge {
     }
 }
 
-fn run_ops(step: &Value, flavor: Flavor) -> (String, Vec<Value>) {
+/// Runs a step's `ops`. Returns their report, the denied tools, and the
+/// bridge calls made (`{name, arguments, text, failed}`), which the Claude
+/// flavor streams as tool calls with the bridge's real answers.
+fn run_ops(step: &Value, flavor: Flavor) -> (String, Vec<Value>, Vec<Value>) {
     let args: Vec<String> = std::env::args().collect();
     let mode = flag_value(&args, "--permission-mode").unwrap_or("default").to_string();
     let (allowed, disallowed) = (flag_list(&args, "--allowedTools"), flag_list(&args, "--disallowedTools"));
     let prompt_tool = flag_value(&args, "--permission-prompt-tool").is_some();
     let mcp = flag_value(&args, "--mcp-config").map(str::to_string);
     let mut bridge: Option<Bridge> = None;
-    let (mut out, mut denials) = (String::new(), vec![]);
+    let (mut out, mut denials, mut bridged) = (String::new(), vec![], vec![]);
     for (i, op) in step["ops"].as_array().into_iter().flatten().enumerate() {
         if let Some(call) = op.get("mcp") {
             if bridge.is_none() {
@@ -568,6 +587,7 @@ fn run_ops(step: &Value, flavor: Flavor) -> (String, Vec<Value>) {
             let r = bridge.as_mut().and_then(|b| b.call("tools/call", call.clone()));
             let text = r.as_ref().and_then(|r| r["content"][0]["text"].as_str()).unwrap_or("(no bridge)");
             let failed = r.as_ref().is_none_or(|r| r["isError"] == true);
+            bridged.push(json!({ "name": call["name"], "arguments": call["arguments"], "text": text, "failed": failed }));
             out += &format!(
                 "mcp {}{}: {text}
 ",
@@ -596,7 +616,7 @@ fn run_ops(step: &Value, flavor: Flavor) -> (String, Vec<Value>) {
         }
         out += &perform(&op["do"]);
     }
-    (out, denials)
+    (out, denials, bridged)
 }
 
 /// Does one action for real and reports what happened.

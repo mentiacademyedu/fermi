@@ -136,11 +136,14 @@ pub struct RunResult {
     /// A short rate limit (an API's HTTP 429) worth retrying on the same
     /// account: the seconds the provider asked to wait (0 = it didn't say).
     pub retry_in: Option<u64>,
+    /// Tool invocations the run made, as `name detail (status)`: what an
+    /// interrupted run already did (see `Engine::run`).
+    pub tools: Vec<String>,
 }
 
 impl RunResult {
     fn new(status: Status, text: String, usage: Usage) -> Self {
-        RunResult { status, text, usage, artifacts: vec![], session: None, retry_in: None }
+        RunResult { status, text, usage, artifacts: vec![], session: None, retry_in: None, tools: vec![] }
     }
     pub fn ok(text: String, usage: Usage) -> Self {
         Self::new(Status::Ok, text, usage)

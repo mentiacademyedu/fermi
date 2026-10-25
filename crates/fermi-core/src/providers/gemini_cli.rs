@@ -121,7 +121,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         }
     }
     flush(&mut pending, &mut text);
-    ops.finish();
+    let tools = ops.finish();
 
     let (success, stderr) = p.finish().await?;
     let mut res = match error {
@@ -130,6 +130,7 @@ pub async fn run(ctx: &RunCtx<'_>) -> Result<RunResult> {
         None => RunResult::ok(text, usage),
     };
     res.usage = usage;
+    res.tools = tools;
     Ok(res)
 }
 

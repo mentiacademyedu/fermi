@@ -150,7 +150,7 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>, sandbox: O
             _ => {}
         }
     }
-    ops.finish();
+    let tools = ops.finish();
 
     let (success, stderr) = p.finish().await?;
     let mut res = match error {
@@ -161,6 +161,7 @@ pub async fn run(ctx: &RunCtx<'_>, prompt: &str, model: Option<&str>, sandbox: O
         _ => RunResult::ok(text, usage),
     };
     res.usage = usage;
+    res.tools = tools;
     res.session = session;
     Ok(res)
 }
