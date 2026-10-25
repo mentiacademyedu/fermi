@@ -16,7 +16,10 @@ cheap guess at the right model for each task.
 - **Routing modes** per profile: `auto` (best model for the task),
   `pinned` (switch only between the models you chose), `single` (one model).
 - **Failover inside the profile**: when an account hits its usage limit or
-  isn't logged in, the task moves to the next account in that profile.
+  isn't logged in, the task moves to the next account in that profile. If the
+  account stopped partway, after running tools, its work stays in the folder
+  and the next account is told which tool calls already ran and what changed,
+  so it carries on instead of repeating edits or side effects.
 - **Cross-provider delegation**: Claude sessions get an `fermi` MCP server with
   `generate_image` (OpenAI image model) and `ask_model` (other providers), so
   Claude can hand off image creation or get a second opinion.
@@ -112,6 +115,17 @@ add or remove accounts, and log in
 once it's done). It's served by the same binary on `127.0.0.1` only. Every
 request needs the access key in the link `fermi ui` prints, and requests from
 other sites are refused. Ctrl+C stops it and its running tasks.
+
+**Isolated tasks**: tick *Isolated* in the new-task box (or send `"isolate":
+true` to `POST /api/tasks`) and the task works in a git worktree of its own,
+on branch `fermi/task-<id>` from the repository's current commit, under
+`~/.fermi/worktrees/`. Tasks started together on one repository can't touch
+each other's files, and your checkout stays as it is. The work stays in the
+worktree, uncommitted, for review: **Trace → Changes** (or
+`GET /api/tasks/<id>/diff`) shows the changed files, the full patch against
+the starting commit and the same fingerprint the checks report, so you can see
+that what you review is what was tested. Follow-ups continue in the same
+worktree; deleting the task removes it and its branch.
 
 ## Continuing conversations
 
@@ -397,6 +411,11 @@ the attempt it belongs to and, for tools, the model call that asked for it.
   `GET /api/tasks/<id>/trace`) lists the operations; failures show their code
   and diagnostics. A tool that never reported back is marked `no_result`, never
   counted as a success.
+- The exported trace also has a `timeline` from the request to the outcome:
+  each prompt, the route chosen (model, account and why), model calls and
+  tools by id, failovers, every check fermi ran (its command, status and the
+  revision it tested) and the result, plus `tested_revision`, the fingerprint
+  the last checks ran on.
 - **Resume**: a task that was cancelled or interrupted (its window closed)
   continues in the same provider session as the next attempt of the same task,
   so its trace stays one sequence (dashboard **Resume**, or
@@ -683,6 +702,7 @@ crates/fermi-core   engine, router, account state, provider adapters, MCP bridge
   browser.rs       headless browser for agents (DevTools protocol), traces, screenshots
   worker.rs        the worker service: jobs, numbered events, artifacts, cancellation
   remote.rs        running tasks on workers: dispatch, follow, retry, apply results
+  workspace.rs     isolated tasks: a git worktree and branch per task, its diff for review
 crates/fermi        CLI, TUI and dashboard (thin clients over the engine's Event stream)
   server.rs        `fermi ui`: local HTTP + WebSocket API
   slides.rs        .pptx parts in and out (the dashboard renders and edits the XML)

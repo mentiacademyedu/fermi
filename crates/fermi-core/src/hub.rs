@@ -93,6 +93,9 @@ pub struct TaskRec {
     /// The worker job this task runs as (see `remote`), and the last of its events seen.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote: Option<RemoteRef>,
+    /// The isolated worktree it runs in (see `workspace`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<crate::workspace::Workspace>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -142,6 +145,7 @@ impl TaskRec {
             attempt: task.attempt.max(1),
             stamps: vec![],
             remote: None,
+            workspace: None,
         };
         rec.started = at / 1000;
         rec.updated = at / 1000;
@@ -727,9 +731,40 @@ impl Hub {
 
     pub fn submit(self: &Arc<Self>, mut task: Task) -> u64 {
         let id = new_task_id(&self.dir);
+        // An isolated task works in a worktree of its own from the start.
+        let isolated = task.isolate.then(|| crate::workspace::create(&self.engine().home, &task.cwd, id));
+        if let Some(Ok((_, work))) = &isolated {
+            task.cwd = work.clone();
+        }
         let mut rec = TaskRec::new(id, &task, &self.via);
         rec.redact(&self.engine().redactor);
         task.attempt = 1;
+        match isolated {
+            Some(Ok((ws, _))) => {
+                rec.push_at(
+                    Event::Log {
+                        line: format!(
+                            "isolated: working in its own worktree {} on branch {}, from {} of {}",
+                            ws.path.display(),
+                            ws.branch,
+                            &ws.base[..ws.base.len().min(12)],
+                            ws.repo.display()
+                        ),
+                    },
+                    now_ms(),
+                );
+                rec.workspace = Some(ws);
+            }
+            Some(Err(e)) => {
+                // Not run at all: running in the shared folder isn't what was asked.
+                rec.apply_at(&Event::Done { ok: false, summary: format!("can't isolate this task: {e:#}") }, now_ms());
+                self.publish(json!({ "kind": "task_new", "task": rec.summary() }));
+                self.tasks.lock().unwrap().push(rec);
+                self.save(id);
+                return id;
+            }
+            None => {}
+        }
         let note = self.with_memory(&mut task);
         self.publish(json!({ "kind": "task_new", "task": rec.summary() }));
         self.tasks.lock().unwrap().push(rec);
@@ -1042,6 +1077,15 @@ impl Hub {
 
     /// Stops a task this process runs. Tasks running in another fermi
     /// window can only be stopped there.
+    /// An isolated task's work, for review (see `workspace::diff`).
+    pub fn diff(&self, id: u64) -> Result<Value> {
+        let t = self.get(id).ok_or_else(|| anyhow::anyhow!("no such task"))?;
+        let ws = t
+            .workspace
+            .ok_or_else(|| anyhow::anyhow!("this task didn't run in an isolated worktree; its changes are in {}", t.cwd.display()))?;
+        crate::workspace::diff(&ws)
+    }
+
     pub fn cancel(&self, id: u64) -> bool {
         let Some(h) = self.handles.lock().unwrap().remove(&id) else { return false };
         h.abort(); // drops the run future and with it the child process
@@ -1065,18 +1109,19 @@ impl Hub {
 
     /// Removes a finished task from the list and from disk.
     pub fn delete(&self, id: u64) -> Result<()> {
-        {
+        let removed = {
             let mut tasks = self.tasks.lock().unwrap();
             match tasks.iter().position(|t| t.id == id) {
                 Some(i) if tasks[i].status == TaskStatus::Running => bail!("cancel the task before deleting it"),
-                Some(i) => {
-                    tasks.remove(i);
-                }
+                Some(i) => tasks.remove(i),
                 None => bail!("no such task"),
             }
-        }
+        };
         let _ = std::fs::remove_file(self.dir.join(format!("{id}.json")));
         let _ = std::fs::remove_dir_all(crate::trace::tapes_dir(&self.engine().home, id));
+        if let Some(ws) = &removed.workspace {
+            crate::workspace::remove(ws);
+        }
         self.publish(json!({ "kind": "task_deleted", "id": id }));
         Ok(())
     }

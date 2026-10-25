@@ -212,8 +212,12 @@ fn update(home: &Path, f: impl FnOnce(&mut BTreeMap<String, Installed>)) -> Resu
 }
 
 /// Appends to `plugins/events.jsonl`: installs, registrations, calls and failures.
+/// Inside an agent's task (fermi's bridge) the entry names that task.
 fn log(home: &Path, mut ev: Value) {
     ev["ts"] = json!(now());
+    if let Some(task) = std::env::var("FERMI_TASK_ID").ok().and_then(|t| t.parse::<u64>().ok()) {
+        ev["task"] = json!(task);
+    }
     let d = dir(home);
     let _ = std::fs::create_dir_all(&d);
     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(d.join("events.jsonl")) {

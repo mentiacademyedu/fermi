@@ -56,6 +56,8 @@ pub struct Ops<'a> {
     /// Started tools waiting for their result.
     open: Vec<(String, Instant)>,
     seen: std::collections::HashSet<String>,
+    /// Every invocation so far: (id, `name detail`, how it ended).
+    ran: Vec<(String, String, String)>,
     n: u32,
     /// Replays measure no durations (they would be the replay's, not the run's).
     timed: bool,
@@ -63,7 +65,7 @@ pub struct Ops<'a> {
 
 impl<'a> Ops<'a> {
     pub fn new(ctx: &RunCtx<'a>) -> Ops<'a> {
-        Ops { tx: ctx.tx, open: vec![], seen: Default::default(), n: 0, timed: ctx.engine.replay.is_none() }
+        Ops { tx: ctx.tx, open: vec![], seen: Default::default(), ran: vec![], n: 0, timed: ctx.engine.replay.is_none() }
     }
 
     /// A tool invocation starts. Returns its id (the provider's, else one made up).
@@ -78,6 +80,8 @@ impl<'a> Ops<'a> {
         // The same invocation reported again is not a second one.
         if self.seen.insert(id.clone()) {
             self.open.push((id.clone(), Instant::now()));
+            let line = format!("{name} {}", crate::providers::brief(input));
+            self.ran.push((id.clone(), line.trim_end().to_string(), "started".into()));
             emit(
                 self.tx,
                 Event::Tool {
@@ -96,6 +100,9 @@ impl<'a> Ops<'a> {
     pub fn result(&mut self, id: &str, status: &str, output: &str, code: Option<String>) {
         let Some(i) = self.open.iter().position(|(o, _)| o == id) else { return };
         let (_, started) = self.open.remove(i);
+        if let Some(r) = self.ran.iter_mut().find(|r| r.0 == id) {
+            r.2 = status.to_string();
+        }
         let ms = self.timed.then(|| started.elapsed().as_millis() as u64);
         emit(self.tx, Event::ToolResult { id: id.to_string(), status: status.to_string(), output: clip(output, OUTPUT_MAX), code, ms });
     }
@@ -106,13 +113,18 @@ impl<'a> Ops<'a> {
     }
 
     /// The run is over: tools that never reported back are recorded as such.
-    pub fn finish(&mut self) {
+    /// Returns every invocation, as `name detail (status)`.
+    pub fn finish(&mut self) -> Vec<String> {
         for (id, _) in std::mem::take(&mut self.open) {
             emit(
                 self.tx,
                 Event::ToolResult { id, status: "no_result".into(), output: String::new(), code: Some("no_result".into()), ms: None },
             );
         }
+        std::mem::take(&mut self.ran)
+            .into_iter()
+            .map(|(_, line, status)| format!("{line} ({})", if status == "started" { "no result" } else { &status }))
+            .collect()
     }
 }
 
@@ -263,14 +275,55 @@ impl Replay {
 pub fn export(rec: &TaskRec) -> Value {
     let stamps = rec.stamps();
     let mut ops: Vec<Value> = vec![];
+    // Everything in order, from the request to the outcome; tools and model
+    // calls appear by id (their details are in `operations`).
+    let mut timeline: Vec<Value> = vec![];
+    let mut revision: Option<Value> = None;
     // Which try within the attempt (a failover to another account starts the next).
     let (mut tries, mut attempt) = (0u32, u32::MAX);
     for (ev, st) in rec.events.iter().zip(&stamps) {
         if st.attempt != attempt {
             (tries, attempt) = (0, st.attempt);
         }
+        let at = |kind: &str| json!({ "kind": kind, "attempt": st.attempt, "seq": st.seq, "at": st.at });
+        let mut step = |kind: &str, fields: Value| {
+            let mut v = at(kind);
+            if let (Some(o), Value::Object(f)) = (v.as_object_mut(), fields) {
+                o.extend(f);
+            }
+            timeline.push(v);
+        };
         match ev {
-            Event::Routed { .. } => tries += 1,
+            Event::User { text } => step("request", json!({ "text": text })),
+            Event::Routed { profile, model, account, why, .. } => {
+                tries += 1;
+                step("route", json!({ "try": tries, "profile": profile, "model": model, "account": account, "why": why }));
+            }
+            Event::Failover { account, reason } => step("failover", json!({ "try": tries, "account": account, "reason": reason })),
+            Event::Verify { attempt: repair, passed, report } => {
+                for c in report["checks"].as_array().into_iter().flatten() {
+                    step(
+                        "check",
+                        json!({ "repair": repair, "name": c["name"], "command": c["command"], "status": c["status"], "exit_code": c["exit_code"],
+                            "duration_ms": c["duration_ms"], "revision": report["fingerprint"] }),
+                    );
+                }
+                step("checks", json!({ "repair": repair, "passed": passed, "revision": report["fingerprint"] }));
+                revision = Some(
+                    json!({ "fingerprint": report["fingerprint"], "commit": report["revision"], "dirty": report["dirty"], "passed": passed }),
+                );
+            }
+            Event::Done { ok, summary } => step("outcome", json!({ "ok": ok, "summary": summary })),
+            _ => {}
+        }
+        match ev {
+            Event::Tool { id, .. } => {
+                timeline.push(json!({ "kind": "tool", "attempt": st.attempt, "seq": st.seq, "at": st.at, "id": id.clone().unwrap_or_else(|| format!("seq-{}", st.seq)) }))
+            }
+            Event::Call { id, .. } => timeline.push(json!({ "kind": "model_call", "attempt": st.attempt, "seq": st.seq, "at": st.at, "id": id })),
+            _ => {}
+        }
+        match ev {
             Event::Tool { name, detail, id, call, input } => ops.push(json!({
                 "kind": "tool", "id": id.clone().unwrap_or_else(|| format!("seq-{}", st.seq)), "task": rec.id,
                 "attempt": st.attempt, "try": tries, "seq": st.seq, "at": st.at, "call": call, "name": name, "detail": detail,
@@ -295,8 +348,9 @@ pub fn export(rec: &TaskRec) -> Value {
     }
     let failures: Vec<&Value> = ops.iter().filter(|o| o["status"] != "ok").collect();
     json!({
-        "task": rec.id, "status": rec.status, "attempts": rec.attempt, "events": rec.events.len(),
-        "last_seq": stamps.last().map(|s| s.seq), "operations": ops, "failures": failures,
+        "task": rec.id, "status": rec.status, "attempts": rec.attempt, "events": rec.events.len(), "prompt": rec.prompt, "cwd": rec.cwd,
+        "workspace": rec.workspace, "last_seq": stamps.last().map(|s| s.seq), "operations": ops, "failures": failures,
+        "timeline": timeline, "tested_revision": revision,
     })
 }
 

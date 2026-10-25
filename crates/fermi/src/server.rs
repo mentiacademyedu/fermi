@@ -166,6 +166,7 @@ pub async fn start(engine: Arc<Engine>, port: u16, cwd: PathBuf, via: &str) -> R
         .route("/api/tasks/{id}", get(task))
         .route("/api/tasks/{id}/cancel", post(cancel))
         .route("/api/tasks/{id}/trace", get(task_trace))
+        .route("/api/tasks/{id}/diff", get(task_diff))
         .route("/api/tasks/{id}/resume", post(resume))
         .route("/api/tasks/{id}/reply", post(reply))
         .route("/api/tasks/{id}/delete", post(delete_task))
@@ -470,6 +471,9 @@ struct NewTask {
     /// Check the agent's work and send failures back (see `fermi_core::verify`).
     #[serde(default)]
     verify: Option<fermi_core::verify::VerifyOpts>,
+    /// Run in a git worktree of its own (see `fermi_core::workspace`).
+    #[serde(default)]
+    isolate: bool,
 }
 
 async fn create_task(State(s): S, Json(b): Json<NewTask>) -> Response {
@@ -488,9 +492,18 @@ async fn create_task(State(s): S, Json(b): Json<NewTask>) -> Response {
     task.effort = non_empty(b.effort);
     task.permission = non_empty(b.permission);
     task.verify = b.verify;
+    task.isolate = b.isolate;
     // Surface routing errors (unknown profile, no account…) right away.
-    if let Err(e) = s.hub.engine().plan(&task) {
+    // A task for the profile's workers is routed by the worker's own accounts.
+    let engine = s.hub.engine();
+    let remote = fermi_core::remote::workers_for(&engine, &task);
+    if let Err(e) = &remote {
         return err(StatusCode::BAD_REQUEST, format!("{e:#}"));
+    }
+    if remote.is_ok_and(|w| w.is_empty()) {
+        if let Err(e) = engine.plan(&task) {
+            return err(StatusCode::BAD_REQUEST, format!("{e:#}"));
+        }
     }
     Json(json!({ "id": s.hub.submit(task) })).into_response()
 }
@@ -514,6 +527,14 @@ async fn task_trace(State(s): S, Path(id): Path<u64>) -> Response {
     match s.hub.get(id) {
         Some(t) => Json(fermi_core::trace::export(&t)).into_response(),
         None => err(StatusCode::NOT_FOUND, "no such task"),
+    }
+}
+
+/// An isolated task's changes against the commit it started from.
+async fn task_diff(State(s): S, Path(id): Path<u64>) -> Response {
+    match s.hub.diff(id) {
+        Ok(v) => Json(v).into_response(),
+        Err(e) => err(StatusCode::BAD_REQUEST, format!("{e:#}")),
     }
 }
 
