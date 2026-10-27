@@ -5,7 +5,7 @@
 //!   cargo run --locked -p xtask -- acceptance --implemented      # cases that have a test (the PR gate)
 //!   cargo run --locked -p xtask -- acceptance --all               # all 106 (the readiness gate)
 //!   cargo run --locked -p xtask -- acceptance --all --profile security
-//!   cargo run --locked -p xtask -- acceptance --all --profile live --allow-billable
+//!   cargo run --locked -p xtask -- acceptance --all --profile live --allow-billable --live-accounts my-claude
 //!   cargo run --locked -p xtask -- report --run-id <runId>
 //!
 //! The registry `tests/acceptance/systems.yaml` maps case ids to tests. Each
@@ -13,6 +13,10 @@
 //! process logs, verifies the result and every artifact hash before it
 //! counts a pass, and records cases without a test as `not_implemented`.
 //! It exits nonzero unless every selected case passed.
+//!
+//! Tests learn the profile from `ACCEPTANCE_PROFILE`. In the live profile the
+//! cases that compare models run on the accounts given with `--live-accounts`
+//! (taken from the user's own fermi config); without any they report blocked.
 
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -122,6 +126,8 @@ struct Opts {
     /// Treat a `blocked` case (the platform can't exercise it) as acceptable, not a failure.
     allow_blocked: bool,
     repeat: Option<u32>,
+    /// Accounts from the user's fermi config the live profile may use.
+    live_accounts: Vec<String>,
 }
 
 fn utc_stamp() -> String {
@@ -204,6 +210,8 @@ fn acceptance(o: Opts) -> Result<bool, String> {
                     .env("ACCEPTANCE_RUN_ID", &run_id)
                     .env("ACCEPTANCE_ATTEMPT", &attempt)
                     .env("ACCEPTANCE_REPORTS", root().join("tests/reports"))
+                    .env("ACCEPTANCE_PROFILE", &o.profile)
+                    .env("ACCEPTANCE_LIVE_ACCOUNTS", o.live_accounts.join(","))
                     .output()
                     .map_err(|e| e.to_string())?;
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -311,12 +319,13 @@ fn main() -> ExitCode {
             allow_billable: flag("--allow-billable"),
             allow_blocked: flag("--allow-blocked"),
             repeat: values("--repeat").pop().and_then(|r| r.parse().ok()),
+            live_accounts: values("--live-accounts").iter().flat_map(|v| v.split(',')).map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
         }),
         Some("report") => match values("--run-id").pop() {
             Some(r) => report(&r).map(|_| true),
             None => Err("report needs --run-id".into()),
         },
-        _ => Err("usage: xtask acceptance [--id X]… [--system AI]… [--implemented | --all] [--allow-blocked] [--profile deterministic|security|live] [--allow-billable] [--repeat N]\n       xtask report --run-id <runId>".into()),
+        _ => Err("usage: xtask acceptance [--id X]… [--system AI]… [--implemented | --all] [--allow-blocked] [--profile deterministic|security|live] [--allow-billable] [--live-accounts a,b] [--repeat N]\n       xtask report --run-id <runId>".into()),
     };
     match res {
         Ok(true) => ExitCode::SUCCESS,
