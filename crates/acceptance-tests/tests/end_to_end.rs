@@ -929,30 +929,148 @@ async fn e2e_07_plugin_forbidden_operation() {
 
 // ── E2E-09 ──────────────────────────────────────────────────────────────────
 
-/// The F-EVAL smoke dataset cut to its first task.
-fn one_task_dataset(c: &Case) -> fermi_core::eval::Dataset {
-    let src = repo_root().join("tests/fixtures/F-EVAL/smoke");
-    let to = c.work.join("dataset");
-    fn copy(from: &Path, to: &Path) {
-        std::fs::create_dir_all(to).unwrap();
-        for e in std::fs::read_dir(from).unwrap().flatten() {
-            if e.path().is_dir() {
-                copy(&e.path(), &to.join(e.file_name()));
-            } else {
-                std::fs::copy(e.path(), to.join(e.file_name())).unwrap();
-            }
-        }
+/// The baseline tree an evaluation run's work folder started from.
+fn baseline_tree(work: &Path) -> String {
+    git(work, &["rev-parse", "HEAD^{tree}"]).unwrap_or_default()
+}
+
+/// E2E-09 on real models (the live profile): two models of a real account
+/// compared on one frozen task. What is checked is fermi's part (fresh
+/// environments, one oracle, identity, latency, usage and cost recorded),
+/// not whether either model solves the task.
+async fn e2e_09_live(mut c: Case, accounts: &[String]) {
+    c.real(&[
+        "evaluation runner (fresh folder per run)",
+        "independent scoring",
+        "the dashboard's comparison API",
+        "the provider's own CLI on a real account",
+        "two real models",
+    ]);
+    let ds = acceptance_tests::smoke_dataset(&c.work.join("dataset"), 1).unwrap();
+    let f = match Fermi::live(&c, "fermi-home", accounts, "") {
+        Ok(f) => f,
+        Err(e) => return c.block(&format!("{e:#}")),
+    };
+    let Some((ma, mb)) = acceptance_tests::live_models(&f) else {
+        return c.block("the live comparison is set up for Claude accounts");
+    };
+    let cfg = |name: &str, model: &str| fermi_core::eval::EvalConfig {
+        name: name.into(),
+        profile: Some("p".into()),
+        model: Some(model.into()),
+        ..Default::default()
+    };
+    let (ca, cb) = (cfg("A", &ma), cfg("B", &mb));
+    let (a, b) = tokio::join!(fermi_core::eval::run(&f.engine, &ds, &ca), fermi_core::eval::run(&f.engine, &ds, &cb));
+    let (a, b) = (a.unwrap(), b.unwrap());
+    let ui = Dash::open(f.engine.clone(), &c.work).await;
+    let cmp = ui.get(&format!("/api/evals/compare?a={}&b={}", a.id, b.id)).await;
+    ui.close().await;
+    let runs = fermi_core::eval::runs_dir(&f.home);
+    let (wa, wb) = (runs.join(&a.id).join("tasks/add/work"), runs.join(&b.id).join("tasks/add/work"));
+    for (label, r) in [("a", &a), ("b", &b)] {
+        c.json(&format!("report-{label}.json"), &serde_json::to_value(r).unwrap());
+        c.text(&format!("{label}/patch.diff"), &std::fs::read_to_string(runs.join(&r.id).join(&r.tasks[0].patch)).unwrap_or_default());
     }
-    copy(&src, &to);
-    let text = std::fs::read_to_string(to.join("dataset.toml")).unwrap();
-    let cut = text.match_indices("[[tasks]]").nth(1).map(|(i, _)| i).unwrap_or(text.len());
-    std::fs::write(to.join("dataset.toml"), &text[..cut]).unwrap();
-    fermi_core::eval::Dataset::load(&to).unwrap()
+    c.json("comparison.json", &cmp);
+    let (ta, tb) = (&a.tasks[0], &b.tasks[0]);
+    c.json(
+        "environments.json",
+        &json!({ "a": { "run": a.id, "work": wa, "baseline_tree": baseline_tree(&wa), "model": ta.model, "account": ta.account },
+                 "b": { "run": b.id, "work": wb, "baseline_tree": baseline_tree(&wb), "model": tb.model, "account": tb.account } }),
+    );
+    c.check(
+        "freshEnvironments",
+        canon(&wa) != canon(&wb)
+            && !baseline_tree(&wa).is_empty()
+            && baseline_tree(&wa) == baseline_tree(&wb)
+            && ta.fixture_hash == tb.fixture_hash
+            && a.dataset.hash == b.dataset.hash
+            && ta.account.as_ref().is_some_and(|x| accounts.contains(x))
+            && tb.account.as_ref().is_some_and(|x| accounts.contains(x)),
+        format!(
+            "two folders from the same pristine fixture (tree {}), on {:?} and {:?}",
+            &baseline_tree(&wa).chars().take(12).collect::<String>(),
+            ta.account,
+            tb.account
+        ),
+    );
+    let mem = |w: &Path| -> Vec<String> {
+        fermi_core::memory::Memory::existing(&f.home, w)
+            .map(|m| m.list(fermi_core::memory::Caller::User).iter().map(|v| format!("{} {}", v.record.id, v.record.title)).collect())
+            .unwrap_or_default()
+    };
+    let (mem_a, mem_b) = (mem(&wa), mem(&wb));
+    c.json("isolation.json", &json!({ "memory_a": mem_a, "memory_b": mem_b }));
+    c.check(
+        "noSharedMemory",
+        mem_a.iter().all(|r| !mem_b.contains(r)),
+        format!("project memory: A {} record(s), B {} record(s), none in common", mem_a.len(), mem_b.len()),
+    );
+    let same_oracle = a.evaluator == b.evaluator
+        && ta.checks.iter().map(|x| (x.name.clone(), x.weight)).collect::<Vec<_>>()
+            == tb.checks.iter().map(|x| (x.name.clone(), x.weight)).collect::<Vec<_>>()
+        && ta.max_score == tb.max_score;
+    c.check(
+        "sameOracle",
+        same_oracle,
+        format!(
+            "one evaluator and the same weighted checks: A ({ma}) {} {}/{}, B ({mb}) {} {}/{}",
+            ta.status, ta.score, ta.max_score, tb.status, tb.score, tb.max_score
+        ),
+    );
+    let patch_of = |r: &fermi_core::eval::Report| std::fs::read_to_string(runs.join(&r.id).join(&r.tasks[0].patch)).unwrap_or_default();
+    c.check(
+        "patchIsTheChange",
+        [&a, &b].iter().all(|r| !patch_of(r).contains("target/")),
+        format!("patches of {} and {} lines, without build output", patch_of(&a).lines().count(), patch_of(&b).lines().count()),
+    );
+    let side = |s: &str| &cmp[s];
+    let measured = |s: &str| {
+        side(s)["summary"]["latency_ms"].as_u64().is_some_and(|l| l > 0)
+            && side(s)["summary"]["output_tokens"].as_u64().is_some_and(|t| t > 0)
+    };
+    let cost_stated = |s: &str, k: &str| {
+        side(s)["summary"]["cost_micros"].is_i64()
+            || cmp["missing"].as_array().is_some_and(|m| m.iter().any(|x| x.as_str().is_some_and(|x| x.starts_with(&format!("{k} cost")))))
+    };
+    c.check(
+        "comparisonShowsIdentityQualityLatencyCost",
+        side("a")["config"]["model"] == ma.as_str()
+            && side("b")["config"]["model"] == mb.as_str()
+            && ta.model.as_deref() == Some(ma.as_str())
+            && tb.model.as_deref() == Some(mb.as_str())
+            && side("a")["summary"]["score"].is_u64()
+            && side("b")["summary"]["score"].is_u64()
+            && measured("a")
+            && measured("b")
+            && cost_stated("a", "A")
+            && cost_stated("b", "B"),
+        format!(
+            "A {} score {} in {} ms, {} output tokens, cost {}; B {} score {} in {} ms, {} output tokens, cost {}; missing {}",
+            side("a")["config"]["model"],
+            side("a")["summary"]["score"],
+            side("a")["summary"]["latency_ms"],
+            side("a")["summary"]["output_tokens"],
+            side("a")["summary"]["cost_micros"],
+            side("b")["config"]["model"],
+            side("b")["summary"]["score"],
+            side("b")["summary"]["latency_ms"],
+            side("b")["summary"]["output_tokens"],
+            side("b")["summary"]["cost_micros"],
+            cmp["missing"]
+        ),
+    );
+    c.finish();
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn e2e_09_compare_two_models() {
-    let mut c = Case::start("E2E-09", "T2 T4");
+    let c = Case::start("E2E-09", "T2 T4");
+    let (Some(mut c), live) = acceptance_tests::live_or_block(c) else { return };
+    if let Some(accounts) = live {
+        return e2e_09_live(c, &accounts).await;
+    }
     c.real(&[
         "evaluation runner (fresh folder per run)",
         "independent scoring",
@@ -960,12 +1078,14 @@ async fn e2e_09_compare_two_models() {
         "the dashboard's comparison API",
     ]);
     c.mocked(&["both models (fake-cli)"]);
-    let ds = one_task_dataset(&c);
+    let ds = acceptance_tests::smoke_dataset(&c.work.join("dataset"), 1).unwrap();
     let solution =
         |kind: &str| std::fs::read_to_string(repo_root().join(format!("tests/fixtures/F-EVAL/solutions/add/{kind}.rs"))).unwrap();
     let marker = |m: &str| format!("CANDIDATE-{m}-ONLY-5e1d");
     let a_step = json!({ "match": "Task add:", "text": "Implemented add.", "usage": { "input": 1000, "output": 200 },
-        "edits": [{ "path": "src/lib.rs", "content": solution("correct") }, { "path": "NOTES.md", "content": marker("A") }],
+        "edits": [{ "path": "src/lib.rs", "content": solution("correct") }, { "path": "NOTES.md", "content": marker("A") },
+            { "path": "target/debug/build-output.txt", "content": "what a build leaves behind
+" }],
         "ops": [{ "mcp": { "name": "memory_record", "arguments": { "kind": "note", "title": "How A solved add", "body": format!("{} wrapping is wrong", marker("A")) } } }] });
     let b_step = json!({ "match": "Task add:", "text": "Implemented add.", "usage": { "input": 800, "output": 150 },
         "edits": [{ "path": "src/lib.rs", "content": solution("wrong") }, { "path": "NOTES.md", "content": marker("B") }] });
@@ -1025,6 +1145,11 @@ async fn e2e_09_compare_two_models() {
             && mem_a.iter().any(|m| m.contains(&marker("A")))
             && !mem_b.iter().any(|m| m.contains(&marker("A"))),
         "each folder, patch and prompt holds only its own candidate's work; A's memory note stayed in A's project",
+    );
+    c.check(
+        "patchIsTheChange",
+        patch(&a).contains("src/lib.rs") && patch(&a).contains("NOTES.md") && !patch(&a).contains("target/"),
+        "A's patch holds its edits, not the build output it left in its folder",
     );
     let same_oracle = a.evaluator == b.evaluator
         && a.tasks[0].checks.iter().map(|x| (x.name.clone(), x.weight)).collect::<Vec<_>>()

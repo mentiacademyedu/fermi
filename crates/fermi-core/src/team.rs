@@ -312,7 +312,7 @@ fn unmerged(dir: &Path) -> Vec<String> {
 
 /// Build output agents leave behind when they run code, which `git add -A`
 /// would otherwise commit (only untracked files are affected).
-const JUNK: [&str; 9] =
+pub(crate) const JUNK: [&str; 9] =
     ["__pycache__/", "*.pyc", "*.pyo", ".pytest_cache/", ".mypy_cache/", ".ruff_cache/", "node_modules/", ".DS_Store", "Thumbs.db"];
 
 /// Keeps fermi's marker files and build junk out of every worktree's

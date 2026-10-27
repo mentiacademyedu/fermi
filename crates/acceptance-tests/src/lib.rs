@@ -316,6 +316,58 @@ pub fn ground_truth(name: &str, file: &str) -> Value {
     serde_json::from_slice(&std::fs::read(&p).unwrap_or_else(|e| panic!("{}: {e}", p.display()))).expect("ground truth JSON")
 }
 
+/// A copy of the F-EVAL `smoke` dataset at `dest`, cut to its first `keep` tasks.
+pub fn smoke_dataset(dest: &Path, keep: usize) -> Result<fermi_core::eval::Dataset> {
+    copy_dir(&repo_root().join("tests").join("fixtures").join("F-EVAL").join("smoke"), dest)?;
+    let toml = dest.join("dataset.toml");
+    let text = std::fs::read_to_string(&toml)?;
+    let cut = text.match_indices("[[tasks]]").nth(keep).map(|(i, _)| i).unwrap_or(text.len());
+    std::fs::write(&toml, &text[..cut])?;
+    fermi_core::eval::Dataset::load(dest)
+}
+
+// ── live providers ──────────────────────────────────────────────────────────
+
+/// The accounts a live run may use (`xtask … --profile live --live-accounts a,b`);
+/// None outside the live profile, or when none were given.
+pub fn live_accounts() -> Option<Vec<String>> {
+    if std::env::var("ACCEPTANCE_PROFILE").ok().as_deref() != Some("live") {
+        return None;
+    }
+    let ids: Vec<String> = std::env::var("ACCEPTANCE_LIVE_ACCOUNTS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    (!ids.is_empty()).then_some(ids)
+}
+
+/// In the live profile: whether this case should run on real models, or
+/// (Some(case) back) carry on with its deterministic form. Without accounts
+/// to use, a live run blocks the case instead of passing it on fake models.
+pub fn live_or_block(c: Case) -> (Option<Case>, Option<Vec<String>>) {
+    if std::env::var("ACCEPTANCE_PROFILE").ok().as_deref() != Some("live") {
+        return (Some(c), None);
+    }
+    match live_accounts() {
+        Some(a) => (Some(c), Some(a)),
+        None => {
+            c.block("the live profile needs real accounts: pass --live-accounts to the runner");
+            (None, None)
+        }
+    }
+}
+
+/// The two models a live comparison runs, from the first live account's
+/// provider (both run on the given accounts).
+pub fn live_models(f: &Fermi) -> Option<(String, String)> {
+    match f.engine.cfg.accounts.first()?.provider {
+        fermi_core::Provider::Claude => Some(("claude:sonnet".into(), "claude:haiku".into())),
+        _ => None,
+    }
+}
+
 // ── fermi with fake providers ───────────────────────────────────────────────
 
 /// A configured account whose CLI is the fake.
@@ -442,6 +494,53 @@ impl Fermi {
         std::fs::write(home.join("config.toml"), &cfg)?;
         let cfg = Config::parse(&cfg)?;
         let engine = Arc::new(Engine::new(cfg, home.clone(), 0));
+        Ok(Fermi { home, engine })
+    }
+
+    /// fermi on real accounts, for the live profile: each account in
+    /// `accounts` is copied from the user's own config (`~/.fermi/config.toml`,
+    /// or `$FERMI_HOME`) with the CLIs it names, so the real CLI runs in the
+    /// account's own folder; history, usage and tapes stay in this case's home.
+    /// Agents may edit files (`acceptEdits`).
+    pub fn live(case: &Case, name: &str, accounts: &[String], extra_profile: &str) -> Result<Fermi> {
+        let home = case.work.join(name);
+        std::fs::create_dir_all(&home)?;
+        let mine = Config::load().context("the live profile uses the accounts in your fermi config")?;
+        let q = |s: &str| serde_json::to_string(s).unwrap();
+        let mut cfg = String::from("default_profile = \"p\"\n\n[bins]\n");
+        for (k, v) in [("claude", &mine.bins.claude), ("codex", &mine.bins.codex), ("gemini", &mine.bins.gemini)] {
+            if let Some(v) = v {
+                cfg += &format!("{k} = {}\n", q(v));
+            }
+        }
+        cfg += &format!("fermi = {}\n\n", q(&fermi_bridge().display().to_string().replace('\\', "/")));
+        for id in accounts {
+            let a =
+                mine.accounts.iter().find(|a| &a.id == id).with_context(|| format!("no account `{id}` in {}", Config::path().display()))?;
+            cfg += &format!(
+                "[[accounts]]\nid = {}\nprovider = {}\nauth = {}\n",
+                q(&a.id),
+                serde_json::to_string(&a.provider)?,
+                serde_json::to_string(&a.auth)?
+            );
+            // The folder the account really uses, written out: an account without
+            // `home` lives under the user's fermi home, not this case's.
+            let folder = a.home_dir().map(|p| p.display().to_string().replace('\\', "/")).unwrap_or_else(|| "default".into());
+            cfg += &format!("home = {}\n", q(&folder));
+            for (k, v) in [("api_key_env", &a.api_key_env), ("base_url", &a.base_url)] {
+                if let Some(v) = v {
+                    cfg += &format!("{k} = {}\n", q(v));
+                }
+            }
+            cfg += "\n";
+        }
+        let ids: Vec<String> = accounts.iter().map(|a| q(a)).collect();
+        cfg += &format!(
+            "[[profiles]]\nname = \"p\"\naccounts = [{}]\nmode = \"auto\"\npermission_mode = \"acceptEdits\"\n{extra_profile}\n",
+            ids.join(", ")
+        );
+        std::fs::write(home.join("config.toml"), &cfg)?;
+        let engine = Arc::new(Engine::new(Config::parse(&cfg)?, home.clone(), 0));
         Ok(Fermi { home, engine })
     }
 

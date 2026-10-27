@@ -168,9 +168,95 @@ async fn ev_01_five_task_smoke_evaluation() {
     c.finish();
 }
 
+/// The fields of a report and of its first task, for comparing schemas.
+fn report_keys(r: &Report) -> Vec<String> {
+    let v = serde_json::to_value(r).unwrap();
+    let mut k: Vec<String> = v.as_object().unwrap().keys().cloned().collect();
+    k.extend(v["tasks"][0].as_object().unwrap().keys().map(|x| format!("task.{x}")));
+    k.sort();
+    k
+}
+
+/// A real account and its two models for a live case, or the case blocked.
+fn live_setup(c: Case, accounts: &[String], homes: &[&str]) -> Option<(Case, Vec<Fermi>, String, String)> {
+    let mut fs = vec![];
+    for h in homes {
+        match Fermi::live(&c, h, accounts, "") {
+            Ok(f) => fs.push(f),
+            Err(e) => {
+                c.block(&format!("{e:#}"));
+                return None;
+            }
+        }
+    }
+    match acceptance_tests::live_models(&fs[0]) {
+        Some((a, b)) => Some((c, fs, a, b)),
+        None => {
+            c.block("the live comparison is set up for Claude accounts");
+            None
+        }
+    }
+}
+
+/// EV-02 on real models: two models of a real account, one frozen task.
+async fn ev_02_live(c: Case, accounts: &[String]) {
+    let Some((mut c, fs, ma, mb)) = live_setup(c, accounts, &["home-a", "home-b"]) else { return };
+    c.real(&["evaluation runner", "fermi engine", "the provider's own CLI on a real account", "two real models", "billing"]);
+    let ds = acceptance_tests::smoke_dataset(&c.work.join("datasets").join("smoke"), 1).unwrap();
+    let (ca, cb) = (config("A", &ma), config("B", &mb));
+    let (a, b) = tokio::join!(eval::run(&fs[0].engine, &ds, &ca), eval::run(&fs[1].engine, &ds, &cb));
+    let (a, b) = (a.unwrap(), b.unwrap());
+    evidence(&mut c, &fs[0].home, &a, "a");
+    evidence(&mut c, &fs[1].home, &b, "b");
+    c.check("sameSchema", report_keys(&a) == report_keys(&b) && a.schema == b.schema, format!("{} fields each", report_keys(&a).len()));
+    c.check(
+        "sameBasis",
+        a.dataset.hash == b.dataset.hash && a.evaluator == b.evaluator && a.limits == b.limits,
+        format!("dataset {} {} ({}), evaluator {}", a.dataset.name, a.dataset.version, &a.dataset.hash[..12], a.evaluator),
+    );
+    c.check(
+        "identityRecorded",
+        a.tasks[0].model.as_deref() == Some(ma.as_str())
+            && b.tasks[0].model.as_deref() == Some(mb.as_str())
+            && a.fingerprint != b.fingerprint,
+        format!("A {:?} on {:?}, B {:?} on {:?}", a.tasks[0].model, a.tasks[0].account, b.tasks[0].model, b.tasks[0].account),
+    );
+    let measured = |r: &Report| {
+        r.tasks.iter().all(|t| t.latency_ms > 0 && t.input_tokens.is_some_and(|n| n > 0) && t.output_tokens.is_some_and(|n| n > 0))
+    };
+    c.check(
+        "latencyAndUsage",
+        measured(&a) && measured(&b),
+        format!(
+            "A {} ms, {} in / {} out; B {} ms, {} in / {} out (as the provider reported)",
+            a.summary.latency_ms,
+            a.summary.input_tokens,
+            a.summary.output_tokens,
+            b.summary.latency_ms,
+            b.summary.input_tokens,
+            b.summary.output_tokens
+        ),
+    );
+    let stated = |r: &Report| r.summary.cost_micros.is_some() || r.summary.missing.iter().any(|m| m.starts_with("cost:"));
+    c.check(
+        "costStated",
+        stated(&a) && stated(&b),
+        format!(
+            "A cost {:?}, B cost {:?}; unknown costs listed: {:?} / {:?}",
+            a.summary.cost_micros, b.summary.cost_micros, a.summary.missing, b.summary.missing
+        ),
+    );
+    c.check("separateEnvironments", a.id != b.id && fs[0].home != fs[1].home, "each run in its own fermi home and run folder");
+    c.finish();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn ev_02_cross_model_reports() {
-    let mut c = Case::start("EV-02", "T1 T4");
+    let c = Case::start("EV-02", "T1 T4");
+    let (Some(mut c), live) = acceptance_tests::live_or_block(c) else { return };
+    if let Some(accounts) = live {
+        return ev_02_live(c, &accounts).await;
+    }
     c.real(&["evaluation runner", "fermi engine with two providers' adapters", "billing (price table)"]);
     c.mocked(&["both models (fake-cli speaking the Claude and Codex formats)"]);
     let ds = smoke(&c, "smoke");
@@ -267,9 +353,71 @@ async fn ev_03_known_failure_detection() {
     c.finish();
 }
 
+/// EV-04 on real models: the dashboard compares two real configurations.
+async fn ev_04_live(c: Case, accounts: &[String]) {
+    let Some((mut c, fs, ma, mb)) = live_setup(c, accounts, &["home"]) else { return };
+    c.real(&["evaluation runner", "comparison", "the dashboard's HTTP API", "the provider's own CLI on a real account", "two real models"]);
+    let ds = acceptance_tests::smoke_dataset(&c.work.join("datasets").join("smoke"), 1).unwrap();
+    let f = &fs[0];
+    let (ca, cb) = (config("A", &ma), config("B", &mb));
+    let (a, b) = tokio::join!(eval::run(&f.engine, &ds, &ca), eval::run(&f.engine, &ds, &cb));
+    let (a, b) = (a.unwrap(), b.unwrap());
+    let server = fermi::server::start(f.engine.clone(), 0, c.work.clone(), "acceptance").await.unwrap();
+    let (base, token) = server.url.split_once("/#t=").map(|(b, t)| (b.to_string(), t.to_string())).unwrap();
+    let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+    let serving = tokio::spawn(server.serve(async {
+        let _ = stop_rx.await;
+    }));
+    let http = reqwest::Client::new();
+    let get = |path: String| http.get(format!("{base}{path}")).header("x-fermi-token", &token).send();
+    let list: Value = get("/api/evals".into()).await.unwrap().json().await.unwrap();
+    let cmp: Value = get(format!("/api/evals/compare?a={}&b={}", a.id, b.id)).await.unwrap().json().await.unwrap();
+    let _ = stop_tx.send(());
+    let _ = serving.await;
+    evidence(&mut c, &f.home, &a, "a");
+    evidence(&mut c, &f.home, &b, "b");
+    c.json("dashboard-list.json", &list);
+    c.json("dashboard-comparison.json", &cmp);
+    c.check("listed", list["runs"].as_array().map_or(0, |r| r.len()) == 2, "both runs on the dashboard");
+    let raw = |r: &Report| (r.tasks.iter().map(|t| t.score as i64).sum::<i64>(), r.tasks.iter().map(|t| t.latency_ms as i64).sum::<i64>());
+    let ((sa, la), (sb, lb)) = (raw(&a), raw(&b));
+    let d = &cmp["differences"];
+    c.check(
+        "reconciles",
+        cmp["a"]["summary"]["score"] == sa && cmp["b"]["summary"]["score"] == sb && d["score"] == sb - sa && d["latency_ms"] == lb - la,
+        format!("{ma} score {sa} in {la} ms → {mb} score {sb} in {lb} ms (Δ {} points, Δ {} ms)", d["score"], d["latency_ms"]),
+    );
+    let rows = cmp["tasks"].as_array().cloned().unwrap_or_default();
+    let per_task = rows.iter().all(|row| {
+        let id = row["task"].as_str().unwrap_or_default();
+        row["a"]["score"] == task(&a, id).score && row["b"]["score"] == task(&b, id).score
+    });
+    c.check("perTask", rows.len() == 1 && per_task, "the task's quality, latency and cost for A and B, matching the reports");
+    let cost_ok = match (a.summary.cost_micros, b.summary.cost_micros) {
+        (Some(x), Some(y)) => d["cost_micros"] == y - x,
+        _ => d["cost_micros"].is_null(),
+    };
+    c.check(
+        "costDifference",
+        cost_ok,
+        format!("A cost {:?} µ$, B cost {:?} µ$, difference shown: {}", a.summary.cost_micros, b.summary.cost_micros, d["cost_micros"]),
+    );
+    let note = cmp["note"].as_str().unwrap_or_default();
+    c.check(
+        "honest",
+        cmp["sample_size"] == 1 && note.contains("no statistical significance is claimed"),
+        format!("n = {}; missing {}; note: {note}", cmp["sample_size"], cmp["missing"]),
+    );
+    c.finish();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn ev_04_configuration_comparison() {
-    let mut c = Case::start("EV-04", "T1 T4");
+    let c = Case::start("EV-04", "T1 T4");
+    let (Some(mut c), live) = acceptance_tests::live_or_block(c) else { return };
+    if let Some(accounts) = live {
+        return ev_04_live(c, &accounts).await;
+    }
     c.real(&["evaluation runner", "comparison", "the dashboard's HTTP API"]);
     c.mocked(&["both configurations' models (fake-cli)"]);
     let ds = smoke(&c, "smoke");
