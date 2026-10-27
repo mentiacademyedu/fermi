@@ -77,16 +77,16 @@ A failing check makes the test panic after the evidence is written, so `cargo te
 
 ```text
 cargo run --locked -p xtask -- acceptance [--id MA-04]… [--system MA]… [--implemented | --all]
-                                          [--profile deterministic|security|live] [--allow-billable] [--repeat N]
+                                          [--profile deterministic|security|live] [--allow-billable] [--live-accounts a,b] [--repeat N]
 cargo run --locked -p xtask -- report --run-id <id>
 ```
 
 - Reads `systems.yaml`, rejects unknown IDs, and selects cases by ID, system and profile. `--implemented` selects every case with a test.
-- Builds the tests once, then runs each case in its own process: `cargo test -p acceptance-tests --test <file> <name> -- --exact`, with `ACCEPTANCE_RUN_ID` and `ACCEPTANCE_ATTEMPT` set.
+- Builds the tests once, then runs each case in its own process: `cargo test -p acceptance-tests --test <file> <name> -- --exact`, with `ACCEPTANCE_RUN_ID`, `ACCEPTANCE_ATTEMPT` and `ACCEPTANCE_PROFILE` set (and `ACCEPTANCE_LIVE_ACCOUNTS` from `--live-accounts`).
 - A pass counts only if the process succeeded **and** `result.json` exists, names the right case and attempt, says passed, and every artifact matches its manifest hash.
 - A case without a test is recorded as `not_implemented`; nothing missing counts as passed. Cases with `repetitions` (MA-01: 20) run that many attempts and pass only if all do; every attempt is kept.
 - Writes `summary.json` (run, profile, revision, dirty flag, OS, every case with its attempts) and `REPORT.md` (overall *passed / 106*, per-system table). Exit code 0 only if every selected case passed, 1 otherwise, 2 for usage or build errors.
-- The live profile refuses to start without `--allow-billable`.
+- The live profile refuses to start without `--allow-billable`. Its model cases (EV-02, EV-04, E2E-09) run on the accounts given with `--live-accounts`, copied from the user's own fermi config by `Fermi::live` (the real CLI, in the account's own folder; history, usage and tapes stay in the case's folder); without accounts they report blocked, never passed on fake models.
 
 Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with it restored AI-05 passed and the runner exited 0.
 
@@ -96,7 +96,7 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 | --- | --- | --- |
 | deterministic (default) | T0, T1, local T2 | engine, hub, teams, code index and verification with the fake CLI and fixtures; real cargo, clippy and git; the dashboard API over HTTP (VE-08) |
 | security | T3 | real process trees: crash isolation (MA-06) and cancellation (MA-07); sandbox and secret cases come with System 10 |
-| live | T4 | opt-in real provider smoke tests; requires `--allow-billable` (no live tests yet) |
+| live | T4 | the worker cases (LR-03 … LR-07, E2E-06) and the model comparisons (EV-02, EV-04, E2E-09) on real models of the given accounts; requires `--allow-billable`, and `--live-accounts` for the model cases |
 
 ## CI
 

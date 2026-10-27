@@ -1,0 +1,1451 @@
+{
+  "cases": [
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3474,
+      "id": "AI-01",
+      "status": "passed",
+      "system": "model-agnostic-ai-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 6406,
+      "id": "AI-02",
+      "status": "passed",
+      "system": "model-agnostic-ai-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1368,
+      "id": "AI-03",
+      "status": "passed",
+      "system": "model-agnostic-ai-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 815,
+      "id": "AI-04",
+      "status": "passed",
+      "system": "model-agnostic-ai-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 974,
+      "id": "AI-05",
+      "status": "passed",
+      "system": "model-agnostic-ai-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 940,
+      "id": "AI-06",
+      "status": "passed",
+      "system": "model-agnostic-ai-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3481,
+      "id": "AI-07",
+      "status": "passed",
+      "system": "model-agnostic-ai-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2187,
+      "id": "AI-08",
+      "status": "passed",
+      "system": "model-agnostic-ai-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a2",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a3",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a4",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a5",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a6",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a7",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a8",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a9",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a10",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a11",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a12",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a13",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a14",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a15",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a16",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a17",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a18",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a19",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        },
+        {
+          "attempt": "a20",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 22965,
+      "id": "MA-01",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 13032,
+      "id": "MA-02",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 8012,
+      "id": "MA-03",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3616,
+      "id": "MA-04",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3538,
+      "id": "MA-05",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1431,
+      "id": "MA-06",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 4579,
+      "id": "MA-07",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 10687,
+      "id": "MA-08",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2443,
+      "id": "CI-01",
+      "status": "passed",
+      "system": "semantic-codebase-intelligence"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1492,
+      "id": "CI-02",
+      "status": "passed",
+      "system": "semantic-codebase-intelligence"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1546,
+      "id": "CI-03",
+      "status": "passed",
+      "system": "semantic-codebase-intelligence"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 4353,
+      "id": "CI-04",
+      "status": "passed",
+      "system": "semantic-codebase-intelligence"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1700,
+      "id": "CI-05",
+      "status": "passed",
+      "system": "semantic-codebase-intelligence"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1658,
+      "id": "CI-06",
+      "status": "passed",
+      "system": "semantic-codebase-intelligence"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1546,
+      "id": "CI-07",
+      "status": "passed",
+      "system": "semantic-codebase-intelligence"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1626,
+      "id": "CI-08",
+      "status": "passed",
+      "system": "semantic-codebase-intelligence"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3657,
+      "id": "PM-01",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1486,
+      "id": "PM-02",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2062,
+      "id": "PM-03",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1004,
+      "id": "PM-04",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1578,
+      "id": "PM-05",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1067,
+      "id": "PM-06",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2541,
+      "id": "PM-07",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1613,
+      "id": "PM-08",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3361,
+      "id": "VE-01",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 5453,
+      "id": "VE-02",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 12467,
+      "id": "VE-03",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2435,
+      "id": "VE-04",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1567,
+      "id": "VE-05",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1762,
+      "id": "VE-06",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 7650,
+      "id": "VE-07",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 10664,
+      "id": "VE-08",
+      "status": "passed",
+      "system": "integrated-verification-engine"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 4666,
+      "id": "BA-01",
+      "status": "passed",
+      "system": "browser-and-application-control"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2777,
+      "id": "BA-02",
+      "status": "passed",
+      "system": "browser-and-application-control"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2637,
+      "id": "BA-03",
+      "status": "passed",
+      "system": "browser-and-application-control"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2276,
+      "id": "BA-04",
+      "status": "passed",
+      "system": "browser-and-application-control"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2800,
+      "id": "BA-05",
+      "status": "passed",
+      "system": "browser-and-application-control"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2652,
+      "id": "BA-06",
+      "status": "passed",
+      "system": "browser-and-application-control"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3624,
+      "id": "BA-07",
+      "status": "passed",
+      "system": "browser-and-application-control"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3453,
+      "id": "BA-08",
+      "status": "passed",
+      "system": "browser-and-application-control"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 4566,
+      "id": "PL-01",
+      "status": "passed",
+      "system": "composable-harness-and-plugins"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2285,
+      "id": "PL-02",
+      "status": "passed",
+      "system": "composable-harness-and-plugins"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 5220,
+      "id": "PL-03",
+      "status": "passed",
+      "system": "composable-harness-and-plugins"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 6291,
+      "id": "PL-04",
+      "status": "passed",
+      "system": "composable-harness-and-plugins"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2960,
+      "id": "PL-05",
+      "status": "passed",
+      "system": "composable-harness-and-plugins"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2258,
+      "id": "PL-06",
+      "status": "passed",
+      "system": "composable-harness-and-plugins"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 719,
+      "id": "PL-08",
+      "status": "passed",
+      "system": "composable-harness-and-plugins"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2990,
+      "id": "OB-01",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1213,
+      "id": "OB-02",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 963,
+      "id": "OB-03",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1217,
+      "id": "OB-04",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 858,
+      "id": "OB-05",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 7572,
+      "id": "OB-06",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1069,
+      "id": "OB-07",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1219,
+      "id": "OB-08",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 683,
+      "id": "CO-01",
+      "status": "passed",
+      "system": "cost-and-performance"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 814,
+      "id": "CO-02",
+      "status": "passed",
+      "system": "cost-and-performance"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 837,
+      "id": "CO-03",
+      "status": "passed",
+      "system": "cost-and-performance"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 671,
+      "id": "CO-04",
+      "status": "passed",
+      "system": "cost-and-performance"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1540,
+      "id": "CO-05",
+      "status": "passed",
+      "system": "cost-and-performance"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2367,
+      "id": "CO-06",
+      "status": "passed",
+      "system": "cost-and-performance"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1104,
+      "id": "CO-07",
+      "status": "passed",
+      "system": "cost-and-performance"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 6325,
+      "id": "CO-08",
+      "status": "passed",
+      "system": "cost-and-performance"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3568,
+      "id": "SE-06",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 869,
+      "id": "SE-07",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 5520,
+      "id": "LR-01",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "no Docker able to run Linux containers on this machine (the container cases run on Linux CI)",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 594,
+      "id": "LR-02",
+      "status": "blocked",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 9554,
+      "id": "LR-04",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3756,
+      "id": "LR-05",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3563,
+      "id": "LR-08",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 14935,
+      "id": "EV-01",
+      "status": "passed",
+      "system": "evaluation-and-self-improvement"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 25624,
+      "id": "EV-02",
+      "status": "passed",
+      "system": "evaluation-and-self-improvement"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 25696,
+      "id": "EV-03",
+      "status": "passed",
+      "system": "evaluation-and-self-improvement"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 25658,
+      "id": "EV-04",
+      "status": "passed",
+      "system": "evaluation-and-self-improvement"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 39474,
+      "id": "EV-05",
+      "status": "passed",
+      "system": "evaluation-and-self-improvement"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 27867,
+      "id": "EV-07",
+      "status": "passed",
+      "system": "evaluation-and-self-improvement"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 27069,
+      "id": "EV-08",
+      "status": "passed",
+      "system": "evaluation-and-self-improvement"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 10089,
+      "id": "E2E-01",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 62784,
+      "id": "E2E-02",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 7130,
+      "id": "E2E-03",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 6425,
+      "id": "E2E-04",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 4918,
+      "id": "E2E-05",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 8142,
+      "id": "E2E-06",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "the OS file sandbox for plugins needs Linux (Landlock); the refusal in the agent's trace and the plugin log were verified on this platform",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 1894,
+      "id": "E2E-07",
+      "status": "blocked",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1071,
+      "id": "E2E-08",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3620,
+      "id": "E2E-09",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 10871,
+      "id": "E2E-10",
+      "status": "passed",
+      "system": "end-to-end"
+    }
+  ],
+  "commitSha": "7dc936c5ea5b99e0d19256916271fbe51b1cf1c8",
+  "dirtyTree": false,
+  "os": "windows",
+  "profile": "deterministic",
+  "runId": "2026-10-27-7dc936c"
+}

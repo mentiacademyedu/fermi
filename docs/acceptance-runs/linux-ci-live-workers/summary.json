@@ -9,7 +9,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 4067,
+      "durationMs": 2005,
       "id": "LR-03",
       "status": "passed",
       "system": "local-and-remote-execution"
@@ -23,7 +23,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 6687,
+      "durationMs": 6752,
       "id": "LR-04",
       "status": "passed",
       "system": "local-and-remote-execution"
@@ -37,7 +37,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2133,
+      "durationMs": 2419,
       "id": "LR-05",
       "status": "passed",
       "system": "local-and-remote-execution"
@@ -51,7 +51,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 5998,
+      "durationMs": 6145,
       "id": "LR-06",
       "status": "passed",
       "system": "local-and-remote-execution"
@@ -65,7 +65,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2091,
+      "durationMs": 2149,
       "id": "LR-07",
       "status": "passed",
       "system": "local-and-remote-execution"
@@ -79,7 +79,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 6776,
+      "durationMs": 6852,
       "id": "E2E-06",
       "status": "passed",
       "system": "end-to-end"
@@ -88,20 +88,19 @@
       "attempts": [
         {
           "attempt": "a1",
-          "exitCode": 0,
-          "reason": null,
-          "status": "passed"
+          "reason": "the live profile needs real accounts: pass --live-accounts to the runner",
+          "status": "blocked"
         }
       ],
-      "durationMs": 617,
+      "durationMs": 259,
       "id": "E2E-09",
-      "status": "passed",
+      "status": "blocked",
       "system": "end-to-end"
     }
   ],
-  "commitSha": "ee160928ad6325240bd36972c09ae2338ae5c7a4",
+  "commitSha": "7dc936c5ea5b99e0d19256916271fbe51b1cf1c8",
   "dirtyTree": false,
   "os": "linux",
   "profile": "live",
-  "runId": "ci-40164598030-1-live-workers"
+  "runId": "ci-40599642988-1-live-workers"
 }

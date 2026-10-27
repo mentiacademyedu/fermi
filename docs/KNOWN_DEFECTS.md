@@ -106,6 +106,13 @@ Found and fixed while writing the tests; listed so the history is complete.
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
 
+## Found by the live tier (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Design gap, caught by the first live run of E2E-09 | a real agent built the code in its evaluation folder, and the patch fermi keeps as evidence took in Cargo's whole `target/` folder (60,380 lines for one task); scoring already skipped `target`, so scores were right, but the evidence was buried and large | the evaluation folder's local git exclude leaves out `target/` and the build junk team runs already ignore; E2E-09 now checks the patch in both its forms, and the negative control (the exclusion removed) fails it; the live patches are 22 lines |
+| Test harness | an account without `home` lives under the user's fermi home (`~/.fermi/accounts/<id>`); copied as is into a case's config it would have resolved there only because the test process shares `FERMI_HOME` | `Fermi::live` writes the folder the account really uses |
+
 ## Found while building the end-to-end workflows (no open defects)
 
 | Kind | Issue | Fix |

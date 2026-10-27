@@ -4,13 +4,13 @@
 
 | Field | Value |
 | --- | --- |
-| Run | `2026-10-25-ee16092` (deterministic), `2026-10-25-ee16092-security` and `2026-10-25-ee16092-live-workers`, plus the same three on Linux CI for the same commit |
-| Revision | `ee16092` (full SHA in the run summaries); clean working tree |
-| Date | 2026-10-24 (2026-10-25 UTC) |
+| Run | `2026-10-27-7dc936c` (deterministic), `2026-10-27-7dc936c-security` and `2026-10-27-7dc936c-live`, plus the same three on Linux CI for the same commit (its live job has no real accounts) |
+| Revision | `7dc936c` (full SHA in the run summaries); clean working tree |
+| Date | 2026-10-27 |
 | Environment | Windows 11 Home 10.0.26200, Rust 1.96.0 (`rust-toolchain.toml`), local developer machine |
-| Providers | fake CLI (`crates/acceptance-tests/src/bin/fake-cli.rs`) and mock HTTP model endpoints (`src/provider.rs`); no live provider calls, no metered usage |
+| Providers | fake CLI (`crates/acceptance-tests/src/bin/fake-cli.rs`) and mock HTTP model endpoints (`src/provider.rs`) for every case in the deterministic and security runs; in the live run, EV-02, EV-04 and E2E-09 ran on real models (Claude Sonnet 5.5 and Haiku 5.5 through Claude Code 2.1.312 on the user's subscription account `jezusmax`, one small task per model and case) |
 | Real tools | git and worktrees, cargo (check, test, clippy) on fixture copies, the dashboard's HTTP API (every end-to-end workflow), headless browsers, worker processes, Docker and the Linux Landlock sandbox (the last two on Linux CI) |
-| Command | `cargo run -p xtask -- acceptance --implemented --allow-blocked`, the same with `--profile security --allow-blocked`, and `--system LR --system E2E --profile live --allow-billable --allow-blocked` (no provider is called); Linux CI runs the same three |
+| Command | `cargo run -p xtask -- acceptance --implemented --allow-blocked`, the same with `--profile security --allow-blocked`, and `--implemented --profile live --allow-billable --allow-blocked --live-accounts jezusmax`; Linux CI runs the same three, its live job without accounts |
 | Evidence | `tests/reports/<run>/<case>/<attempt>/` (result.json, manifest.json with SHA-256, artifacts); summaries and reports published in `docs/acceptance-runs/` |
 | CI | GitHub Actions on Ubuntu runs the same gates on every push |
 
@@ -24,8 +24,8 @@
 | Acceptance, deterministic | `xtask acceptance --implemented` | 93 passed, 2 blocked (LR-02 needs Docker, E2E-07 needs Landlock), runner exit 0 (Linux CI: 95 of 95, with Chrome, Docker and Landlock) |
 | Acceptance, security (Windows) | `xtask acceptance --implemented --profile security --allow-blocked` | 19 passed, 6 blocked (PL-07, SE-01/04/05 and E2E-07 need Linux Landlock; LR-02 needs Docker), runner exit 0 |
 | Acceptance, security (Linux CI) | `xtask acceptance --system SE --system MA --system PL --system EV --system LR --system E2E --profile security` on Ubuntu | passed: all 21 (SE-01 … SE-08, MA-06, MA-07, PL-04, PL-07, EV-06, LR-02, LR-06, LR-07, E2E-02, E2E-04, E2E-05, E2E-07, E2E-08) on the real OS sandbox and Docker; 6 of these blocked on Windows (`docs/acceptance-runs/linux-ci-security/`) |
-| Acceptance, live (workers and E2E, no provider) | `xtask acceptance --system LR --system E2E --profile live --allow-billable --allow-blocked` (no provider is called) | Windows: 6 passed, LR-03 blocked (Docker); Linux CI: all 7 passed |
-| Coverage | `cargo llvm-cov --workspace --locked` | 67.1% of product lines on Windows (at `291c237`, the published revision plus a test-harness fix), 67.2% on Linux CI (see `TEST_COVERAGE.md`) |
+| Acceptance, live | `xtask acceptance --implemented --profile live --allow-billable --allow-blocked --live-accounts jezusmax` | Windows: 8 passed (LR-04 … LR-07 and E2E-06 on workers; EV-02, EV-04 and E2E-09 on real Claude models), LR-03 blocked (Docker); Linux CI, which has no real accounts: LR-03 … LR-07 and E2E-06 passed, E2E-09 blocked (it passes there in the deterministic profile) |
+| Coverage | `cargo llvm-cov --workspace --locked` | 67.2% of product lines on Linux CI at `7dc936c`; 67.1% on Windows at `291c237` (see `TEST_COVERAGE.md`) |
 
 ## Acceptance outcomes
 
@@ -87,19 +87,21 @@ Every pass has a `result.json` whose checks all passed and whose artifacts match
 | Negative: plugin log entries without the task | `negative-control-e2e07` | E2E-07 failed (no refusal logged for the task), runner exit 1 |
 | Negative: the review diff fingerprints the user's checkout | `negative-control-e2e10` | E2E-10 failed (the revision under review didn't match the tested one), runner exit 1 |
 | Positive: all restored | `2026-10-25-ee16092` | every E2E case passed (E2E-07 on Linux CI) |
+| Negative: the evaluation work folder without its build-output exclusion | `negative-control-eval-build-output` | E2E-09 failed (A's patch held the file its build left under `target/`), runner exit 1 |
+| Positive: restored | `2026-10-27-7dc936c` | E2E-09 passed, on fake and on real models |
 | In-test control (OB-08): a tampered recording | each OB-08 run | the replay reports the difference and the state hashes differ |
 
 ### Defects
 
-No product defect is open. Product defects found and fixed so far: CLI outages without failover (D-004), orphaned processes after cancel (D-005), four code-index gaps (D-006); plus gate and environment issues D-001, D-002, D-003, D-007. The end-to-end workflows found two more, fixed before release: a cancelled call kept its account counted as busy, and the dashboard refused tasks for a profile whose accounts are on workers. Design gaps in the merge gate, in redaction and in protecting evaluation assets on Windows, an egress-proxy regression, a worker cancellation that left the job running, a history race, and a browser cold start slower than its launch wait on a busy CI runner (a late save overwriting a resumed task) were caught before release. Details in `KNOWN_DEFECTS.md`.
+No product defect is open. Product defects found and fixed so far: CLI outages without failover (D-004), orphaned processes after cancel (D-005), four code-index gaps (D-006); plus gate and environment issues D-001, D-002, D-003, D-007. The end-to-end workflows found two more, fixed before release: a cancelled call kept its account counted as busy, and the dashboard refused tasks for a profile whose accounts are on workers. The live tier found one more on its first run, fixed before release: a real agent's build put Cargo's `target/` folder (60,380 lines) into the evaluation patch kept as evidence. Design gaps in the merge gate, in redaction and in protecting evaluation assets on Windows, an egress-proxy regression, a worker cancellation that left the job running, a history race, and a browser cold start slower than its launch wait on a busy CI runner (a late save overwriting a resumed task) were caught before release. Details in `KNOWN_DEFECTS.md`.
 
 ## Readiness verdict
 
-**Ready on the deterministic, security and worker profiles; not yet established against live providers.** All 96 system cases and all 10 end-to-end workflows pass on revision `ee16092` (106 / 106: Linux CI passes every one; Windows passes 99 and reports the seven that need Landlock or Docker as blocked), with the real OS sandbox, Docker, browsers and worker processes exercised. Every case uses simulated model output: no case has run against a real Claude, OpenAI or Gemini model, which the plan's live profile (T4) asks for before a full readiness claim.
+**Ready on every profile the plan defines, with the live tier covering one provider.** All 96 system cases and all 10 end-to-end workflows pass on revision `7dc936c` (106 / 106: Linux CI passes every one; Windows passes 99 and reports the seven that need Landlock or Docker as blocked), with the real OS sandbox, Docker, browsers and worker processes exercised. The live profile ran the three cases that compare models (EV-02, EV-04, E2E-09) on real models, Claude Sonnet 5.5 and Haiku 5.5 on the user's account, and they passed: fresh environments, one oracle, model identity, latency and the provider's usage recorded, and cost reported as unknown because a subscription has no price table. Not covered live: OpenAI and Gemini models (only one Claude account was approved), and every other case, which uses simulated model output by design. One small task per model is a smoke test, not a benchmark of model quality.
 
 ## Verified status of the 12 systems
 
-*Mock-only verified* means the case passed with real fermi components and a simulated model; no live provider was used.
+*Mock-only verified* means the case passed with real fermi components and a simulated model. EV-02, EV-04 and E2E-09 also passed on real Claude models in the live run.
 
 | System | Passed | Status | Basis |
 | --- | --- | --- | --- |
@@ -135,3 +137,4 @@ No product defect is open. Product defects found and fixed so far: CLI outages w
 | 2026-10-24-45735d6 | `45735d6`, clean | 76 / 76 deterministic, 80 / 106 on Windows, 84 with Linux CI; superseded by workers |
 | 2026-10-25-82eae66 | `82eae66`, clean | 79 passed and 1 blocked deterministic, 85 / 106 on Windows, 91 with Linux CI; superseded by the System 1–3 gaps |
 | 2026-10-25-cab8247 | `cab8247`, clean | 85 passed and 1 blocked deterministic, 91 / 106 on Windows, 97 with Linux CI; superseded by the end-to-end workflows |
+| 2026-10-25-ee16092 | `ee16092`, clean | 93 passed and 2 blocked deterministic, 99 / 106 on Windows, 106 with Linux CI; all on simulated models; superseded by the live tier |

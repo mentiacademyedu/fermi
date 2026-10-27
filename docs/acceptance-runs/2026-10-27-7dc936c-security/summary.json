@@ -1,0 +1,353 @@
+{
+  "cases": [
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1714,
+      "id": "MA-06",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 4816,
+      "id": "MA-07",
+      "status": "passed",
+      "system": "multi-agent-orchestration"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 2468,
+      "id": "PM-07",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1512,
+      "id": "PM-08",
+      "status": "passed",
+      "system": "persistent-project-memory"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 6575,
+      "id": "PL-04",
+      "status": "passed",
+      "system": "composable-harness-and-plugins"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "the OS file sandbox for plugins needs Linux (Landlock); the argument scope, deny_read and environment checks were verified on this platform",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 2021,
+      "id": "PL-07",
+      "status": "blocked",
+      "system": "composable-harness-and-plugins"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 7697,
+      "id": "OB-06",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1079,
+      "id": "OB-07",
+      "status": "passed",
+      "system": "agent-observability"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "the OS file sandbox needs Linux (Landlock); fermi's deny_read policy and the canary scan were verified on this platform",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 880,
+      "id": "SE-01",
+      "status": "blocked",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 984,
+      "id": "SE-02",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1055,
+      "id": "SE-03",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "blocking a connection that bypasses the proxy needs Linux (Landlock); the proxy allowlist was verified on this platform",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 808,
+      "id": "SE-04",
+      "status": "blocked",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "file isolation between tasks needs Linux (Landlock); on this platform each task has its own folder, temp and environment but no OS boundary",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 1082,
+      "id": "SE-05",
+      "status": "blocked",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1508,
+      "id": "SE-06",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 857,
+      "id": "SE-07",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1803,
+      "id": "SE-08",
+      "status": "passed",
+      "system": "security-and-isolation"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "no Docker able to run Linux containers on this machine (the container cases run on Linux CI)",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 576,
+      "id": "LR-02",
+      "status": "blocked",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 14481,
+      "id": "LR-06",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3996,
+      "id": "LR-07",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 13715,
+      "id": "EV-06",
+      "status": "passed",
+      "system": "evaluation-and-self-improvement"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 64123,
+      "id": "E2E-02",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 6597,
+      "id": "E2E-04",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 4818,
+      "id": "E2E-05",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "the OS file sandbox for plugins needs Linux (Landlock); the refusal in the agent's trace and the plugin log were verified on this platform",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 1857,
+      "id": "E2E-07",
+      "status": "blocked",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 1021,
+      "id": "E2E-08",
+      "status": "passed",
+      "system": "end-to-end"
+    }
+  ],
+  "commitSha": "7dc936c5ea5b99e0d19256916271fbe51b1cf1c8",
+  "dirtyTree": false,
+  "os": "windows",
+  "profile": "security",
+  "runId": "2026-10-27-7dc936c-security"
+}

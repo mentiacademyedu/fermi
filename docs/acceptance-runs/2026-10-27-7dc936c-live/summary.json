@@ -1,0 +1,134 @@
+{
+  "cases": [
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "no Docker able to run Linux containers on this machine (the remote worker runs in one on Linux CI)",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 588,
+      "id": "LR-03",
+      "status": "blocked",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 8121,
+      "id": "LR-04",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 3891,
+      "id": "LR-05",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 14141,
+      "id": "LR-06",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 4084,
+      "id": "LR-07",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 28725,
+      "id": "EV-02",
+      "status": "passed",
+      "system": "evaluation-and-self-improvement"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 22097,
+      "id": "EV-04",
+      "status": "passed",
+      "system": "evaluation-and-self-improvement"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 8121,
+      "id": "E2E-06",
+      "status": "passed",
+      "system": "end-to-end"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 19567,
+      "id": "E2E-09",
+      "status": "passed",
+      "system": "end-to-end"
+    }
+  ],
+  "commitSha": "7dc936c5ea5b99e0d19256916271fbe51b1cf1c8",
+  "dirtyTree": false,
+  "os": "windows",
+  "profile": "live",
+  "runId": "2026-10-27-7dc936c-live"
+}

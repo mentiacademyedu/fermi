@@ -583,7 +583,9 @@ fermi eval compare <run A> <run B>
   protected file that changed anyway earns nothing. Reports record the dataset
   and fixture hashes, the evaluator, the configuration's fingerprint, each
   task's score and evidence, latency, tokens and cost (shown as unknown when
-  no price applies, never as zero).
+  no price applies, never as zero). The patch kept as evidence is the
+  candidate's change only: build output it leaves behind (`target/`,
+  `node_modules/`, caches) is left out.
 - **Comparisons** pair runs of the same dataset version only, per task and in
   total, with missing measurements and the sample size shown. Five tasks are a
   smoke test: the comparison describes those runs and claims no statistical
