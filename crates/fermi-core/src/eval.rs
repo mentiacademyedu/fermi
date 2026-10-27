@@ -423,6 +423,13 @@ fn git(dir: &Path, args: &[&str]) -> Result<String> {
 pub fn git_baseline(work: &Path) -> Result<()> {
     git(work, &["init", "-q", "-b", "main"])?;
     git(work, &["config", "core.autocrlf", "false"])?;
+    // Build output the candidate's own builds and checks leave behind isn't
+    // part of its change (scoring skips `target` too).
+    let exclude = work.join(".git").join("info").join("exclude");
+    std::fs::create_dir_all(exclude.parent().unwrap())?;
+    let mut ignore = vec!["target/"];
+    ignore.extend(crate::team::JUNK);
+    std::fs::write(&exclude, ignore.join("\n") + "\n")?;
     git(work, &["add", "-A"])?;
     git(work, &["commit", "-q", "--allow-empty", "-m", "baseline"])?;
     Ok(())

@@ -1019,6 +1019,12 @@ async fn e2e_09_live(mut c: Case, accounts: &[String]) {
             ta.status, ta.score, ta.max_score, tb.status, tb.score, tb.max_score
         ),
     );
+    let patch_of = |r: &fermi_core::eval::Report| std::fs::read_to_string(runs.join(&r.id).join(&r.tasks[0].patch)).unwrap_or_default();
+    c.check(
+        "patchIsTheChange",
+        [&a, &b].iter().all(|r| !patch_of(r).contains("target/")),
+        format!("patches of {} and {} lines, without build output", patch_of(&a).lines().count(), patch_of(&b).lines().count()),
+    );
     let side = |s: &str| &cmp[s];
     let measured = |s: &str| {
         side(s)["summary"]["latency_ms"].as_u64().is_some_and(|l| l > 0)
@@ -1077,7 +1083,9 @@ async fn e2e_09_compare_two_models() {
         |kind: &str| std::fs::read_to_string(repo_root().join(format!("tests/fixtures/F-EVAL/solutions/add/{kind}.rs"))).unwrap();
     let marker = |m: &str| format!("CANDIDATE-{m}-ONLY-5e1d");
     let a_step = json!({ "match": "Task add:", "text": "Implemented add.", "usage": { "input": 1000, "output": 200 },
-        "edits": [{ "path": "src/lib.rs", "content": solution("correct") }, { "path": "NOTES.md", "content": marker("A") }],
+        "edits": [{ "path": "src/lib.rs", "content": solution("correct") }, { "path": "NOTES.md", "content": marker("A") },
+            { "path": "target/debug/build-output.txt", "content": "what a build leaves behind
+" }],
         "ops": [{ "mcp": { "name": "memory_record", "arguments": { "kind": "note", "title": "How A solved add", "body": format!("{} wrapping is wrong", marker("A")) } } }] });
     let b_step = json!({ "match": "Task add:", "text": "Implemented add.", "usage": { "input": 800, "output": 150 },
         "edits": [{ "path": "src/lib.rs", "content": solution("wrong") }, { "path": "NOTES.md", "content": marker("B") }] });
@@ -1137,6 +1145,11 @@ async fn e2e_09_compare_two_models() {
             && mem_a.iter().any(|m| m.contains(&marker("A")))
             && !mem_b.iter().any(|m| m.contains(&marker("A"))),
         "each folder, patch and prompt holds only its own candidate's work; A's memory note stayed in A's project",
+    );
+    c.check(
+        "patchIsTheChange",
+        patch(&a).contains("src/lib.rs") && patch(&a).contains("NOTES.md") && !patch(&a).contains("target/"),
+        "A's patch holds its edits, not the build output it left in its folder",
     );
     let same_oracle = a.evaluator == b.evaluator
         && a.tasks[0].checks.iter().map(|x| (x.name.clone(), x.weight)).collect::<Vec<_>>()
