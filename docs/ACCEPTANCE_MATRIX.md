@@ -2,7 +2,7 @@
 
 Phase 1 audit of fermi (called APEX in the spec) against `docs/FERMI_ADE_Verification_and_Acceptance_Testing`.
 
-Published run `2026-10-27-f985976` on revision `f985976a69d5`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-27-f985976/REPORT.md`.
+Published run `2026-10-27-6822a64` on revision `6822a6467160`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-27-6822a64/REPORT.md`.
 
 *Result* is the published acceptance outcome: `passed` or `failed` from an executed test with validated evidence; `not_implemented` when no test exists (usually because the capability is missing); `not_run` when a test exists but wasn't in the published run.
 *Capability* is an audit finding from reading the code; it is not verification.

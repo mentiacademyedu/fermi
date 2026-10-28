@@ -13,6 +13,8 @@ Defects found by the baseline and the acceptance tests. Missing capabilities are
 | D-005 | cancel left processes started by the agent running | product | MA-07 | fixed in `0221093` |
 | D-006 | code index gaps: unsupported files, revision, scope, qualified names | product | CI-01, CI-03, CI-07, CI-08 | fixed in `0221093` |
 | D-007 | fixtures could check out with CRLF on Windows | environment | MA-03 | fixed (`.gitattributes`) |
+| D-008 | the dashboard window never got past its splash: the page script didn't parse | product (critical) | UI-01 … UI-05 | fixed in `6822a64` |
+| D-009 | the team-run form had no Plan button, so no team run could be started from the window | product | UI-04 | fixed in `6822a64` |
 
 ## D-001: formatting gate failed
 
@@ -83,6 +85,29 @@ Defects found by the baseline and the acceptance tests. Missing capabilities are
 | Cause | Git for Windows `core.autocrlf=true` converted line endings when the harness committed fixture copies, and would also convert them in a fresh clone |
 | Fix | the harness sets `core.autocrlf=false` in fixture repositories; `.gitattributes` pins `tests/fixtures/**` to LF |
 
+## D-008: the dashboard window never got past its splash
+
+| Field | Value |
+| --- | --- |
+| Severity | critical (the window, `fermi ui` and the desktop app, was unusable) |
+| Introduced | `720c8b0` (the end-to-end workflows), released in every build installed from then until this fix |
+| Reproduction | open `fermi ui`: the splash stays on "connecting…"; the browser reports `SyntaxError: Invalid or unexpected token` at line 2256 of the page |
+| Cause | the trace dialog's new Changes entry joined the file list with `join("…")` holding a raw line break (written by a script that turned `\n` into a real newline) instead of `\n`; one syntax error stops the page's whole script, so nothing ran |
+| Why the acceptance runs passed | the E2E workflows and every other case drive the dashboard's HTTP API, which was fine; nothing loaded the page itself, and the hand checks of the new UI predate that edit |
+| Fix | `\n` in the string; the dashboard tests (UI-01 … UI-05) now load the page in a real browser on every CI run and fail on any page error |
+| Rerun | UI-01 … UI-05 pass on Windows (Edge) and Linux CI (Chrome); the negative control (the raw line break back) fails all five with the syntax error as the page error |
+
+## D-009: the team-run form had no Plan button
+
+| Field | Value |
+| --- | --- |
+| Severity | high (team runs could be started only through the API) |
+| Introduced | `ae7ccb8` (team runs) |
+| Reproduction | Teams → New team run: where the button belongs, the form shows the text `[object HTMLButtonElement]` |
+| Cause | `el("div", null, go)` passes the button as the element's text, so the form got its string form instead of the button |
+| Fix | the button is appended to its row |
+| Rerun | UI-04 starts a team run from the form, approves its plan, resolves the conflict in the window and reaches "Checks passed: ready to merge"; the negative control (the old line) fails UI-04 at its first check |
+
 ## Test-implementation issues (not product defects)
 
 Found and fixed while writing the tests; listed so the history is complete.
@@ -105,6 +130,16 @@ Found and fixed while writing the tests; listed so the history is complete.
 | --- | --- | --- |
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
+
+## Found by the dashboard tests (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Product defect | D-008 and D-009 above | fixed |
+| Product gap | the page had no icon, so every load logged a 404 for `/favicon.ico` as a page error | an inline SVG icon (the page's policy already allows `data:` images) |
+| Test implementation | UI-01 counted the refusal it causes on purpose (loading without the key) as a page error, and read the window before the splash had faded; UI-04 likewise for the refused "continue" before resolving | a case names the requests it expects refused, and nothing else may fail; the splash check waits for it to go |
+| Test implementation | UI-02 clicked "Changes" by its label and hit the Changes tab under the open dialog; it also looked for the agent's text in the done line, which shows the route and usage | the trace entry is clicked by selector; the case waits for the agent's text and the done line separately |
+| Test implementation, caught by a negative control | with the Plan button gone, UI-04 panicked on the click before writing its evidence | starting the run is a recorded check; a failure keeps the team view's text as evidence |
 
 ## Found while closing MA-04 (no open defects)
 

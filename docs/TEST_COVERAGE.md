@@ -15,7 +15,7 @@ All 106 capabilities are audited as *implemented* and have a passing test (seven
 
 ## Code coverage
 
-`cargo llvm-cov --workspace --locked` on Windows at `291c237` (the published revision `ee16092` plus a fix to the test harness's outage proxy; unit and acceptance tests together). The Linux-only sandbox code (Landlock) isn't exercised here; Linux CI's `lcov.info` gives 67.2% of product lines for `ee16092` (run 40164598030) and for the live tier's merge `7dc936c` (run 40599642988), and 67.3% for `f985976` (run 40607108227; fermi-core 78.5%, fermi 37.2%, `team.rs` 77%):
+`cargo llvm-cov --workspace --locked` on Windows at `291c237` (the published revision `ee16092` plus a fix to the test harness's outage proxy; unit and acceptance tests together). The Linux-only sandbox code (Landlock) isn't exercised here; Linux CI's `lcov.info` gives 67.2% of product lines for `ee16092` (run 40164598030) and for the live tier's merge `7dc936c` (run 40599642988), 67.3% for `f985976` (run 40607108227), and 68.0% for `6822a64` (run 40619945857; fermi-core 78.5%, fermi 39.4%, `server.rs` 33.9% with the dashboard tests, `team.rs` 78%):
 
 | Scope | Lines | Functions |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ Earlier measurements: 54.1% at `faa705c`, 59.1% at `19f85c1`, 61.9% at `e72c2c7`
 
 | Area | Lines covered | Why |
 | --- | --- | --- |
-| `fermi/src/server.rs` (dashboard API) | 30% | the task, trace, diff, cancel, state, team, eval, checks and memory endpoints the E2E, VE-08 and PM cases use are exercised; accounts, profiles, files, skills, slides and terminals aren't |
+| `fermi/src/server.rs` (dashboard API) | 34% | the task, trace, diff, cancel, state, team, eval, checks and memory endpoints the E2E, VE-08, PM and dashboard tests use are exercised, and the page itself with its live connection; accounts, profiles, files, skills, slides and terminals aren't |
 | `fermi/src/main.rs` (CLI commands) | 0% | no CLI tests |
 | `providers/image.rs` (image generation) | 0% | the mock endpoints don't serve images |
 | `mcp.rs` (bridge tools) | 27% | the bridge runs as its own process in most tests (MA-05, BA, PL), whose coverage isn't recorded; in process, only `run_checks`, the memory and browser tools are called |
@@ -39,6 +39,6 @@ Earlier measurements: 54.1% at `faa705c`, 59.1% at `19f85c1`, 61.9% at `e72c2c7`
 
 ## Unsupported paths and exclusions
 
-- The desktop shell and the web UI have no automated tests (dashboard tests with Playwright are not built yet). Dashboard changes are checked by hand with a headless browser.
+- The web UI has five dashboard tests (UI-01 … UI-05: opening and the key, a task from the composer with its trace, cancel, a team run with a conflict, phone width), run in a real browser on every CI run. Its other views (settings, files, slides, code map, memory, plugins, evaluations, skills, import, terminals) and the desktop shell have no automated tests.
 - Live providers (T4) are never called by the default or CI runs.
-- Container and remote execution cases need Docker or remote workers, neither available on the development machine.
+- The container cases (LR-02, LR-03) need Docker, which the development machine lacks; they run on Linux CI.

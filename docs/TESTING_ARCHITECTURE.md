@@ -56,6 +56,7 @@ crates/acceptance-tests/
   src/workers.rs                # worker processes, Docker workers and an outage proxy (LR)
   tests/execution.rs            # LR-01 … LR-08 (LR-02/03 need Docker; blocked where it is missing)
   tests/end_to_end.rs           # E2E-01 … E2E-07, E2E-09, E2E-10 (E2E-08 is in cost.rs), through the dashboard's HTTP API
+  tests/dashboard.rs            # UI-01 … UI-05: the web UI in a headless browser (not catalog cases)
 xtask/src/main.rs               # acceptance runner
 tests/acceptance/systems.yaml   # registry of all 106 IDs, with test mappings and published status
 tests/acceptance/phase1_audit.py  # writes ACCEPTANCE_MATRIX.md (and the registry with --registry)
@@ -100,13 +101,28 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests (Ubuntu): formatting, clippy with warnings as errors, unit tests, the acceptance runner with `--implemented`, and coverage with cargo-llvm-cov; `tests/reports/` and `lcov.info` are uploaded as artifacts. The toolchain is pinned by `rust-toolchain.toml`.
+`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests (Ubuntu): formatting, clippy with warnings as errors, unit tests, the acceptance runner with `--implemented`, and coverage with cargo-llvm-cov; the dashboard tests; `tests/reports/` and `lcov.info` are uploaded as artifacts, kept 30 days for a green run and 90 for a failed one. The toolchain is pinned by `rust-toolchain.toml`. The plan's nightly run (repeated concurrency, resilience and security profiles) isn't scheduled: on this private repository it would spend the account's Actions minutes every day, which is the owner's decision.
+
+## Dashboard tests
+
+`tests/dashboard.rs` loads the web UI (`crates/fermi/web/index.html`) in a headless Chromium-based browser (fermi's own DevTools-protocol driver, `fermi_core::browser`, as System 6 uses; Edge on Windows, Chrome on Linux CI) against the real dashboard server, and clicks through it as a user does. Only the model's output comes from the fake CLI. They aren't catalog cases, so the runner's registry doesn't list them; each still writes `result.json`, a manifest and evidence (browser trace, screenshots, what the window showed) under `tests/reports/<run>/UI-xx/`, and every case fails on any page error or uncaught exception other than a refusal it causes on purpose.
+
+| Case | What the window does |
+| --- | --- |
+| UI-01 | opens with its key, connects and lists the workspace; the key leaves the address bar; without the key the page says how to open it and the API refuses |
+| UI-02 | a task typed in the composer with **Isolated** ticked: the agent gets the prompt, the outcome shows, the change is on the task's own branch and the user's folder is untouched; Trace → Changes shows the patch |
+| UI-03 | Cancel on a running task: the task is cancelled, the conversation says so, the button goes |
+| UI-04 | Teams → New team run → Plan it → Approve and start; the merge conflict shows both patches and both choices; continuing before resolving is refused with the reason; after the user resolves it, "Checks passed: ready to merge" and the integrated file is the user's resolution, with no agent asked |
+| UI-05 | at phone width (375 px, touch) the page has no horizontal overflow and the prompt and Send are on screen and uncovered |
+
+```text
+cargo test -p acceptance-tests --locked --test dashboard -- --test-threads=1
+```
 
 ## Not built yet
 
-- **HTTP provider mock** for the API adapters (`base_url`): needed for AI-04 (429 backoff), AI-08 and the API side of AI-05.
-- **Dashboard tests** (Playwright against `fermi ui`): the web UI has no automated tests.
-- **Container and remote workers** (LR-02 onwards): Docker is not available on the development machine, so those cases would be `blocked`.
+- **Desktop shell tests**: the Tauri window around the same page has no automated tests.
+- **The rest of the web UI**: settings, accounts and profiles, files and editor, slides, code map, memory, plugins, evaluations, skills, import, trending and terminals are checked by hand only.
 
 ## Next
 

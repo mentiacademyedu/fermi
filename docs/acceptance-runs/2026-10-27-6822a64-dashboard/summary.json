@@ -1,0 +1,61 @@
+{
+  "runId": "2026-10-27-6822a64-dashboard",
+  "commitSha": "6822a64671606a75019a379175ee110bb04dfb89",
+  "dirtyTree": false,
+  "os": "windows",
+  "suite": "dashboard (crates/acceptance-tests/tests/dashboard.rs)",
+  "cases": [
+    {
+      "id": "UI-01",
+      "status": "passed",
+      "durationMs": 3130,
+      "checks": [
+        "opensWithItsKey",
+        "keyLeavesTheAddressBar",
+        "refusedWithoutTheKey",
+        "noPageErrors"
+      ]
+    },
+    {
+      "id": "UI-02",
+      "status": "passed",
+      "durationMs": 4457,
+      "checks": [
+        "sentFromTheComposer",
+        "isolatedFromTheUsersFolder",
+        "changesInTheTrace",
+        "noPageErrors"
+      ]
+    },
+    {
+      "id": "UI-03",
+      "status": "passed",
+      "durationMs": 3328,
+      "checks": [
+        "cancelledFromTheWindow",
+        "noPageErrors"
+      ]
+    },
+    {
+      "id": "UI-04",
+      "status": "passed",
+      "durationMs": 9172,
+      "checks": [
+        "startedFromTheWindow",
+        "conflictShownWithBothPatches",
+        "unresolvedRefusedInTheWindow",
+        "resolvedFromTheWindow",
+        "noPageErrors"
+      ]
+    },
+    {
+      "id": "UI-05",
+      "status": "passed",
+      "durationMs": 2634,
+      "checks": [
+        "usableAtPhoneWidth",
+        "noPageErrors"
+      ]
+    }
+  ]
+}

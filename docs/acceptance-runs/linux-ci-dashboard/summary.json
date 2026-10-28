@@ -1,0 +1,61 @@
+{
+  "runId": "ci-40619945857-1-dashboard",
+  "commitSha": "6822a64671606a75019a379175ee110bb04dfb89",
+  "dirtyTree": false,
+  "os": "linux",
+  "suite": "dashboard (crates/acceptance-tests/tests/dashboard.rs)",
+  "cases": [
+    {
+      "id": "UI-01",
+      "status": "passed",
+      "durationMs": 2066,
+      "checks": [
+        "opensWithItsKey",
+        "keyLeavesTheAddressBar",
+        "refusedWithoutTheKey",
+        "noPageErrors"
+      ]
+    },
+    {
+      "id": "UI-02",
+      "status": "passed",
+      "durationMs": 3492,
+      "checks": [
+        "sentFromTheComposer",
+        "isolatedFromTheUsersFolder",
+        "changesInTheTrace",
+        "noPageErrors"
+      ]
+    },
+    {
+      "id": "UI-03",
+      "status": "passed",
+      "durationMs": 2585,
+      "checks": [
+        "cancelledFromTheWindow",
+        "noPageErrors"
+      ]
+    },
+    {
+      "id": "UI-04",
+      "status": "passed",
+      "durationMs": 4834,
+      "checks": [
+        "startedFromTheWindow",
+        "conflictShownWithBothPatches",
+        "unresolvedRefusedInTheWindow",
+        "resolvedFromTheWindow",
+        "noPageErrors"
+      ]
+    },
+    {
+      "id": "UI-05",
+      "status": "passed",
+      "durationMs": 1880,
+      "checks": [
+        "usableAtPhoneWidth",
+        "noPageErrors"
+      ]
+    }
+  ]
+}
