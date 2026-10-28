@@ -234,31 +234,74 @@ async fn ma_03_independent_edits() {
     c.finish();
 }
 
+/// Two developers whose changes conflict, under a conflict policy (`ask` or
+/// `agent`; None leaves the run's default).
+async fn conflicting_devs(
+    c: &Case,
+    name: &str,
+    conflicts: Option<&str>,
+    debugger: Value,
+) -> (Fermi, Arc<Teams>, u64, acceptance_tests::Fixture) {
+    let base = std::fs::read_to_string(acceptance_tests::repo_root().join("tests/fixtures/F-CODE/repo/engine/src/lib.rs")).unwrap();
+    // Both change the same line; each alone keeps the fixture's tests passing.
+    let v1 = base.replace("(normalize(name), helper())", "(normalize(name), helper().max(1))");
+    let v2 = base.replace("(normalize(name), helper())", "(normalize(name).to_uppercase(), helper())");
+    let plan = planner(json!([
+        { "id": "one", "role": "developer", "title": "Change one", "description": "Do [[ONE]]." },
+        { "id": "two", "role": "developer", "title": "Change two", "description": "Do [[TWO]]." }
+    ]));
+    let a = json!({ "match": "[[ONE]]", "edits": [{ "path": "engine/src/lib.rs", "content": v1 }], "text": "one" });
+    let b = json!({ "match": "[[TWO]]", "edits": [{ "path": "engine/src/lib.rs", "content": v2 }], "text": "two" });
+    let f = Fermi::at(c, name, &[account("cl", "claude", vec![plan, a, b, debugger])], "").unwrap();
+    let fx = fixture("F-CODE", &c.work.join(format!("repo-{name}"))).unwrap();
+    let mut req = new_run(&fx.path, 2);
+    req.conflicts = conflicts.map(|p| serde_json::from_value(json!(p)).unwrap());
+    let teams = Teams::new(f.hub());
+    let id = teams.create(req).unwrap();
+    wait_run(&teams, id, &[RunStatus::Review, RunStatus::Attention]).await;
+    teams.approve(id, None).unwrap();
+    (f, teams, id, fx)
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn ma_04_conflicting_edits() {
     let mut c = Case::start("MA-04", "T1");
-    c.real(&["fermi team runs", "git merge"]);
-    c.mocked(&["model output (fake-cli); the debugger is given no resolution"]);
-    let base = std::fs::read_to_string(acceptance_tests::repo_root().join("tests/fixtures/F-CODE/repo/engine/src/lib.rs")).unwrap();
-    let v1 = base.replace("(normalize(name), helper())", "(normalize(name), helper() + 1)");
-    let v2 = base.replace("(normalize(name), helper())", "(normalize(name).to_uppercase(), helper())");
-    let a = json!({ "match": "[[ONE]]", "edits": [{ "path": "engine/src/lib.rs", "content": v1 }], "text": "one" });
-    let b = json!({ "match": "[[TWO]]", "edits": [{ "path": "engine/src/lib.rs", "content": v2 }], "text": "two" });
+    c.real(&["fermi team runs", "git worktrees and merges", "the project's checks on the integrated branch"]);
+    c.mocked(&["model output (fake-cli)"]);
     let dbg = json!({ "match": "Resolve merge conflict", "text": "I can't decide which change is right." });
-    let (_f, teams, id, fx) = two_devs(&c, "conf", a, b, Some(dbg)).await;
+
+    // 1. The default (no policy given): the conflict waits for the user, with both patches.
+    let (f, teams, id, fx) = conflicting_devs(&c, "ask", None, dbg.clone()).await;
     let run = wait_run(&teams, id, &[RunStatus::Attention, RunStatus::Ready]).await;
     let branch = |k: &str| run.tasks.iter().find(|t| t.key == k).and_then(|t| t.branch.clone()).unwrap_or_default();
     let show = |b: &str| git(&fx.path, &["show", &format!("{b}:engine/src/lib.rs")]).unwrap_or_default();
     let (b1, b2) = (branch("one"), branch("two"));
     c.text("diff-one.patch", &git(&fx.path, &["diff", &fx.commit, &b1]).unwrap_or_default());
     c.text("diff-two.patch", &git(&fx.path, &["diff", &fx.commit, &b2]).unwrap_or_default());
-    c.json("run.json", &serde_json::to_value(&run).unwrap());
-    let log = run.log.iter().map(|l| l.1.clone()).collect::<Vec<_>>().join("\n");
-    c.check("conflictDetected", log.contains("conflicts in") && log.contains("engine/src/lib.rs"), "the log names the conflicting file");
-    c.check("escalated", run.status == RunStatus::Attention && run.error.is_some(), format!("{:?}: {:?}", run.status, run.error));
+    c.json("conflict-run.json", &serde_json::to_value(&run).unwrap());
+    let conflict = run.conflict.clone();
+    let (ours, theirs) = conflict.as_ref().map(|k| (k.ours.clone(), k.theirs.clone())).unwrap_or_default();
+    c.text("conflict-ours.patch", &ours);
+    c.text("conflict-theirs.patch", &theirs);
+    let sides = format!("{ours}\n{theirs}");
+    c.check(
+        "conflictReported",
+        run.status == RunStatus::Attention
+            && run.error.as_deref().is_some_and(|e| e.contains("engine/src/lib.rs"))
+            && conflict.as_ref().is_some_and(|k| k.files == ["engine/src/lib.rs"])
+            && sides.contains("+    (normalize(name), helper().max(1))")
+            && sides.contains("+    (normalize(name).to_uppercase(), helper())"),
+        format!("{:?}: {:?}; both candidate patches in the report", run.status, run.error),
+    );
+    let prompts: Vec<String> = f.calls("cl").iter().filter_map(|x| x["prompt"].as_str().map(str::to_string)).collect();
+    c.check(
+        "nothingChosenForTheUser",
+        run.tasks.iter().all(|t| !t.key.starts_with("merge-")) && !prompts.iter().any(|p| p.contains("Resolve merge conflict")),
+        "no agent was asked to resolve it",
+    );
     c.check(
         "bothPatchesKept",
-        show(&b1).contains("helper() + 1") && show(&b2).contains("to_uppercase()"),
+        show(&b1).contains("helper().max(1)") && show(&b2).contains("to_uppercase()"),
         "each branch still has its own change",
     );
     let integ = run.integration.as_ref().map(|i| i.worktree.clone()).unwrap();
@@ -269,6 +312,52 @@ async fn ma_04_conflicting_edits() {
         format!("still unresolved in the integration worktree: {unmerged:?}"),
     );
     c.check("userBranchUntouched", git(&fx.path, &["rev-parse", "HEAD"]).unwrap() == fx.commit, "main is still at the base commit");
+
+    // 2. The user's way out: continuing before resolving is refused; a real resolution goes on.
+    if conflict.is_none() {
+        c.check("userResolutionIntegrated", false, "no conflict waited for the user, so there was nothing to resolve");
+        return c.finish();
+    }
+    let early = teams.resolve(id, "manual").map_err(|e| format!("{e:#}"));
+    let resume = teams.resume(id).map_err(|e| format!("{e:#}"));
+    let resolved = std::fs::read_to_string(integ.join("engine/src/lib.rs")).unwrap_or_default();
+    let both = acceptance_tests::repo_root().join("tests/fixtures/F-CODE/repo/engine/src/lib.rs");
+    let both =
+        std::fs::read_to_string(both).unwrap().replace("(normalize(name), helper())", "(normalize(name).to_uppercase(), helper().max(1))");
+    std::fs::write(integ.join("engine/src/lib.rs"), &both).unwrap();
+    git(&integ, &["add", "engine/src/lib.rs"]).unwrap();
+    let done = teams.resolve(id, "manual").map_err(|e| format!("{e:#}"));
+    let after = wait_run(&teams, id, &[RunStatus::Ready, RunStatus::Attention]).await;
+    c.json("resolved-run.json", &serde_json::to_value(&after).unwrap());
+    // (the helper trims the trailing newline)
+    let merged_file = git(&integ, &["show", "HEAD:engine/src/lib.rs"]).unwrap_or_default();
+    c.check(
+        "unresolvedRefused",
+        early.as_ref().is_err_and(|e| e.contains("still unmerged"))
+            && resume.as_ref().is_err_and(|e| e.contains("merge conflict is waiting"))
+            && resolved.contains("<<<<<<<"),
+        format!("continue: {early:?}; resume: {resume:?}"),
+    );
+    c.check(
+        "userResolutionIntegrated",
+        done.is_ok()
+            && after.status == RunStatus::Ready
+            && after.conflict.is_none()
+            && merged_file == both.trim_end()
+            && after.verification.as_ref().is_some_and(|v| v.passed),
+        format!("{:?}; {done:?}; the integrated branch has both changes and the checks passed", after.status),
+    );
+
+    // 3. Opting in: `conflicts = agent` hands it to a debugger straight away.
+    let (f2, teams2, id2, _fx2) = conflicting_devs(&c, "agent", Some("agent"), dbg).await;
+    let run2 = wait_run(&teams2, id2, &[RunStatus::Attention, RunStatus::Ready]).await;
+    c.json("agent-run.json", &serde_json::to_value(&run2).unwrap());
+    let asked = f2.calls("cl").iter().any(|x| x["prompt"].as_str().is_some_and(|p| p.contains("Resolve merge conflict")));
+    c.check(
+        "agentOnlyWhenChosen",
+        asked && run2.tasks.iter().any(|t| t.key.starts_with("merge-")) && run2.status == RunStatus::Attention,
+        format!("with conflicts = agent the debugger was asked; it couldn't resolve it, so the run stopped ({:?})", run2.status),
+    );
     c.finish();
 }
 

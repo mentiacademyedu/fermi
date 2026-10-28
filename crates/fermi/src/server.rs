@@ -1230,6 +1230,9 @@ struct TeamActionBody {
     key: Option<String>,
     #[serde(default)]
     plan: Option<Value>,
+    /// How to settle a merge conflict: `manual` or `agent`.
+    #[serde(default)]
+    how: Option<String>,
 }
 
 async fn team_action(State(s): S, Path((id, action)): Path<(u64, String)>, body: Option<Json<TeamActionBody>>) -> Response {
@@ -1245,6 +1248,7 @@ async fn team_action(State(s): S, Path((id, action)): Path<(u64, String)>, body:
             "skip" => teams.skip(id, &key()?).map(|_| json!({ "ok": true })),
             "merge" => teams.merge(id).map(|branch| json!({ "branch": branch })),
             "verify" => teams.verify(id).map(|_| json!({ "ok": true })),
+            "resolve" => teams.resolve(id, b.how.as_deref().unwrap_or("")).map(|_| json!({ "ok": true })),
             "discard" => teams.discard(id).map(|_| json!({ "ok": true })),
             other => bail!("unknown action {other}"),
         }

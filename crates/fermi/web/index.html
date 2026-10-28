@@ -4004,7 +4004,10 @@ function teamRunView(run) {
   const btn = (label, cls, fn) => { const b = el("button", "small " + cls, label); b.onclick = fn; acts.append(b); return b; };
   if (run.planner) btn("Architect’s conversation", "ghost", () => selectTask(run.planner));
   if (live) btn("Stop", "ghost", () => teamAct(run, "cancel"));
-  if (["attention", "cancelled"].includes(run.status)) btn("Resume", "primary", () => teamAct(run, "resume"));
+  if (run.conflict) {
+    btn("I resolved it — continue", "primary", () => teamAct(run, "resolve", { how: "manual" }));
+    btn("Let an agent resolve it", "", () => teamAct(run, "resolve", { how: "agent" }));
+  } else if (["attention", "cancelled"].includes(run.status)) btn("Resume", "primary", () => teamAct(run, "resume"));
   if (run.integration && ["ready", "attention"].includes(run.status)) btn("Run checks", "", () => teamAct(run, "verify"));
   if (run.status === "ready") btn("Changes", "", () => teamDiff(run, null));
   if (run.status === "ready") btn(`Merge into ${run.base_branch || "the base"}`, "primary", async () => {
@@ -4019,6 +4022,16 @@ function teamRunView(run) {
   TEAM_STEPS.forEach(([k, label], i) => steps.append(el("span", i < at ? "past" : i === at ? "now" : "", label)));
   box.append(steps);
   if (run.error) box.append(el("div", "tm-err", run.error));
+  if (run.conflict) {
+    // A merge conflict waits for the user: both sides' changes to the conflicting files.
+    const c = run.conflict;
+    for (const [label, patch] of [[`Already merged (${c.into})`, c.ours], [`${c.title} (${c.branch})`, c.theirs]]) {
+      const d = el("details", "op-tool"), s = el("summary");
+      s.append(el("span", "op-name", label), el("span", "op-detail", c.files.join(", ")));
+      d.append(s, el("pre", null, patch || "(no change)"));
+      box.append(d);
+    }
+  }
   if (run.status === "review") { box.append(planEditor(run)); return box; }
   // The merge gate: the project's checks on the integrated branch.
   if (run.status === "verifying") box.append(el("div", "faint", "fermi is running the project's checks on the integrated branch…"));

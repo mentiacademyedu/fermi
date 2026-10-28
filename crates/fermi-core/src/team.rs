@@ -201,6 +201,36 @@ pub struct Checks {
     pub security: bool,
 }
 
+/// What happens when merging a task's branch conflicts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ConflictPolicy {
+    /// Stop and show the conflict; the user resolves it or hands it to an agent.
+    #[default]
+    Ask,
+    /// A debugger agent resolves it straight away (for unattended runs).
+    Agent,
+}
+
+/// A merge that conflicted and waits for the user: what each side changed
+/// in the conflicting files, and where the merge stands (the integration
+/// worktree, mid-merge, with conflict markers).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Conflict {
+    /// The plan task whose branch was being merged.
+    pub task: String,
+    pub title: String,
+    pub branch: String,
+    /// The integration branch it was merged into.
+    pub into: String,
+    pub files: Vec<String>,
+    /// The integration branch's change to those files since the common base.
+    pub ours: String,
+    /// The task branch's change to them.
+    pub theirs: String,
+    pub worktree: PathBuf,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Integration {
     pub branch: String,
@@ -228,6 +258,11 @@ pub struct TeamRun {
     pub parallel: usize,
     #[serde(default)]
     pub checks: Checks,
+    #[serde(default)]
+    pub conflicts: ConflictPolicy,
+    /// A merge conflict waiting for the user (see `ConflictPolicy::Ask`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conflict: Option<Conflict>,
     pub status: RunStatus,
     #[serde(default)]
     pub plan_summary: String,
@@ -314,6 +349,38 @@ fn unmerged(dir: &Path) -> Vec<String> {
 /// would otherwise commit (only untracked files are affected).
 pub(crate) const JUNK: [&str; 9] =
     ["__pycache__/", "*.pyc", "*.pyo", ".pytest_cache/", ".mypy_cache/", ".ruff_cache/", "node_modules/", ".DS_Store", "Thumbs.db"];
+
+/// The debugger step that resolves a conflicted merge in the integration worktree.
+fn conflict_task(run: &TeamRun, integ: &Integration, key: &str, title: &str, branch: &str, files: Vec<String>) -> TeamTask {
+    TeamTask {
+        key: format!("merge-{key}"),
+        role: Role::Debugger,
+        title: format!("Resolve merge conflict: {title}"),
+        description: format!(
+            "Merging branch {branch} ({title}) into the integration branch conflicts in: {}. Resolve every conflict so both sides' \
+             intent is kept (read the handoffs), remove all conflict markers, make sure it builds, and `git add` the files. \
+             Don't commit: fermi completes the merge.",
+            files.join(", ")
+        ),
+        depends_on: run.tasks.iter().filter(|x| integ.merged.contains(&x.key) || x.key == key).map(|x| x.key.clone()).collect(),
+        files,
+        done_when: "No unresolved conflicts remain and the code builds.".into(),
+        stage: Stage::Merge,
+        state: TaskState::Pending,
+        task_id: None,
+        branch: Some(integ.branch.clone()),
+        worktree: Some(integ.worktree.clone()),
+        start: None,
+        handoff: None,
+        changed: vec![],
+        note: None,
+    }
+}
+
+/// The lines git leaves around a conflict (not `=======`, which can be text).
+fn has_markers(text: &str) -> bool {
+    text.lines().any(|l| l.starts_with("<<<<<<< ") || l.starts_with(">>>>>>> "))
+}
 
 /// Keeps fermi's marker files and build junk out of every worktree's
 /// `git status` (the repo's local `.git/info/exclude`, never committed).
@@ -569,6 +636,9 @@ pub struct NewRun {
     pub parallel: Option<usize>,
     #[serde(default)]
     pub checks: Option<Checks>,
+    /// Merge conflicts: ask the user (default) or let an agent resolve them.
+    #[serde(default)]
+    pub conflicts: Option<ConflictPolicy>,
 }
 
 /// Key prefix of the debugger steps that fix failing checks on the integrated branch.
@@ -682,6 +752,8 @@ impl Teams {
             permission: req.permission.filter(|p| !p.is_empty()),
             parallel: req.parallel.unwrap_or(3).clamp(1, 6),
             checks: req.checks.unwrap_or(Checks { tests: true, security: true }),
+            conflicts: req.conflicts.unwrap_or_default(),
+            conflict: None,
             status: RunStatus::Planning,
             plan_summary: String::new(),
             tasks: vec![],
@@ -1019,32 +1091,40 @@ impl Teams {
                         let _ = git(&integ.worktree, &["merge", "--abort"]);
                         return Err(e);
                     }
-                    run.note(format!("Merging {} conflicts in {}; the debugger resolves it.", t.title, files.join(", ")));
-                    let fix = TeamTask {
-                        key: format!("merge-{key}"),
-                        role: Role::Debugger,
-                        title: format!("Resolve merge conflict: {}", t.title),
-                        description: format!(
-                            "Merging branch {branch} ({}) into the integration branch conflicts in: {}. Resolve every conflict so both sides' \
-                             intent is kept (read the handoffs), remove all conflict markers, make sure it builds, and `git add` the files. \
-                             Don't commit: fermi completes the merge.",
+                    if run.conflicts == ConflictPolicy::Ask {
+                        let wt = &integ.worktree;
+                        let base = git(wt, &["merge-base", "HEAD", &branch]).unwrap_or_else(|_| run.base.clone());
+                        let side = |to: &str| {
+                            let mut args = vec!["diff", base.as_str(), to, "--"];
+                            args.extend(files.iter().map(String::as_str));
+                            git(wt, &args).unwrap_or_default()
+                        };
+                        run.conflict = Some(Conflict {
+                            task: key.clone(),
+                            title: t.title.clone(),
+                            branch: branch.clone(),
+                            into: integ.branch.clone(),
+                            ours: side("HEAD"),
+                            theirs: side(&branch),
+                            files: files.clone(),
+                            worktree: wt.clone(),
+                        });
+                        run.status = RunStatus::Attention;
+                        run.error = Some(format!(
+                            "Merging {} conflicts with what's already merged, in {}. Resolve it in {} and continue, or let an agent resolve it.",
+                            t.title,
+                            files.join(", "),
+                            wt.display()
+                        ));
+                        run.note(format!(
+                            "Merging {} conflicts in {}; waiting for you (both changes are kept).",
                             t.title,
                             files.join(", ")
-                        ),
-                        depends_on: run.tasks.iter().filter(|x| integ.merged.contains(&x.key) || x.key == key).map(|x| x.key.clone()).collect(),
-                        files,
-                        done_when: "No unresolved conflicts remain and the code builds.".into(),
-                        stage: Stage::Merge,
-                        state: TaskState::Pending,
-                        task_id: None,
-                        branch: Some(integ.branch.clone()),
-                        worktree: Some(integ.worktree.clone()),
-                        start: None,
-                        handoff: None,
-                        changed: vec![],
-                        note: None,
-                    };
-                    return self.start_integration_task(run, fix);
+                        ));
+                        return Ok(());
+                    }
+                    run.note(format!("Merging {} conflicts in {}; the debugger resolves it.", t.title, files.join(", ")));
+                    return self.start_integration_task(run, conflict_task(run, &integ, &key, &t.title, &branch, files));
                 }
             }
         }
@@ -1231,6 +1311,9 @@ impl Teams {
             if !matches!(run.status, RunStatus::Attention | RunStatus::Cancelled) {
                 bail!("this run isn't stopped");
             }
+            if run.conflict.is_some() {
+                bail!("a merge conflict is waiting: resolve it yourself and continue, or let an agent resolve it");
+            }
             run.error = None;
             if run.tasks.is_empty() {
                 return self.start_planner(run);
@@ -1246,6 +1329,54 @@ impl Teams {
             run.status = if plan_done { RunStatus::Integrating } else { RunStatus::Running };
             run.note("Resumed.");
             Ok(())
+        })?;
+        self.advance(id);
+        Ok(())
+    }
+
+    /// Settles a merge conflict that waits for the user: `agent` hands it to a
+    /// debugger; `manual` takes the user's own resolution in the integration
+    /// worktree (refused while files are unmerged or still have conflict
+    /// markers) and completes the merge.
+    pub fn resolve(&self, id: u64, how: &str) -> Result<()> {
+        self.with(id, |run| {
+            let c = run.conflict.clone().context("no merge conflict is waiting")?;
+            let integ = run.integration.clone().context("no integration branch")?;
+            match how {
+                "agent" => {
+                    run.conflict = None;
+                    run.error = None;
+                    run.status = RunStatus::Integrating;
+                    run.note(format!("You handed the conflict in {} to an agent.", c.files.join(", ")));
+                    self.start_integration_task(run, conflict_task(run, &integ, &c.task, &c.title, &c.branch, c.files.clone()))
+                }
+                "manual" => {
+                    let wt = &integ.worktree;
+                    let left = unmerged(wt);
+                    if !left.is_empty() {
+                        bail!("still unmerged: {} (resolve them and `git add` them in {})", left.join(", "), wt.display());
+                    }
+                    let marked: Vec<&String> =
+                        c.files.iter().filter(|f| std::fs::read_to_string(wt.join(f)).map(|t| has_markers(&t)).unwrap_or(false)).collect();
+                    if !marked.is_empty() {
+                        bail!("conflict markers are still in {}", marked.iter().map(|f| f.as_str()).collect::<Vec<_>>().join(", "));
+                    }
+                    // Complete the merge, unless the user already committed it.
+                    if git(wt, &["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok() {
+                        git_commit_args(wt, &["commit", "--no-edit"])?;
+                    }
+                    if git(wt, &["merge-base", "--is-ancestor", &c.branch, "HEAD"]).is_err() {
+                        bail!("{} isn't merged into {} yet", c.branch, c.into);
+                    }
+                    run.integration.as_mut().unwrap().merged.push(c.task.clone());
+                    run.conflict = None;
+                    run.error = None;
+                    run.status = RunStatus::Integrating;
+                    run.note(format!("You resolved the conflict in {}; merging goes on.", c.files.join(", ")));
+                    Ok(())
+                }
+                other => bail!("resolve with `agent` or `manual`, not `{other}`"),
+            }
         })?;
         self.advance(id);
         Ok(())
