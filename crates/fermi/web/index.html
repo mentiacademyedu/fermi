@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fermi</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23222'/%3E%3Ctext x='16' y='23' font-family='sans-serif' font-size='20' font-weight='700' text-anchor='middle' fill='%23fff'%3Ef%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/vendor/xterm.css">
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/addon-fit.js"></script>
@@ -2253,8 +2254,7 @@ $("#trace-task").onclick = async () => {
     s.append(el("span", "op-name", "Changes"), el("span", "op-detail", `${tr.workspace.branch} · ${tr.workspace.path}`));
     d.append(s, pre); list.append(d);
     api(`/api/tasks/${tr.task}/diff`).then((v) => {
-      pre.textContent = `${v.files.map((f) => `${f.status}  ${f.path}`).join("
-") || "No changes."}
+      pre.textContent = `${v.files.map((f) => `${f.status}  ${f.path}`).join("\n") || "No changes."}
 
 fingerprint ${v.fingerprint}
 
@@ -3987,7 +3987,8 @@ function teamForm() {
       const full = await api(`/api/teams/${r.id}`); S.tm.runs.set(r.id, full); S.tm.sel = r.id; pref.set("tmSel", r.id); renderTeams();
     } catch (e) { toast(e.message, true); go.disabled = false; }
   };
-  f.append(gl, rl, rolesBox, row, checks, el("div", null, go));
+  const gob = el("div"); gob.append(go);
+  f.append(gl, rl, rolesBox, row, checks, gob);
   return f;
 }
 async function teamAct(run, action, body = {}) {
