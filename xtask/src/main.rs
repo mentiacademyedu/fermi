@@ -7,6 +7,7 @@
 //!   cargo run --locked -p xtask -- acceptance --all --profile security
 //!   cargo run --locked -p xtask -- acceptance --all --profile live --allow-billable --live-accounts my-claude
 //!   cargo run --locked -p xtask -- report --run-id <runId>
+//!   cargo run --locked -p xtask -- dashboard-report --run-id <runId>   # after the dashboard tests: summary and frontend coverage
 //!
 //! The registry `tests/acceptance/systems.yaml` maps case ids to tests. Each
 //! test writes its own result.json and artifacts; the runner keeps the
@@ -305,6 +306,144 @@ fn report(run_id: &str) -> Result<(), String> {
     Ok(())
 }
 
+// ── the dashboard tests ─────────────────────────────────────────────────────
+
+const PAGE: &str = "crates/fermi/web/index.html";
+
+/// The page's inline script as the browser sees it, and the line of index.html it starts on.
+fn page_script() -> Result<(String, usize), String> {
+    let html = std::fs::read_to_string(root().join(PAGE)).map_err(|e| format!("reading {PAGE}: {e}"))?;
+    let open = html.find("<script>").ok_or("the page has no inline script")? + "<script>".len();
+    let close = open + html[open..].find("</script>").ok_or("the page's inline script isn't closed")?;
+    // HTML parsing turns CRLF and lone CR into LF (a Windows checkout has CRLF).
+    let src = html[open..close].replace("\r\n", "\n").replace('\r', "\n");
+    Ok((src, html[..open].matches('\n').count() + 1))
+}
+
+fn percent(hit: usize, found: usize) -> Value {
+    json!({ "found": found, "hit": hit, "percent": if found == 0 { 0.0 } else { (hit as f64 * 1000.0 / found as f64).round() / 10.0 } })
+}
+
+/// Summarizes a run of the dashboard tests (UI-xx, which the registry doesn't
+/// list): its summary.json, and the frontend coverage merged over every case
+/// (frontend-coverage.json, frontend.lcov). The page script's coverage counts
+/// a line as run when any of its code ran, and a function when it was called.
+fn dashboard_report(run_id: &str) -> Result<bool, String> {
+    let dir = root().join("tests/reports").join(run_id);
+    let (src, first_line) = page_script()?;
+    // Each UTF-16 code unit of the script (the browser's offsets): its line and whether it's code.
+    let mut units: Vec<(usize, bool)> = vec![];
+    let mut line = first_line;
+    for ch in src.chars() {
+        units.extend(std::iter::repeat_n((line, !ch.is_whitespace()), ch.len_utf16()));
+        if ch == '\n' {
+            line += 1;
+        }
+    }
+    let mut ids: Vec<String> = std::fs::read_dir(&dir)
+        .map_err(|_| format!("no reports for {run_id}"))?
+        .filter_map(|e| e.ok().map(|e| e.file_name().to_string_lossy().to_string()))
+        .filter(|n| n.starts_with("UI-"))
+        .collect();
+    ids.sort();
+    let (mut ran, mut functions) = (vec![false; units.len()], BTreeMap::<(usize, usize), (String, bool)>::new());
+    let (mut cases, mut covered, mut all_passed, mut first) = (vec![], vec![], true, Value::Null);
+    for id in &ids {
+        let mut attempts: Vec<PathBuf> =
+            std::fs::read_dir(dir.join(id)).into_iter().flatten().filter_map(|e| e.ok().map(|e| e.path())).collect();
+        attempts.sort();
+        let Some(at) = attempts.pop() else { continue };
+        let r: Value = std::fs::read(at.join("result.json")).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+        let status = match validate(&at, id) {
+            Ok(_) => "passed".to_string(),
+            Err(e) => {
+                eprintln!("{id}: {e}");
+                all_passed = false;
+                r["status"].as_str().filter(|s| *s != "passed").unwrap_or("failed").to_string()
+            }
+        };
+        if first.is_null() {
+            first = r.clone();
+        }
+        let checks: Vec<Value> = r["assertions"].as_array().into_iter().flatten().map(|a| a["name"].clone()).collect();
+        cases.push(json!({ "id": id, "status": status, "durationMs": r["durationMs"], "checks": checks }));
+        let Ok(bytes) = std::fs::read(at.join("frontend-coverage.json")) else { continue };
+        let cov: Value = serde_json::from_slice(&bytes).map_err(|e| format!("{id}: frontend-coverage.json: {e}"))?;
+        if cov["loads"].as_u64().unwrap_or(0) == 0 {
+            eprintln!("{id}: recorded no frontend coverage");
+            continue;
+        }
+        if cov["length"].as_u64() != Some(units.len() as u64) {
+            return Err(format!(
+                "{id} ran a page script of {} code units, but {PAGE} now has {}: rebuild and rerun the dashboard tests",
+                cov["length"],
+                units.len()
+            ));
+        }
+        for span in cov["ran"].as_array().into_iter().flatten() {
+            let (s, e) = (span[0].as_u64().unwrap_or(0) as usize, span[1].as_u64().unwrap_or(0) as usize);
+            ran[s.min(units.len())..e.min(units.len())].fill(true);
+        }
+        for f in cov["functions"].as_array().into_iter().flatten() {
+            let key = (f["start"].as_u64().unwrap_or(0) as usize, f["end"].as_u64().unwrap_or(0) as usize);
+            functions.entry(key).or_insert_with(|| (f["name"].as_str().unwrap_or_default().to_string(), false)).1 |= f["ran"] == true;
+        }
+        covered.push(id.clone());
+    }
+    if covered.is_empty() {
+        return Err(format!("no dashboard test in {run_id} recorded frontend coverage"));
+    }
+
+    let mut lines: BTreeMap<usize, bool> = BTreeMap::new();
+    for (&(line, code), &hit) in units.iter().zip(&ran).filter(|(u, _)| u.1) {
+        *lines.entry(line).or_default() |= code && hit;
+    }
+    let code_units = units.iter().filter(|u| u.1).count();
+    let code_ran = units.iter().zip(&ran).filter(|(u, &hit)| u.1 && hit).count();
+    let line_of = |offset: usize| units.get(offset).map_or(first_line, |u| u.0);
+    let name = |n: &str, offset: usize| format!("{}@{}", if n.is_empty() { "(anonymous)" } else { n }, line_of(offset));
+    let totals = json!({
+        "lines": percent(lines.values().filter(|&&h| h).count(), lines.len()),
+        "functions": percent(functions.values().filter(|f| f.1).count(), functions.len()),
+        "codeCharacters": percent(code_ran, code_units),
+    });
+    let not_run: Vec<Value> = functions.iter().filter(|(_, f)| !f.1).map(|(&(s, _), f)| json!(name(&f.0, s))).collect();
+    let report = json!({ "runId": run_id, "page": PAGE, "script": "the inline <script>", "cases": covered, "totals": totals, "functionsNotRun": not_run });
+    std::fs::write(dir.join("frontend-coverage.json"), serde_json::to_string_pretty(&report).unwrap()).map_err(|e| e.to_string())?;
+
+    let mut lcov = format!("TN:\nSF:{PAGE}\n");
+    for (&(s, _), (n, _)) in &functions {
+        lcov += &format!("FN:{},{}\n", line_of(s), name(n, s));
+    }
+    for (&(s, _), (n, hit)) in &functions {
+        lcov += &format!("FNDA:{},{}\n", u8::from(*hit), name(n, s));
+    }
+    lcov += &format!("FNF:{}\nFNH:{}\n", functions.len(), functions.values().filter(|f| f.1).count());
+    for (line, hit) in &lines {
+        lcov += &format!("DA:{line},{}\n", u8::from(*hit));
+    }
+    lcov += &format!("LF:{}\nLH:{}\nend_of_record\n", lines.len(), lines.values().filter(|&&h| h).count());
+    std::fs::write(dir.join("frontend.lcov"), lcov).map_err(|e| e.to_string())?;
+
+    let summary = json!({
+        "runId": run_id, "commitSha": first["commitSha"], "dirtyTree": first["dirtyTree"], "os": std::env::consts::OS,
+        "suite": "dashboard (crates/acceptance-tests/tests/dashboard.rs)", "cases": cases, "frontendCoverage": totals,
+    });
+    std::fs::write(dir.join("summary.json"), serde_json::to_string_pretty(&summary).unwrap()).map_err(|e| e.to_string())?;
+    let p = |k: &str| format!("{} / {} ({}%)", totals[k]["hit"], totals[k]["found"], totals[k]["percent"]);
+    eprintln!(
+        "dashboard tests: {} of {} passed\nfrontend coverage ({PAGE}, merged over {}): lines {}, functions {}, code characters {}\nreport: {}",
+        cases.iter().filter(|c| c["status"] == "passed").count(),
+        cases.len(),
+        covered.join(", "),
+        p("lines"),
+        p("functions"),
+        p("codeCharacters"),
+        dir.join("frontend-coverage.json").display()
+    );
+    Ok(all_passed)
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let flag = |name: &str| args.iter().any(|a| a == name);
@@ -325,7 +464,11 @@ fn main() -> ExitCode {
             Some(r) => report(&r).map(|_| true),
             None => Err("report needs --run-id".into()),
         },
-        _ => Err("usage: xtask acceptance [--id X]… [--system AI]… [--implemented | --all] [--allow-blocked] [--profile deterministic|security|live] [--allow-billable] [--live-accounts a,b] [--repeat N]\n       xtask report --run-id <runId>".into()),
+        Some("dashboard-report") => match values("--run-id").pop() {
+            Some(r) => dashboard_report(&r),
+            None => Err("dashboard-report needs --run-id".into()),
+        },
+        _ => Err("usage: xtask acceptance [--id X]… [--system AI]… [--implemented | --all] [--allow-blocked] [--profile deterministic|security|live] [--allow-billable] [--live-accounts a,b] [--repeat N]\n       xtask report --run-id <runId>\n       xtask dashboard-report --run-id <runId>".into()),
     };
     match res {
         Ok(true) => ExitCode::SUCCESS,

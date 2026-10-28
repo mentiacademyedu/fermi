@@ -59,6 +59,10 @@ jobs:
         env:
           ACCEPTANCE_RUN_ID: ci-${{ github.run_id }}-${{ github.run_attempt }}-dashboard
 
+      # Their summary and the page script's coverage, merged over the cases.
+      - name: Dashboard report and frontend coverage
+        run: cargo run --locked -p xtask -- dashboard-report --run-id ci-${{ github.run_id }}-${{ github.run_attempt }}-dashboard
+
       - uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Coverage

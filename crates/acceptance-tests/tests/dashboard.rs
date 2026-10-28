@@ -5,12 +5,17 @@
 //! HTTP API, and these guard the page on top of it. Only the model's output
 //! comes from the fake CLI. Every case also fails on any page error.
 //!
+//! Each case also records which parts of the page's own script ran (the
+//! browser's precise coverage, `frontend-coverage.json`);
+//! `xtask dashboard-report` merges them into the frontend coverage.
+//!
 //!   cargo test -p acceptance-tests --locked --test dashboard
 
 use acceptance_tests::{account, fixture, git, sha256, Case, Fermi};
 use fermi_core::browser::{self, Browser};
 use fermi_core::engine::Engine;
 use serde_json::{json, Value};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -25,8 +30,71 @@ struct Window {
     page: Browser,
     /// Requests whose refusal the case causes on purpose.
     allowed: std::sync::Mutex<Vec<String>>,
+    coverage: std::sync::Mutex<Coverage>,
     stop: tokio::sync::oneshot::Sender<()>,
     serving: tokio::task::JoinHandle<anyhow::Result<()>>,
+}
+
+/// What the page's own script ran, over every load in the case. Offsets are
+/// the browser's: UTF-16 code units into the inline `<script>` of index.html.
+#[derive(Default)]
+struct Coverage {
+    loads: usize,
+    length: usize,
+    ran: Vec<bool>,
+    /// (start, end) → (name, ran at least once).
+    functions: BTreeMap<(usize, usize), (String, bool)>,
+}
+
+impl Coverage {
+    /// Adds one `Profiler.takePreciseCoverage` result for the script.
+    fn add(&mut self, functions: &[Value]) {
+        let range = |r: &Value| {
+            let n = |k: &str| r[k].as_u64().unwrap_or(0) as usize;
+            (n("startOffset"), n("endOffset"), n("count") > 0)
+        };
+        // Block ranges nest inside their function's range and override it,
+        // so paint outer ranges first.
+        let mut ranges: Vec<(usize, usize, bool)> =
+            functions.iter().flat_map(|f| f["ranges"].as_array().into_iter().flatten().map(range)).collect();
+        ranges.sort_by_key(|&(s, e, _)| (s, std::cmp::Reverse(e)));
+        let length = ranges.iter().map(|r| r.1).max().unwrap_or(0);
+        let mut ran = vec![false; length];
+        for (s, e, hit) in ranges {
+            ran[s..e].fill(hit);
+        }
+        if length > self.ran.len() {
+            self.ran.resize(length, false);
+        }
+        self.ran.iter_mut().zip(&ran).for_each(|(a, b)| *a |= b);
+        self.length = self.length.max(length);
+        for f in functions {
+            let Some(first) = f["ranges"].get(0).map(range) else { continue };
+            // The script's own top level isn't a function.
+            if first.0 == 0 && first.1 == length {
+                continue;
+            }
+            let e = self
+                .functions
+                .entry((first.0, first.1))
+                .or_insert_with(|| (f["functionName"].as_str().unwrap_or_default().to_string(), false));
+            e.1 |= first.2;
+        }
+        self.loads += 1;
+    }
+
+    /// Executed stretches as `[start, end)` pairs.
+    fn spans(&self) -> Vec<[usize; 2]> {
+        let mut out: Vec<[usize; 2]> = vec![];
+        for (i, &hit) in self.ran.iter().enumerate() {
+            match out.last_mut() {
+                Some(last) if hit && last[1] == i => last[1] = i + 1,
+                _ if hit => out.push([i, i + 1]),
+                _ => {}
+            }
+        }
+        out
+    }
 }
 
 impl Window {
@@ -39,9 +107,41 @@ impl Window {
             let _ = stopped.await;
         }));
         let page = Browser::launch(&engine.cfg.browser, &c.work.join("browser"), engine.redactor.clone()).await.unwrap();
-        let w = Window { base, token, http: reqwest::Client::new(), page, allowed: Default::default(), stop, serving };
+        // Coverage from the start: what ran before enabling it would be missed.
+        page.send("Profiler.enable", json!({})).await.unwrap();
+        page.send("Profiler.startPreciseCoverage", json!({ "callCount": true, "detailed": true })).await.unwrap();
+        let w = Window {
+            base,
+            token,
+            http: reqwest::Client::new(),
+            page,
+            allowed: Default::default(),
+            coverage: Default::default(),
+            stop,
+            serving,
+        };
         w.page.open(&format!("{}/#t={}", w.base, w.token)).await.unwrap();
         w
+    }
+
+    /// Loads `url`, keeping the coverage of the page being left.
+    async fn reopen(&self, url: &str) {
+        self.take_coverage().await;
+        self.page.open(url).await.unwrap();
+    }
+
+    /// Adds what the page's script ran since the last take (taking resets the counts).
+    async fn take_coverage(&self) {
+        let Ok(r) = self.page.send("Profiler.takePreciseCoverage", json!({})).await else { return };
+        let mut cov = self.coverage.lock().unwrap();
+        for s in r["result"].as_array().into_iter().flatten() {
+            // The page's own inline script; the vendored terminal scripts aren't ours, and
+            // evaluated snippets have no URL. (Its URL can hold the key, so it isn't kept.)
+            let url = s["url"].as_str().unwrap_or_default();
+            if url.starts_with(&self.base) && !url.contains("/vendor/") {
+                cov.add(s["functions"].as_array().map(Vec::as_slice).unwrap_or_default());
+            }
+        }
     }
 
     /// Evaluates `expr` in the page (promises are awaited).
@@ -104,6 +204,24 @@ impl Window {
         let _ = self.page.screenshot(Some("final"), true).await;
         let errors = self.errors().await;
         c.check("noPageErrors", errors.is_empty(), format!("{} page error(s): {errors:?}", errors.len()));
+        self.take_coverage().await;
+        let cov = std::mem::take(&mut *self.coverage.lock().unwrap());
+        let functions: Vec<Value> = cov
+            .functions
+            .iter()
+            .map(|(&(start, end), (name, ran))| json!({ "name": name, "start": start, "end": end, "ran": ran }))
+            .collect();
+        let ran_chars = cov.ran.iter().filter(|&&r| r).count();
+        c.json(
+            "frontend-coverage.json",
+            &json!({ "script": "crates/fermi/web/index.html (inline script)", "offsets": "UTF-16 code units",
+                     "loads": cov.loads, "length": cov.length, "ran": cov.spans(), "functions": functions }),
+        );
+        c.check(
+            "frontendCoverageRecorded",
+            cov.loads > 0 && ran_chars > 0,
+            format!("{} load(s) of the page script ({} code units), {ran_chars} ran", cov.loads, cov.length),
+        );
         let dir = self.page.dir.clone();
         drop(self.page);
         let _ = self.stop.send(());
@@ -118,6 +236,27 @@ impl Window {
             }
         }
     }
+}
+
+/// Nested block ranges override their function's count; loads add up.
+#[test]
+fn coverage_merges_nested_ranges_and_loads() {
+    let r = |s: usize, e: usize, n: u64| json!({ "startOffset": s, "endOffset": e, "count": n });
+    let load = |g: u64| {
+        vec![
+            json!({ "functionName": "", "ranges": [r(0, 100, 1)] }),
+            json!({ "functionName": "f", "ranges": [r(10, 40, 1), r(20, 30, 0)] }),
+            json!({ "functionName": "g", "ranges": [r(50, 60, g)] }),
+        ]
+    };
+    let mut cov = Coverage::default();
+    cov.add(&load(0));
+    assert_eq!(cov.spans(), vec![[0, 20], [30, 50], [60, 100]]);
+    assert_eq!(cov.functions.values().map(|f| (f.0.as_str(), f.1)).collect::<Vec<_>>(), vec![("f", true), ("g", false)]);
+    cov.add(&load(1));
+    assert_eq!(cov.spans(), vec![[0, 20], [30, 100]]);
+    assert!(cov.functions[&(50, 60)].1);
+    assert_eq!((cov.loads, cov.length), (2, 100));
 }
 
 /// Without a Chromium-based browser the case can't run here.
@@ -161,7 +300,7 @@ async fn ui_01_opens_and_connects() {
     // (the browser logs that refusal; it's the only error allowed here).
     w.js("sessionStorage.clear()").await;
     w.allow("/api/state");
-    w.page.open(&format!("{}/", w.base)).await.unwrap();
+    w.reopen(&format!("{}/", w.base)).await;
     let refused = w.js("fetch('/api/state').then(r => r.status)").await;
     let says = w.shows("Open fermi from the app").await;
     let hidden = w.js("document.querySelector('#app').hidden").await;
@@ -397,7 +536,7 @@ async fn ui_05_phone_width() {
     let fx = fixture("F-CODE", &c.work.join("repo")).unwrap();
     let w = Window::open(&c, f.engine.clone(), &fx.path).await;
     let layout = w.page.viewport(375, 812, true).await.unwrap_or_default();
-    w.page.open(&format!("{}/", w.base)).await.unwrap(); // the key is kept for reloads
+    w.reopen(&format!("{}/", w.base)).await; // the key is kept for reloads
     let ready = w.ready().await;
     let state = w.page.state().await.unwrap_or_default();
     let prompt = w.page.check(Some("#prompt"), None).await.unwrap_or_default();
