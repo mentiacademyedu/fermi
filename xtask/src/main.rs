@@ -369,6 +369,10 @@ fn dashboard_report(run_id: &str) -> Result<bool, String> {
         cases.push(json!({ "id": id, "status": status, "durationMs": r["durationMs"], "checks": checks }));
         let Ok(bytes) = std::fs::read(at.join("frontend-coverage.json")) else { continue };
         let cov: Value = serde_json::from_slice(&bytes).map_err(|e| format!("{id}: frontend-coverage.json: {e}"))?;
+        if cov["loads"].as_u64().unwrap_or(0) == 0 {
+            eprintln!("{id}: recorded no frontend coverage");
+            continue;
+        }
         if cov["length"].as_u64() != Some(units.len() as u64) {
             return Err(format!(
                 "{id} ran a page script of {} code units, but {PAGE} now has {}: rebuild and rerun the dashboard tests",
