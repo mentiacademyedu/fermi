@@ -224,7 +224,15 @@ A team run puts several agents with roles on one goal in a git repository
    role. Agents finish with a structured handoff (summary, files, decisions,
    risks, next steps, tests) that the tasks depending on them receive.
 3. **Merge branches.** Finished branches are merged in dependency order into an
-   integration branch; a conflict goes to a debugger agent in that worktree.
+   integration branch. A conflict stops the run and waits for you: the run
+   shows the conflicting files and what each side changed in them, and the
+   integration worktree is left mid-merge. Resolve it there (fix the files and
+   `git add` them) and choose **I resolved it — continue**, which fermi refuses
+   while files are unmerged or still have conflict markers; or choose **Let an
+   agent resolve it** to hand it to a debugger. Nothing picks a side for you. A
+   run created with `"conflicts": "agent"` (`POST /api/teams`) sends conflicts
+   straight to the debugger instead, for unattended runs
+   (`POST /api/teams/<id>/resolve` with `{"how": "manual"}` or `{"how": "agent"}`).
 4. **Check.** Optionally a final test pass and a security review run on the
    merged result. Then fermi runs the project's checks itself (see
    *Verification*); if they fail, a debugger fixes the integrated branch and
