@@ -4,8 +4,8 @@
 
 | Field | Value |
 | --- | --- |
-| Run | `2026-10-27-6822a64` (deterministic), `2026-10-27-6822a64-security`, `2026-10-27-6822a64-live-workers` and `2026-10-27-6822a64-dashboard`, plus the same four on Linux CI for the same commit (its live job has no real accounts); the real-model live run is `2026-10-27-7dc936c-live` (see below) |
-| Revision | `6822a64` (full SHA in the run summaries); clean working tree |
+| Run | `2026-10-27-4e46727` (deterministic), `2026-10-27-4e46727-security`, `2026-10-27-4e46727-live-workers` and `2026-10-27-4e46727-dashboard`, plus the same four on Linux CI for the same commit (its live job has no real accounts); the real-model live run is `2026-10-27-7dc936c-live` (see below) |
+| Revision | `4e46727` (full SHA in the run summaries); clean working tree |
 | Date | 2026-10-27 |
 | Environment | Windows 11 Home 10.0.26200, Rust 1.96.0 (`rust-toolchain.toml`), local developer machine |
 | Providers | fake CLI (`crates/acceptance-tests/src/bin/fake-cli.rs`) and mock HTTP model endpoints (`src/provider.rs`) for every case in the deterministic and security runs; in the live run, EV-02, EV-04 and E2E-09 ran on real models (Claude Sonnet 5.5 and Haiku 5.5 through Claude Code 2.1.312 on the user's subscription account `jezusmax`, one small task per model and case) |
@@ -24,9 +24,10 @@
 | Acceptance, deterministic | `xtask acceptance --implemented` | 93 passed, 2 blocked (LR-02 needs Docker, E2E-07 needs Landlock), runner exit 0 (Linux CI: 95 of 95, with Chrome, Docker and Landlock) |
 | Acceptance, security (Windows) | `xtask acceptance --implemented --profile security --allow-blocked` | 19 passed, 6 blocked (PL-07, SE-01/04/05 and E2E-07 need Linux Landlock; LR-02 needs Docker), runner exit 0 |
 | Acceptance, security (Linux CI) | `xtask acceptance --system SE --system MA --system PL --system EV --system LR --system E2E --profile security` on Ubuntu | passed: all 21 (SE-01 … SE-08, MA-06, MA-07, PL-04, PL-07, EV-06, LR-02, LR-06, LR-07, E2E-02, E2E-04, E2E-05, E2E-07, E2E-08) on the real OS sandbox and Docker; 6 of these blocked on Windows (`docs/acceptance-runs/linux-ci-security/`) |
-| Acceptance, live | workers: `xtask acceptance --system LR --id E2E-06 --profile live --allow-billable --allow-blocked` at `6822a64`; real models: `--implemented --profile live --allow-billable --allow-blocked --live-accounts jezusmax` at `7dc936c` | Windows at `6822a64`: 5 passed (LR-04 … LR-07, E2E-06), LR-03 blocked (Docker). Windows at `7dc936c`: those plus EV-02, EV-04 and E2E-09 on real Claude models, 8 passed; they weren't rerun on real models since, as the later changes (team-run conflicts, the web page) don't touch evaluation. Linux CI, which has no real accounts: LR-03 … LR-07 and E2E-06 passed, E2E-09 blocked (it passes there in the deterministic profile) |
-| Dashboard tests | `cargo test -p acceptance-tests --locked --test dashboard -- --test-threads=1` | 5 / 5 passed (UI-01 … UI-05) on Windows (Edge) and on Linux CI (Chrome), no page errors |
-| Coverage | `cargo llvm-cov --workspace --locked` | 68.0% of product lines on Linux CI at `6822a64`; 67.1% on Windows at `291c237` (see `TEST_COVERAGE.md`) |
+| Acceptance, live | workers: `xtask acceptance --system LR --id E2E-06 --profile live --allow-billable --allow-blocked` at `4e46727`; real models: `--implemented --profile live --allow-billable --allow-blocked --live-accounts jezusmax` at `7dc936c` | Windows at `4e46727`: 5 passed (LR-04 … LR-07, E2E-06), LR-03 blocked (Docker). Windows at `7dc936c`: those plus EV-02, EV-04 and E2E-09 on real Claude models, 8 passed; they weren't rerun on real models since, as the later changes (team-run conflicts, the web page and its tests) don't touch evaluation. Linux CI, which has no real accounts: LR-03 … LR-07 and E2E-06 passed, E2E-09 blocked (it passes there in the deterministic profile) |
+| Dashboard tests | `cargo test -p acceptance-tests --locked --test dashboard -- --test-threads=1`, then `xtask dashboard-report` | 5 / 5 passed (UI-01 … UI-05) on Windows (Edge) and on Linux CI (Chrome), no page errors |
+| Frontend coverage | `xtask dashboard-report` (the browser's precise coverage of the page script, merged over UI-01 … UI-05) | lines 1292 / 3976 (32.5%) and functions 163 / 545 (29.9%) on Windows; lines 1292 / 3976 (32.5%) and functions 163 / 545 (29.9%) on Linux CI (see `TEST_COVERAGE.md`) |
+| Coverage | `cargo llvm-cov --workspace --locked` | 68.0% of product lines on Linux CI at `4e46727`; 67.1% on Windows at `291c237` (see `TEST_COVERAGE.md`) |
 
 ## Acceptance outcomes
 
@@ -97,6 +98,10 @@ Every pass has a `result.json` whose checks all passed and whose artifacts match
 | Negative: the conflict choices removed from the team view | `negative-control-ui-conflict` | UI-04 failed (the window offered neither way out) |
 | Negative: the team form's Plan button back as text (D-009) | `negative-control-ui-planbutton` | UI-04 failed at its first check, with the team view kept as evidence |
 | Positive: all restored | `2026-10-27-6822a64-dashboard` | UI-01 … UI-05 passed, on Windows and on Linux CI |
+| Negative: precise coverage never started | `negative-control-frontend-coverage` | all five dashboard tests failed at `frontendCoverageRecorded` (test exit 101), and `xtask dashboard-report` refused the run: no case recorded frontend coverage (exit 2) |
+| Negative: the page changed after the run (one comment line added to its script) | report on `fc-dev1` | `xtask dashboard-report` refused: UI-01 ran a script of 242,658 code units, the checkout's has 242,669 (exit 2) |
+| Negative: a run from before frontend coverage | report on `2026-10-27-6822a64-dashboard` | refused: no case recorded frontend coverage (exit 2); nothing written |
+| Positive: restored | `2026-10-27-4e46727-dashboard` | UI-01 … UI-05 passed with coverage recorded, on Windows and on Linux CI |
 | In-test control (OB-08): a tampered recording | each OB-08 run | the replay reports the difference and the state hashes differ |
 
 ### Defects
@@ -107,7 +112,7 @@ No product defect is open. Product defects found and fixed so far: CLI outages w
 
 **Correction to the two previous verdicts.** The runs at `7dc936c` and `f985976` were published as ready while the dashboard window couldn't be used: from `720c8b0` on, its page script didn't parse, so `fermi ui` and the desktop app stayed on their splash (D-008). Every acceptance case drives the dashboard's HTTP API, not the page, so none could see it. The dashboard tests added with this run load the page in a real browser on every CI run; they found D-008 and D-009 on their first run.
 
-**Ready on every profile the plan defines, with the live tier covering one provider.** All 96 system cases and all 10 end-to-end workflows pass on revision `6822a64` (106 / 106: Linux CI passes every one; Windows passes 99 and reports the seven that need Landlock or Docker as blocked), with the real OS sandbox, Docker, browsers and worker processes exercised. The live profile ran the three cases that compare models (EV-02, EV-04, E2E-09) on real models, Claude Sonnet 5.5 and Haiku 5.5 on the user's account, and they passed: fresh environments, one oracle, model identity, latency and the provider's usage recorded, and cost reported as unknown because a subscription has no price table. Not covered live: OpenAI and Gemini models (only one Claude account was approved), and every other case, which uses simulated model output by design. One small task per model is a smoke test, not a benchmark of model quality. The web page passes its five dashboard tests (UI-01 … UI-05) on Windows and Linux; its other views (settings, files, slides, code map, memory, plugins, evaluations, skills, import, terminals) are still checked by hand only.
+**Ready on every profile the plan defines, with the live tier covering one provider.** All 96 system cases and all 10 end-to-end workflows pass on revision `4e46727` (106 / 106: Linux CI passes every one; Windows passes 99 and reports the seven that need Landlock or Docker as blocked), with the real OS sandbox, Docker, browsers and worker processes exercised. The live profile ran the three cases that compare models (EV-02, EV-04, E2E-09) on real models, Claude Sonnet 5.5 and Haiku 5.5 on the user's account, and they passed: fresh environments, one oracle, model identity, latency and the provider's usage recorded, and cost reported as unknown because a subscription has no price table. Not covered live: OpenAI and Gemini models (only one Claude account was approved), and every other case, which uses simulated model output by design. One small task per model is a smoke test, not a benchmark of model quality. The web page passes its five dashboard tests (UI-01 … UI-05) on Windows and Linux, which run about a third of its script (lines 1292 / 3976 (32.5%) on Linux CI); its other views (settings, files, slides, code map, memory, plugins, evaluations, skills, import, terminals) are still checked by hand only.
 
 ## Verified status of the 12 systems
 
@@ -150,3 +155,4 @@ No product defect is open. Product defects found and fixed so far: CLI outages w
 | 2026-10-25-ee16092 | `ee16092`, clean | 93 passed and 2 blocked deterministic, 99 / 106 on Windows, 106 with Linux CI; all on simulated models; superseded by the live tier |
 | 2026-10-27-7dc936c | `7dc936c`, clean | the same, plus EV-02, EV-04 and E2E-09 passed on real Claude models in the live run (its evidence stays the live result); superseded by MA-04. The dashboard page was broken at this revision (D-008) |
 | 2026-10-27-f985976 | `f985976`, clean | 93 passed and 2 blocked deterministic, 99 / 106 on Windows, 106 with Linux CI; MA-04 implemented; superseded by the dashboard tests. The dashboard page was broken at this revision (D-008) |
+| 2026-10-27-6822a64 | `6822a64`, clean | 93 passed and 2 blocked deterministic, 99 / 106 on Windows, 106 with Linux CI; dashboard tests 5 / 5; superseded by frontend coverage |

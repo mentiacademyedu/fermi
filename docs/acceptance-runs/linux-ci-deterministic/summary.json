@@ -9,7 +9,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 370,
+      "durationMs": 324,
       "id": "AI-01",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -23,7 +23,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 841,
+      "durationMs": 702,
       "id": "AI-02",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -37,7 +37,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 459,
+      "durationMs": 414,
       "id": "AI-03",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -51,7 +51,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 324,
+      "durationMs": 264,
       "id": "AI-04",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -65,7 +65,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 353,
+      "durationMs": 309,
       "id": "AI-05",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -79,7 +79,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 337,
+      "durationMs": 290,
       "id": "AI-06",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -93,7 +93,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 411,
+      "durationMs": 365,
       "id": "AI-07",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -107,7 +107,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 286,
+      "durationMs": 241,
       "id": "AI-08",
       "status": "passed",
       "system": "model-agnostic-ai-engine"
@@ -235,7 +235,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 6966,
+      "durationMs": 6224,
       "id": "MA-01",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -249,7 +249,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3728,
+      "durationMs": 3509,
       "id": "MA-02",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -263,7 +263,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 911,
+      "durationMs": 693,
       "id": "MA-03",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -277,7 +277,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1156,
+      "durationMs": 952,
       "id": "MA-04",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -291,7 +291,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 410,
+      "durationMs": 371,
       "id": "MA-05",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -305,7 +305,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 351,
+      "durationMs": 301,
       "id": "MA-06",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -319,7 +319,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 504,
+      "durationMs": 443,
       "id": "MA-07",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -333,7 +333,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1238,
+      "durationMs": 1102,
       "id": "MA-08",
       "status": "passed",
       "system": "multi-agent-orchestration"
@@ -347,7 +347,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 915,
+      "durationMs": 618,
       "id": "CI-01",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -361,7 +361,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 917,
+      "durationMs": 621,
       "id": "CI-02",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -375,7 +375,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 943,
+      "durationMs": 627,
       "id": "CI-03",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -389,7 +389,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1146,
+      "durationMs": 808,
       "id": "CI-04",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -403,7 +403,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 929,
+      "durationMs": 638,
       "id": "CI-05",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -417,7 +417,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1151,
+      "durationMs": 668,
       "id": "CI-06",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -431,7 +431,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1184,
+      "durationMs": 621,
       "id": "CI-07",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -445,7 +445,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 909,
+      "durationMs": 620,
       "id": "CI-08",
       "status": "passed",
       "system": "semantic-codebase-intelligence"
@@ -459,7 +459,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 328,
+      "durationMs": 278,
       "id": "PM-01",
       "status": "passed",
       "system": "persistent-project-memory"
@@ -473,7 +473,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 365,
+      "durationMs": 304,
       "id": "PM-02",
       "status": "passed",
       "system": "persistent-project-memory"
@@ -487,7 +487,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1391,
+      "durationMs": 1344,
       "id": "PM-03",
       "status": "passed",
       "system": "persistent-project-memory"
@@ -501,7 +501,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 285,
+      "durationMs": 245,
       "id": "PM-04",
       "status": "passed",
       "system": "persistent-project-memory"
@@ -515,7 +515,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 368,
+      "durationMs": 300,
       "id": "PM-05",
       "status": "passed",
       "system": "persistent-project-memory"
@@ -529,7 +529,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 291,
+      "durationMs": 243,
       "id": "PM-06",
       "status": "passed",
       "system": "persistent-project-memory"
@@ -543,7 +543,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2124,
+      "durationMs": 1006,
       "id": "PM-07",
       "status": "passed",
       "system": "persistent-project-memory"
@@ -557,7 +557,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 359,
+      "durationMs": 287,
       "id": "PM-08",
       "status": "passed",
       "system": "persistent-project-memory"
@@ -571,7 +571,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 375,
+      "durationMs": 301,
       "id": "VE-01",
       "status": "passed",
       "system": "integrated-verification-engine"
@@ -585,7 +585,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 772,
+      "durationMs": 733,
       "id": "VE-02",
       "status": "passed",
       "system": "integrated-verification-engine"
@@ -599,7 +599,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1478,
+      "durationMs": 4568,
       "id": "VE-03",
       "status": "passed",
       "system": "integrated-verification-engine"
@@ -613,7 +613,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 529,
+      "durationMs": 1349,
       "id": "VE-04",
       "status": "passed",
       "system": "integrated-verification-engine"
@@ -627,7 +627,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 301,
+      "durationMs": 253,
       "id": "VE-05",
       "status": "passed",
       "system": "integrated-verification-engine"
@@ -641,7 +641,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 920,
+      "durationMs": 626,
       "id": "VE-06",
       "status": "passed",
       "system": "integrated-verification-engine"
@@ -655,7 +655,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1004,
+      "durationMs": 825,
       "id": "VE-07",
       "status": "passed",
       "system": "integrated-verification-engine"
@@ -669,7 +669,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1527,
+      "durationMs": 1398,
       "id": "VE-08",
       "status": "passed",
       "system": "integrated-verification-engine"
@@ -683,7 +683,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 8371,
+      "durationMs": 2095,
       "id": "BA-01",
       "status": "passed",
       "system": "browser-and-application-control"
@@ -697,7 +697,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1635,
+      "durationMs": 1575,
       "id": "BA-02",
       "status": "passed",
       "system": "browser-and-application-control"
@@ -711,7 +711,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1220,
+      "durationMs": 1132,
       "id": "BA-03",
       "status": "passed",
       "system": "browser-and-application-control"
@@ -725,7 +725,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 932,
+      "durationMs": 772,
       "id": "BA-04",
       "status": "passed",
       "system": "browser-and-application-control"
@@ -739,7 +739,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1221,
+      "durationMs": 1080,
       "id": "BA-05",
       "status": "passed",
       "system": "browser-and-application-control"
@@ -753,7 +753,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1247,
+      "durationMs": 1190,
       "id": "BA-06",
       "status": "passed",
       "system": "browser-and-application-control"
@@ -767,7 +767,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2175,
+      "durationMs": 2058,
       "id": "BA-07",
       "status": "passed",
       "system": "browser-and-application-control"
@@ -781,7 +781,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2063,
+      "durationMs": 1990,
       "id": "BA-08",
       "status": "passed",
       "system": "browser-and-application-control"
@@ -795,7 +795,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 298,
+      "durationMs": 280,
       "id": "PL-01",
       "status": "passed",
       "system": "composable-harness-and-plugins"
@@ -809,7 +809,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 305,
+      "durationMs": 255,
       "id": "PL-02",
       "status": "passed",
       "system": "composable-harness-and-plugins"
@@ -823,7 +823,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 389,
+      "durationMs": 313,
       "id": "PL-03",
       "status": "passed",
       "system": "composable-harness-and-plugins"
@@ -837,7 +837,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3391,
+      "durationMs": 3343,
       "id": "PL-04",
       "status": "passed",
       "system": "composable-harness-and-plugins"
@@ -851,7 +851,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 324,
+      "durationMs": 263,
       "id": "PL-05",
       "status": "passed",
       "system": "composable-harness-and-plugins"
@@ -865,7 +865,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 431,
+      "durationMs": 368,
       "id": "PL-06",
       "status": "passed",
       "system": "composable-harness-and-plugins"
@@ -879,7 +879,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 285,
+      "durationMs": 242,
       "id": "PL-08",
       "status": "passed",
       "system": "composable-harness-and-plugins"
@@ -893,7 +893,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 350,
+      "durationMs": 312,
       "id": "OB-01",
       "status": "passed",
       "system": "agent-observability"
@@ -907,7 +907,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 727,
+      "durationMs": 694,
       "id": "OB-02",
       "status": "passed",
       "system": "agent-observability"
@@ -921,7 +921,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 390,
+      "durationMs": 348,
       "id": "OB-03",
       "status": "passed",
       "system": "agent-observability"
@@ -935,7 +935,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 458,
+      "durationMs": 410,
       "id": "OB-04",
       "status": "passed",
       "system": "agent-observability"
@@ -949,7 +949,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 328,
+      "durationMs": 296,
       "id": "OB-05",
       "status": "passed",
       "system": "agent-observability"
@@ -963,7 +963,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 6653,
+      "durationMs": 6660,
       "id": "OB-06",
       "status": "passed",
       "system": "agent-observability"
@@ -977,7 +977,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 375,
+      "durationMs": 339,
       "id": "OB-07",
       "status": "passed",
       "system": "agent-observability"
@@ -991,7 +991,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 414,
+      "durationMs": 370,
       "id": "OB-08",
       "status": "passed",
       "system": "agent-observability"
@@ -1005,7 +1005,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 267,
+      "durationMs": 230,
       "id": "CO-01",
       "status": "passed",
       "system": "cost-and-performance"
@@ -1019,7 +1019,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 329,
+      "durationMs": 290,
       "id": "CO-02",
       "status": "passed",
       "system": "cost-and-performance"
@@ -1033,7 +1033,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 338,
+      "durationMs": 288,
       "id": "CO-03",
       "status": "passed",
       "system": "cost-and-performance"
@@ -1047,7 +1047,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 286,
+      "durationMs": 246,
       "id": "CO-04",
       "status": "passed",
       "system": "cost-and-performance"
@@ -1061,7 +1061,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 832,
+      "durationMs": 792,
       "id": "CO-05",
       "status": "passed",
       "system": "cost-and-performance"
@@ -1075,7 +1075,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1492,
+      "durationMs": 1506,
       "id": "CO-06",
       "status": "passed",
       "system": "cost-and-performance"
@@ -1089,7 +1089,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 402,
+      "durationMs": 459,
       "id": "CO-07",
       "status": "passed",
       "system": "cost-and-performance"
@@ -1103,7 +1103,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 820,
+      "durationMs": 756,
       "id": "CO-08",
       "status": "passed",
       "system": "cost-and-performance"
@@ -1117,7 +1117,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 380,
+      "durationMs": 346,
       "id": "SE-06",
       "status": "passed",
       "system": "security-and-isolation"
@@ -1131,7 +1131,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 286,
+      "durationMs": 248,
       "id": "SE-07",
       "status": "passed",
       "system": "security-and-isolation"
@@ -1145,7 +1145,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 580,
+      "durationMs": 495,
       "id": "LR-01",
       "status": "passed",
       "system": "local-and-remote-execution"
@@ -1159,7 +1159,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 17561,
+      "durationMs": 19354,
       "id": "LR-02",
       "status": "passed",
       "system": "local-and-remote-execution"
@@ -1173,7 +1173,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 6767,
+      "durationMs": 6713,
       "id": "LR-04",
       "status": "passed",
       "system": "local-and-remote-execution"
@@ -1187,7 +1187,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2164,
+      "durationMs": 2345,
       "id": "LR-05",
       "status": "passed",
       "system": "local-and-remote-execution"
@@ -1201,7 +1201,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 840,
+      "durationMs": 767,
       "id": "LR-08",
       "status": "passed",
       "system": "local-and-remote-execution"
@@ -1215,7 +1215,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1675,
+      "durationMs": 1503,
       "id": "EV-01",
       "status": "passed",
       "system": "evaluation-and-self-improvement"
@@ -1229,7 +1229,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3150,
+      "durationMs": 2845,
       "id": "EV-02",
       "status": "passed",
       "system": "evaluation-and-self-improvement"
@@ -1243,7 +1243,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3146,
+      "durationMs": 2816,
       "id": "EV-03",
       "status": "passed",
       "system": "evaluation-and-self-improvement"
@@ -1257,7 +1257,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3140,
+      "durationMs": 2787,
       "id": "EV-04",
       "status": "passed",
       "system": "evaluation-and-self-improvement"
@@ -1271,7 +1271,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 4642,
+      "durationMs": 4099,
       "id": "EV-05",
       "status": "passed",
       "system": "evaluation-and-self-improvement"
@@ -1285,7 +1285,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3263,
+      "durationMs": 2738,
       "id": "EV-07",
       "status": "passed",
       "system": "evaluation-and-self-improvement"
@@ -1299,7 +1299,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3197,
+      "durationMs": 2711,
       "id": "EV-08",
       "status": "passed",
       "system": "evaluation-and-self-improvement"
@@ -1313,7 +1313,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1112,
+      "durationMs": 886,
       "id": "E2E-01",
       "status": "passed",
       "system": "end-to-end"
@@ -1327,7 +1327,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 6078,
+      "durationMs": 5180,
       "id": "E2E-02",
       "status": "passed",
       "system": "end-to-end"
@@ -1341,7 +1341,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 3555,
+      "durationMs": 3399,
       "id": "E2E-03",
       "status": "passed",
       "system": "end-to-end"
@@ -1355,7 +1355,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 886,
+      "durationMs": 806,
       "id": "E2E-04",
       "status": "passed",
       "system": "end-to-end"
@@ -1369,7 +1369,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 2366,
+      "durationMs": 2313,
       "id": "E2E-05",
       "status": "passed",
       "system": "end-to-end"
@@ -1383,7 +1383,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 7060,
+      "durationMs": 6995,
       "id": "E2E-06",
       "status": "passed",
       "system": "end-to-end"
@@ -1397,7 +1397,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 403,
+      "durationMs": 360,
       "id": "E2E-07",
       "status": "passed",
       "system": "end-to-end"
@@ -1411,7 +1411,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 364,
+      "durationMs": 329,
       "id": "E2E-08",
       "status": "passed",
       "system": "end-to-end"
@@ -1425,7 +1425,7 @@
           "status": "passed"
         }
       ],
-      "durationMs": 623,
+      "durationMs": 546,
       "id": "E2E-09",
       "status": "passed",
       "system": "end-to-end"
@@ -1439,15 +1439,15 @@
           "status": "passed"
         }
       ],
-      "durationMs": 1732,
+      "durationMs": 1334,
       "id": "E2E-10",
       "status": "passed",
       "system": "end-to-end"
     }
   ],
-  "commitSha": "6822a64671606a75019a379175ee110bb04dfb89",
+  "commitSha": "4e46727148be090c4ff187db19e4bf92a5c9c408",
   "dirtyTree": false,
   "os": "linux",
   "profile": "deterministic",
-  "runId": "ci-40619945857-1"
+  "runId": "ci-40638282321-1"
 }

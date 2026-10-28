@@ -15,7 +15,7 @@ All 106 capabilities are audited as *implemented* and have a passing test (seven
 
 ## Code coverage
 
-`cargo llvm-cov --workspace --locked` on Windows at `291c237` (the published revision `ee16092` plus a fix to the test harness's outage proxy; unit and acceptance tests together). The Linux-only sandbox code (Landlock) isn't exercised here; Linux CI's `lcov.info` gives 67.2% of product lines for `ee16092` (run 40164598030) and for the live tier's merge `7dc936c` (run 40599642988), 67.3% for `f985976` (run 40607108227), and 68.0% for `6822a64` (run 40619945857; fermi-core 78.5%, fermi 39.4%, `server.rs` 33.9% with the dashboard tests, `team.rs` 78%):
+`cargo llvm-cov --workspace --locked` on Windows at `291c237` (the published revision `ee16092` plus a fix to the test harness's outage proxy; unit and acceptance tests together). The Linux-only sandbox code (Landlock) isn't exercised here; Linux CI's `lcov.info` gives 67.2% of product lines for `ee16092` (run 40164598030) and for the live tier's merge `7dc936c` (run 40599642988), 67.3% for `f985976` (run 40607108227), 68.0% for `6822a64` (run 40619945857), and 68.0% for `4e46727` (run 40638282321; fermi-core 78.6%, fermi 39.4%, `server.rs` 33.9% with the dashboard tests, `team.rs` 78%):
 
 | Scope | Lines | Functions |
 | --- | --- | --- |
@@ -37,8 +37,19 @@ Earlier measurements: 54.1% at `faa705c`, 59.1% at `19f85c1`, 61.9% at `e72c2c7`
 | `mcp.rs` (bridge tools) | 27% | the bridge runs as its own process in most tests (MA-05, BA, PL), whose coverage isn't recorded; in process, only `run_checks`, the memory and browser tools are called |
 | `sessions.rs` (import from other CLIs) | 51% | unit tests cover the parsers, not discovery on disk |
 
+## Frontend coverage
+
+The web page's own script (the inline `<script>` of `crates/fermi/web/index.html`, about 4,000 lines), measured by the browser during the dashboard tests and merged by `xtask dashboard-report` (`frontend-coverage.json`, `frontend.lcov`). At `4e46727`:
+
+| Where | Lines | Functions |
+| --- | --- | --- |
+| Windows (Edge), `2026-10-27-4e46727-dashboard` | 1292 / 3976 (32.5%) | 163 / 545 (29.9%) |
+| Linux CI (Chrome), run 40638282321 | 1292 / 3976 (32.5%) | 163 / 545 (29.9%) |
+
+A line counts as run when any of its code ran, a function when it was called; the vendored terminal scripts (xterm.js) are excluded. The five cases open the window, send one task, cancel one, run one team run and resize to phone width, so the views they never open (settings, accounts and profiles, files and editor, slides, code map, memory, plugins, evaluations, skills, import, trending, terminals) hold most of the uncovered two-thirds; `functionsNotRun` in the report lists them by name and line. No threshold is enforced for either coverage figure.
+
 ## Unsupported paths and exclusions
 
-- The web UI has five dashboard tests (UI-01 … UI-05: opening and the key, a task from the composer with its trace, cancel, a team run with a conflict, phone width), run in a real browser on every CI run. Its other views (settings, files, slides, code map, memory, plugins, evaluations, skills, import, terminals) and the desktop shell have no automated tests.
+- The web UI has five dashboard tests (UI-01 … UI-05: opening and the key, a task from the composer with its trace, cancel, a team run with a conflict, phone width), run in a real browser on every CI run, with the page script's coverage measured (see above). Its other views (settings, files, slides, code map, memory, plugins, evaluations, skills, import, terminals) and the desktop shell have no automated tests.
 - Live providers (T4) are never called by the default or CI runs.
 - The container cases (LR-02, LR-03) need Docker, which the development machine lacks; they run on Linux CI.

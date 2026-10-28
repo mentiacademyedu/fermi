@@ -1,0 +1,83 @@
+{
+  "cases": [
+    {
+      "checks": [
+        "opensWithItsKey",
+        "keyLeavesTheAddressBar",
+        "refusedWithoutTheKey",
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 3638,
+      "id": "UI-01",
+      "status": "passed"
+    },
+    {
+      "checks": [
+        "sentFromTheComposer",
+        "isolatedFromTheUsersFolder",
+        "changesInTheTrace",
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 5466,
+      "id": "UI-02",
+      "status": "passed"
+    },
+    {
+      "checks": [
+        "cancelledFromTheWindow",
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 3997,
+      "id": "UI-03",
+      "status": "passed"
+    },
+    {
+      "checks": [
+        "startedFromTheWindow",
+        "conflictShownWithBothPatches",
+        "unresolvedRefusedInTheWindow",
+        "resolvedFromTheWindow",
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 12241,
+      "id": "UI-04",
+      "status": "passed"
+    },
+    {
+      "checks": [
+        "usableAtPhoneWidth",
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 3453,
+      "id": "UI-05",
+      "status": "passed"
+    }
+  ],
+  "commitSha": "4e46727148be090c4ff187db19e4bf92a5c9c408",
+  "dirtyTree": false,
+  "frontendCoverage": {
+    "codeCharacters": {
+      "found": 201129,
+      "hit": 54235,
+      "percent": 27.0
+    },
+    "functions": {
+      "found": 545,
+      "hit": 163,
+      "percent": 29.9
+    },
+    "lines": {
+      "found": 3976,
+      "hit": 1292,
+      "percent": 32.5
+    }
+  },
+  "os": "windows",
+  "runId": "2026-10-27-4e46727-dashboard",
+  "suite": "dashboard (crates/acceptance-tests/tests/dashboard.rs)"
+}

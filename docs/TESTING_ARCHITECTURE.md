@@ -101,7 +101,7 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests (Ubuntu): formatting, clippy with warnings as errors, unit tests, the acceptance runner with `--implemented`, and coverage with cargo-llvm-cov; the dashboard tests; `tests/reports/` and `lcov.info` are uploaded as artifacts, kept 30 days for a green run and 90 for a failed one. The toolchain is pinned by `rust-toolchain.toml`. The plan's nightly run (repeated concurrency, resilience and security profiles) isn't scheduled: on this private repository it would spend the account's Actions minutes every day, which is the owner's decision.
+`.github/workflows/ci.yml` runs on pushes to `main` and on pull requests (Ubuntu): formatting, clippy with warnings as errors, unit tests, the acceptance runner with `--implemented`, and coverage with cargo-llvm-cov; the dashboard tests and their report with the frontend coverage; `tests/reports/` and `lcov.info` are uploaded as artifacts, kept 30 days for a green run and 90 for a failed one. The toolchain is pinned by `rust-toolchain.toml`. The plan's nightly run (repeated concurrency, resilience and security profiles) isn't scheduled: on this private repository it would spend the account's Actions minutes every day, which is the owner's decision.
 
 ## Dashboard tests
 
@@ -115,8 +115,11 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 | UI-04 | Teams → New team run → Plan it → Approve and start; the merge conflict shows both patches and both choices; continuing before resolving is refused with the reason; after the user resolves it, "Checks passed: ready to merge" and the integrated file is the user's resolution, with no agent asked |
 | UI-05 | at phone width (375 px, touch) the page has no horizontal overflow and the prompt and Send are on screen and uncovered |
 
+Each case also records which parts of the page's own script ran: the browser's precise coverage (`Profiler.startPreciseCoverage` with block detail, started before the page loads and taken before every navigation and at the end), saved as `frontend-coverage.json` and checked as `frontendCoverageRecorded`. `xtask dashboard-report` then merges the cases against the inline `<script>` of `index.html` (as the browser parses it, CRLF read as LF), writes the run's `summary.json`, `frontend-coverage.json` (line, function and character totals, and the functions no case ran) and `frontend.lcov`, and refuses coverage taken from a different page than the checkout's. A line counts as run when any of its code ran, a function when it was called. The vendored terminal scripts aren't counted, and no threshold is enforced.
+
 ```text
 cargo test -p acceptance-tests --locked --test dashboard -- --test-threads=1
+cargo run --locked -p xtask -- dashboard-report --run-id <the same ACCEPTANCE_RUN_ID>
 ```
 
 ## Not built yet

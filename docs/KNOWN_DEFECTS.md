@@ -131,6 +131,13 @@ Found and fixed while writing the tests; listed so the history is complete.
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
 
+## Found while adding frontend coverage (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Test implementation | the first report counted 4,030 more code units than the browser had run: a Windows checkout has CRLF line endings, and HTML parsing turns them into LF before the script runs | the report reads the script as the browser parses it |
+| Test implementation, caught by a negative control | with coverage never started, the report blamed a different page ("0 code units … rebuild") instead of the missing coverage | a case that recorded nothing counts as uncovered; with none covered the report says so |
+
 ## Found by the dashboard tests (no open defects)
 
 | Kind | Issue | Fix |

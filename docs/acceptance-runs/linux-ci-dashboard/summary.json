@@ -1,61 +1,83 @@
 {
-  "runId": "ci-40619945857-1-dashboard",
-  "commitSha": "6822a64671606a75019a379175ee110bb04dfb89",
-  "dirtyTree": false,
-  "os": "linux",
-  "suite": "dashboard (crates/acceptance-tests/tests/dashboard.rs)",
   "cases": [
     {
-      "id": "UI-01",
-      "status": "passed",
-      "durationMs": 2066,
       "checks": [
         "opensWithItsKey",
         "keyLeavesTheAddressBar",
         "refusedWithoutTheKey",
-        "noPageErrors"
-      ]
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 2215,
+      "id": "UI-01",
+      "status": "passed"
     },
     {
-      "id": "UI-02",
-      "status": "passed",
-      "durationMs": 3492,
       "checks": [
         "sentFromTheComposer",
         "isolatedFromTheUsersFolder",
         "changesInTheTrace",
-        "noPageErrors"
-      ]
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 3403,
+      "id": "UI-02",
+      "status": "passed"
     },
     {
-      "id": "UI-03",
-      "status": "passed",
-      "durationMs": 2585,
       "checks": [
         "cancelledFromTheWindow",
-        "noPageErrors"
-      ]
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 2515,
+      "id": "UI-03",
+      "status": "passed"
     },
     {
-      "id": "UI-04",
-      "status": "passed",
-      "durationMs": 4834,
       "checks": [
         "startedFromTheWindow",
         "conflictShownWithBothPatches",
         "unresolvedRefusedInTheWindow",
         "resolvedFromTheWindow",
-        "noPageErrors"
-      ]
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 4751,
+      "id": "UI-04",
+      "status": "passed"
     },
     {
-      "id": "UI-05",
-      "status": "passed",
-      "durationMs": 1880,
       "checks": [
         "usableAtPhoneWidth",
-        "noPageErrors"
-      ]
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 1830,
+      "id": "UI-05",
+      "status": "passed"
     }
-  ]
+  ],
+  "commitSha": "4e46727148be090c4ff187db19e4bf92a5c9c408",
+  "dirtyTree": false,
+  "frontendCoverage": {
+    "codeCharacters": {
+      "found": 201129,
+      "hit": 54181,
+      "percent": 26.9
+    },
+    "functions": {
+      "found": 545,
+      "hit": 163,
+      "percent": 29.9
+    },
+    "lines": {
+      "found": 3976,
+      "hit": 1292,
+      "percent": 32.5
+    }
+  },
+  "os": "linux",
+  "runId": "ci-40638282321-1-dashboard",
+  "suite": "dashboard (crates/acceptance-tests/tests/dashboard.rs)"
 }
