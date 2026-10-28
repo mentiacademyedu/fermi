@@ -106,6 +106,13 @@ Found and fixed while writing the tests; listed so the history is complete.
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
 
+## Found while closing MA-04 (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Design gap, the last *partial* capability | a merge conflict in a team run went straight to a debugger agent; nothing showed the user both changes or checked that the agent kept both, so a resolution could quietly favour one side | the run stops with a conflict report (the files, each side's patch, the integration worktree mid-merge); the user resolves it and continues (refused while files are unmerged or carry conflict markers) or hands it to an agent; `conflicts = "agent"` keeps automatic resolution for unattended runs |
+| Test implementation, caught by the negative control | MA-04 first created its run with `conflicts = "ask"` spelled out, so it passed even with automatic resolution as the default; and when the control removed the escalation, a later step panicked before the evidence was written | run 1 uses the default a user gets; the resolution step runs only when a conflict waits, so a failure keeps its evidence |
+
 ## Found by the live tier (no open defects)
 
 | Kind | Issue | Fix |

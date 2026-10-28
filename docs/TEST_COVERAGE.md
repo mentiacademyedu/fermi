@@ -8,14 +8,14 @@
 | Cases with an executable acceptance test | 106 |
 | Execution coverage (cases executed / 106) | 106 / 106 |
 | Overall acceptance (cases passed / 106) | 106 / 106 (99 on Windows; PL-07, SE-01/04/05, E2E-07, LR-02 and LR-03 pass on Linux CI, blocked on Windows; Linux CI passes all 106) |
-| Capabilities found in the audit | 105 implemented, 1 partial (MA-04), 0 missing |
+| Capabilities found in the audit | 106 implemented, 0 partial, 0 missing |
 | Systems at their completion gate (8 / 8) | all twelve: System 1 (AI engine), System 2 (orchestration), System 3 (code intelligence), System 4 (project memory), System 5 (verification engine), System 6 (browser control), System 7 (plugins; 8/8 on Linux CI), System 8 (observability), System 9 (cost and performance), System 10 (security; 8/8 on Linux CI), System 11 (execution; 8/8 on Linux CI), System 12 (evaluation); and the end-to-end workflows, 10 / 10 (E2E-07 on Linux CI) |
 
-All 105 capabilities audited as *implemented* have a passing test (seven of them on Linux CI). The one case audited as *partial* also passes: MA-04 (conflicts go to a debugger agent instead of the user). Every case runs on simulated model output in the deterministic and security profiles; EV-02, EV-04 and E2E-09 also ran on real Claude models (Sonnet 5.5 and Haiku 5.5) in the live profile and passed. OpenAI and Gemini have not run live.
+All 106 capabilities are audited as *implemented* and have a passing test (seven of them on Linux CI). MA-04 was the last *partial* one: team-run conflicts went straight to a debugger agent, and now wait for the user. Every case runs on simulated model output in the deterministic and security profiles; EV-02, EV-04 and E2E-09 also ran on real Claude models (Sonnet 5.5 and Haiku 5.5) in the live profile and passed. OpenAI and Gemini have not run live.
 
 ## Code coverage
 
-`cargo llvm-cov --workspace --locked` on Windows at `291c237` (the published revision `ee16092` plus a fix to the test harness's outage proxy; unit and acceptance tests together). The Linux-only sandbox code (Landlock) isn't exercised here; Linux CI's `lcov.info` gives 67.2% of product lines for `ee16092` (run 40164598030) and for the live tier's merge `7dc936c` (run 40599642988; fermi-core 78.4%, fermi 37.2%):
+`cargo llvm-cov --workspace --locked` on Windows at `291c237` (the published revision `ee16092` plus a fix to the test harness's outage proxy; unit and acceptance tests together). The Linux-only sandbox code (Landlock) isn't exercised here; Linux CI's `lcov.info` gives 67.2% of product lines for `ee16092` (run 40164598030) and for the live tier's merge `7dc936c` (run 40599642988), and 67.3% for `f985976` (run 40607108227; fermi-core 78.5%, fermi 37.2%, `team.rs` 77%):
 
 | Scope | Lines | Functions |
 | --- | --- | --- |

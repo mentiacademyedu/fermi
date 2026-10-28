@@ -214,9 +214,9 @@ cases:
     action: "Two agents edit the same function"
     expected: "Conflict detected and escalated; neither change silently overwritten"
     evidence: "Conflict report both patches and branch state."
-    capability: partial
-    implementation: "crates/fermi-core/src/team.rs (integrate)"
-    auditNote: "Conflicts are detected (unmerged paths) and logged with both branches kept, but resolution is delegated automatically to a debugger agent rather than escalated to the user. Manually verified once."
+    capability: implemented
+    implementation: "crates/fermi-core/src/team.rs (integrate, resolve, ConflictPolicy), crates/fermi/src/server.rs (/api/teams/{id}/resolve), web/index.html"
+    auditNote: "A conflict stops the run with a report of the conflicting files and both sides' patches, the integration worktree left mid-merge; the user resolves it and continues (refused while files are unmerged or marked) or hands it to an agent. Agent resolution happens on its own only when the run was created with conflicts = agent. Fixed 2026-10-27: conflicts went straight to a debugger agent."
     testFile: crates/acceptance-tests/tests/agent_execution.rs
     testName: ma_04_conflicting_edits
     executionState: completed

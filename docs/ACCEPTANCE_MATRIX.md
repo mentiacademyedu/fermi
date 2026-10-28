@@ -2,7 +2,7 @@
 
 Phase 1 audit of fermi (called APEX in the spec) against `docs/FERMI_ADE_Verification_and_Acceptance_Testing`.
 
-Published run `2026-10-27-7dc936c` on revision `7dc936c5ea5b`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-27-7dc936c/REPORT.md`.
+Published run `2026-10-27-f985976` on revision `f985976a69d5`, profile deterministic, windows. Full report: `docs/acceptance-runs/2026-10-27-f985976/REPORT.md`.
 
 *Result* is the published acceptance outcome: `passed` or `failed` from an executed test with validated evidence; `not_implemented` when no test exists (usually because the capability is missing); `not_run` when a test exists but wasn't in the published run.
 *Capability* is an audit finding from reading the code; it is not verification.
@@ -14,7 +14,7 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | System | Cases | Capability implemented | Partial | Missing | Acceptance passed |
 | --- | --- | --- | --- | --- | --- |
 | 1 Model-agnostic AI engine | 8 | 8 | 0 | 0 | 8 / 8 |
-| 2 Multi-agent orchestration | 8 | 7 | 1 | 0 | 8 / 8 |
+| 2 Multi-agent orchestration | 8 | 8 | 0 | 0 | 8 / 8 |
 | 3 Semantic codebase intelligence | 8 | 8 | 0 | 0 | 8 / 8 |
 | 4 Persistent project memory | 8 | 8 | 0 | 0 | 8 / 8 |
 | 5 Integrated verification engine | 8 | 8 | 0 | 0 | 8 / 8 |
@@ -26,7 +26,7 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | 11 Local and remote execution | 8 | 8 | 0 | 0 | 6 / 8 |
 | 12 Evaluation and self-improvement | 8 | 8 | 0 | 0 | 8 / 8 |
 | End-to-end workflows | 10 | 10 | 0 | 0 | 9 / 10 |
-| **Total** | **106** | **105** | **1** | **0** | **99 / 106** |
+| **Total** | **106** | **106** | **0** | **0** | **99 / 106** |
 
 ## 1 Model-agnostic AI engine
 
@@ -48,7 +48,7 @@ Capability: **implemented** (the behavior exists end to end), **partial** (some 
 | MA-01 | Concurrent workers | T1 | **passed (20/20)** | ma_01_concurrent_workers | implemented | crates/fermi-core/src/hub.rs (submit/launch), team.rs (schedule) | Tasks run concurrently; team runs start up to N agents in parallel, each in its own worktree. |
 | MA-02 | Dependency ordering | T0 T1 | **passed** | ma_02_dependency_ordering | implemented | crates/fermi-core/src/team.rs (schedule, topo) | Dependencies gate starts; failed or interrupted tasks block dependents (run goes to attention); cancel stops the run. |
 | MA-03 | Independent edits | T1 | **passed** | ma_03_independent_edits | implemented | crates/fermi-core/src/team.rs (start_task, integrate) | Separate worktrees and branches merged with --no-ff into an integration branch; manually verified on a fixture (2 runs). |
-| MA-04 | Conflicting edits | T1 | **passed** | ma_04_conflicting_edits | partial | crates/fermi-core/src/team.rs (integrate) | Conflicts are detected (unmerged paths) and logged with both branches kept, but resolution is delegated automatically to a debugger agent rather than escalated to the user. Manually verified once. |
+| MA-04 | Conflicting edits | T1 | **passed** | ma_04_conflicting_edits | implemented | crates/fermi-core/src/team.rs (integrate, resolve, ConflictPolicy), crates/fermi/src/server.rs (/api/teams/{id}/resolve), web/index.html | A conflict stops the run with a report of the conflicting files and both sides' patches, the integration worktree left mid-merge; the user resolves it and continues (refused while files are unmerged or marked) or hands it to an agent. Agent resolution happens on its own only when the run was created with conflicts = agent. Fixed 2026-10-27: conflicts went straight to a debugger agent. |
 | MA-05 | Scoped delegation | T1 | **passed** | ma_05_scoped_delegation | implemented | crates/fermi-core/src/mcp.rs (delegate) | The bridge's delegate tool runs a subtask as its own agent with only the instructions, the files given (inside the folder, allowed by deny_read; anything else refuses the delegation) and agent-visible memory; its permission is the one asked, never broader than the delegator's. Each envelope is kept in delegations/<parent>/. Added 2026-10-24. |
 | MA-06 | Worker crash isolation | T1 T3 | **passed** | ma_06_worker_crash_isolation | implemented | crates/fermi-core/src/hub.rs, team.rs (on_done) | A killed agent process marks only its task failed; concurrent tasks finish with their results. In team runs a failed task blocks its dependents (MA-02). |
 | MA-07 | Parent cancellation | T1 T3 | **passed** | ma_07_parent_cancellation | implemented | crates/fermi-core/src/team.rs (cancel), providers/proc.rs (kill_tree) | Cancel stops running agents and every process they started (process tree), and queued tasks never start. Fixed 2026-10-23: processes started by the CLI were orphaned (D-005). |
