@@ -1,4 +1,4 @@
-//! Dashboard tests (UI-01 … UI-05): the web UI (`crates/fermi/web/index.html`)
+//! Dashboard tests (UI-01 … UI-08): the web UI (`crates/fermi/web/index.html`)
 //! in a real headless browser against the real dashboard server, clicked
 //! through as a user does. They aren't catalog cases (the 106 IDs live in
 //! `tests/acceptance/systems.yaml`): the E2E workflows drive the dashboard's
@@ -11,7 +11,7 @@
 //!
 //!   cargo test -p acceptance-tests --locked --test dashboard
 
-use acceptance_tests::{account, fixture, git, sha256, Case, Fermi};
+use acceptance_tests::{account, fixture, git, ground_truth, sha256, Case, Fermi};
 use fermi_core::browser::{self, Browser};
 use fermi_core::engine::Engine;
 use serde_json::{json, Value};
@@ -175,6 +175,35 @@ impl Window {
     async fn api(&self, path: &str) -> Value {
         let r = self.http.get(format!("{}{path}", self.base)).header("x-fermi-token", &self.token).send().await.unwrap();
         r.json().await.unwrap_or(Value::Null)
+    }
+
+    async fn api_q(&self, path: &str, query: &[(&str, &str)]) -> Value {
+        let r = self.http.get(format!("{}{path}", self.base)).query(query).header("x-fermi-token", &self.token).send().await.unwrap();
+        r.json().await.unwrap_or(Value::Null)
+    }
+
+    /// Clicks the first `selector` element whose text contains `text`, as a
+    /// user picks a row (rows are plain elements the driver can't find by text).
+    async fn pick(&self, selector: &str, text: &str) -> bool {
+        let mark = format!(
+            "(() => {{ document.querySelectorAll('[data-ui-pick]').forEach(e => delete e.dataset.uiPick);
+               const e = [...document.querySelectorAll({})].find(e => e.innerText.includes({}));
+               if (e) e.dataset.uiPick = ''; return !!e; }})()",
+            json!(selector),
+            json!(text)
+        );
+        self.until(&mark).await && self.page.click(Some("[data-ui-pick]"), None, None).await.is_ok()
+    }
+
+    /// The sections of a view under `root`: each heading with the names in its
+    /// rows (as written: the headings are uppercased by CSS, which innerText applies).
+    async fn sections(&self, root: &str) -> Value {
+        self.js(&format!(
+            "[...document.querySelectorAll({})].map(s => ({{ title: s.querySelector('h3')?.textContent || '',
+               rows: [...s.querySelectorAll('.cx-row .n')].map(n => n.textContent) }}))",
+            json!(format!("{root} .cx-sec"))
+        ))
+        .await
     }
 
     /// Lets the browser's report of a refused request to `path` through.
@@ -550,6 +579,290 @@ async fn ui_05_phone_width() {
             && state["layout"]["overflow_x"] == false
             && [&prompt, &send].iter().all(|e| e["visible"] == true && e["in_viewport"] == true && e["uncovered"] == true),
         format!("opened: {ready}; layout {}; prompt and send visible, on screen and uncovered", state["layout"]),
+    );
+    w.close(&mut c).await;
+    c.finish();
+}
+
+/// The row names of the first section whose heading starts with `title`.
+fn rows(sections: &Value, title: &str) -> Vec<String> {
+    sections
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|s| s["title"].as_str().is_some_and(|t| t.starts_with(title)))
+        .map(|s| s["rows"].as_array().into_iter().flatten().filter_map(|r| r.as_str().map(String::from)).collect())
+        .unwrap_or_default()
+}
+
+/// Whether each oracle id (`a::b::name`) names one of the rows.
+fn lists_all(rows: &[String], ids: &[String]) -> bool {
+    ids.iter().all(|id| {
+        let name = id.rsplit("::").next().unwrap_or(id);
+        rows.iter().any(|r| r == name || r.ends_with(&format!("::{name}")))
+    })
+}
+
+fn strings(v: &Value) -> Vec<String> {
+    v.as_array().into_iter().flatten().filter_map(|x| x.as_str().map(String::from)).collect()
+}
+
+// ── UI-06 ───────────────────────────────────────────────────────────────────
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ui_06_code_map() {
+    let mut c = Case::start("UI-06", "T2");
+    c.real(&["dashboard server and web UI in a headless browser", "code index on the F-CODE fixture", "git (uncommitted changes)"]);
+    let f = Fermi::new(&c, &[account("cl", "claude", vec![])], "").unwrap();
+    let Some(mut c) = need_browser(c, &f) else { return };
+    let fx = fixture("F-CODE", &c.work.join("repo")).unwrap();
+    let refs = ground_truth("F-CODE", "references.json");
+    let graph = ground_truth("F-CODE", "dependency-graph.json");
+    let w = Window::open(&c, f.engine.clone(), &fx.path).await;
+    assert!(w.ready().await, "the dashboard didn't open");
+
+    // Code map → search → the symbol, with its callers and the tests reaching it.
+    w.page.click(Some("#open-code"), None, None).await.unwrap();
+    let indexed = w.until("document.querySelector('#cx-stats').innerText.includes('symbols')").await;
+    let stats = w.js("document.querySelector('#cx-stats').innerText").await;
+    w.page.fill("#cx-q", "process", None).await.unwrap();
+    let picked = w.pick("#cx-results .cx-hit", "engine/src/lib.rs:5").await;
+    let shown = w.until("document.querySelector('#cx-main h2')?.innerText.endsWith('process')").await;
+    let symbol = w.sections("#cx-main").await;
+    let callers = strings(&json!(refs["callers"]["engine::process"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|c| c["caller"].clone())
+        .collect::<Vec<_>>()));
+    let tests: Vec<String> = callers.iter().filter(|c| c.contains("::tests::")).cloned().collect();
+    let called_by = rows(&symbol, "Called by");
+    c.json("symbol-view.json", &json!({ "stats": stats, "sections": symbol, "oracle_callers": callers }));
+    c.check(
+        "callersAndTestsShown",
+        indexed
+            && picked
+            && shown
+            && called_by.len() == callers.len()
+            && lists_all(&called_by, &callers)
+            && lists_all(&rows(&symbol, "Tests reaching it"), &tests),
+        format!(
+            "indexed: {indexed}; symbol shown: {shown}; called by {called_by:?}, the oracle {callers:?}; tests {:?}",
+            rows(&symbol, "Tests reaching it")
+        ),
+    );
+
+    // Its location opens the file in the editor.
+    w.page.click(Some("#cx-main .cx-loc a"), None, None).await.unwrap();
+    let disk = std::fs::read_to_string(fx.path.join("engine/src/lib.rs")).unwrap();
+    let opened = w
+        .until(&format!("!document.querySelector('#view-file').hidden && document.querySelector('#code').value === {}", json!(disk)))
+        .await;
+    c.check("opensTheDefinition", opened, format!("engine/src/lib.rs open in the editor with its contents: {opened}"));
+
+    // An uncommitted change to normalize: what it could break and the tests to run.
+    let lib = fx.path.join("util/src/lib.rs");
+    let src = std::fs::read_to_string(&lib).unwrap();
+    std::fs::write(&lib, src.replace("s.trim().to_lowercase()", "s.trim().to_lowercase().replace(' ', \"_\")")).unwrap();
+    w.page.click(Some("#open-code"), None, None).await.unwrap();
+    w.page.click(Some("#cx-impact"), None, None).await.unwrap();
+    let impact_shown = w.until("document.querySelector('#cx-main h2')?.innerText.startsWith('Impact of your changes')").await;
+    let impact = w.sections("#cx-main").await;
+    let oracle = &graph["impact"]["util::normalize"];
+    let (affected, to_run) = (strings(&oracle["affectedSymbols"]), strings(&oracle["tests"]));
+    let status = git(&fx.path, &["status", "--porcelain"]).unwrap_or_default();
+    c.json("impact-view.json", &json!({ "sections": impact, "oracle": oracle, "git_status": status }));
+    c.check(
+        "impactOfUncommittedChange",
+        impact_shown
+            && lists_all(&rows(&impact, "Changed"), &["util::normalize".to_string()])
+            && lists_all(&rows(&impact, "Could break"), &affected)
+            && lists_all(&rows(&impact, "Tests to run"), &to_run),
+        format!(
+            "changed {:?}; could break {:?} (oracle {affected:?}); tests to run {:?} (oracle {to_run:?})",
+            rows(&impact, "Changed"),
+            rows(&impact, "Could break"),
+            rows(&impact, "Tests to run")
+        ),
+    );
+    c.check("readOnly", status.trim() == "M util/src/lib.rs", format!("the repository after browsing: {:?}", status.trim()));
+    w.close(&mut c).await;
+    c.finish();
+}
+
+// ── UI-07 ───────────────────────────────────────────────────────────────────
+
+/// Fills the `n`th field of the memory form.
+async fn mm_field(w: &Window, n: usize, tag: &str, value: &str) {
+    w.page.fill(&format!("#mm-main form label:nth-of-type({n}) {tag}"), value, None).await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ui_07_memory_reaches_the_next_task() {
+    let mut c = Case::start("UI-07", "T2");
+    c.real(&["dashboard server and web UI in a headless browser", "fermi memory", "hub (context assembly for a new task)"]);
+    c.mocked(&["model output (fake-cli); the prompt it received is the assembled context"]);
+    let step = json!({ "match": "[[UI-07]]", "text": "PostgreSQL, as the team decided." });
+    let f = Fermi::new(&c, &[account("cl", "claude", vec![step])], "").unwrap();
+    let Some(mut c) = need_browser(c, &f) else { return };
+    let fx = fixture("F-CODE", &c.work.join("repo")).unwrap();
+    let w = Window::open(&c, f.engine.clone(), &fx.path).await;
+    assert!(w.ready().await, "the dashboard didn't open");
+    let root = fx.path.to_string_lossy().to_string();
+
+    // Memory → New record: a decision resting on a file.
+    w.page.click(Some("#open-memory"), None, None).await.unwrap();
+    w.until("document.querySelector('#mm-stats').innerText.includes('record')").await;
+    let title = "Use PostgreSQL for the storage layer";
+    w.page.click(Some("#mm-new"), None, None).await.unwrap();
+    mm_field(&w, 2, "input", title).await;
+    mm_field(&w, 3, "input", "storage").await;
+    mm_field(&w, 4, "textarea", "Chosen over SQLite: several writers at once.").await;
+    mm_field(&w, 5, "input", "util/src/lib.rs:5").await;
+    w.page.click(Some("#mm-main form button.primary"), None, None).await.unwrap();
+    let saved = w.until(&format!("document.querySelector('#mm-main h2')?.innerText === {}", json!(title))).await;
+    let view = w.js("document.querySelector('#mm-main').innerText").await;
+    c.check(
+        "recordedFromTheWindow",
+        saved && view.as_str().is_some_and(|v| v.contains("recorded by user (you)") && v.contains("util/src/lib.rs:5")),
+        format!("shown after saving: {saved}; the record reads {view}"),
+    );
+
+    // A new version, with its reason; the first stays in the history.
+    let title2 = "Use PostgreSQL 16 for the storage layer";
+    w.page.click(None, Some("New version"), None).await.unwrap();
+    mm_field(&w, 1, "input", title2).await;
+    mm_field(&w, 3, "input", "Pinned the major version").await;
+    w.page.click(Some("#mm-main form button.primary"), None, None).await.unwrap();
+    let shown = w.until(&format!("document.querySelector('#mm-main h2')?.innerText === {}", json!(title2))).await;
+    let page = w.js("document.querySelector('#mm-main').textContent").await;
+    let page = page.as_str().unwrap_or_default();
+    let revised = shown
+        && page.contains("version 2")
+        && page.contains("Why it changed: Pinned the major version")
+        && page.contains("Earlier versions")
+        && page.contains(&format!("v1 · {title}"));
+    c.text("revised-record.txt", page);
+    c.check("revisedWithHistory", revised, format!("version 2 shown with the reason and version 1 in the history: {revised}"));
+
+    // A private note on the same topic.
+    let canary = "PRIV-CANARY-UI07";
+    w.page.click(Some("#mm-new"), None, None).await.unwrap();
+    mm_field(&w, 2, "input", &format!("Private: rotate the database password {canary}")).await;
+    mm_field(&w, 3, "input", "storage").await;
+    w.js("(() => { const s = document.querySelector('#mm-main form label:nth-of-type(6) select'); s.value = 'private'; s.dispatchEvent(new Event('change', { bubbles: true })); })()").await;
+    w.page.click(Some("#mm-main form button.primary"), None, None).await.unwrap();
+    w.until(&format!("document.querySelector('#mm-main h2')?.innerText.includes({})", json!(canary))).await;
+    w.page.fill("#mm-q", "PostgreSQL", None).await.unwrap();
+    let found = w.until(&format!("document.querySelector('#mm-list').innerText.includes({})", json!(title2))).await;
+    let records = w.api_q("/api/memory", &[("root", &root)]).await;
+    c.json("records.json", &records);
+    let list = records["records"].as_array().cloned().unwrap_or_default();
+    let decision = list.iter().find(|r| r["title"] == title2).cloned().unwrap_or_default();
+    let private = list.iter().find(|r| r["title"].as_str().is_some_and(|t| t.contains(canary))).cloned().unwrap_or_default();
+    c.check(
+        "storedAsShown",
+        found && decision["version"] == 2 && decision["author"] == "user" && private["audience"] == "private",
+        format!(
+            "search finds it: {found}; decision v{} by {}; the note is {}",
+            decision["version"], decision["author"], private["audience"]
+        ),
+    );
+
+    // The next task gets the decision with its author and source, never the private note.
+    w.page.click(Some("#new-task"), None, None).await.unwrap();
+    w.page.fill("#prompt", "Which database should the storage layer use? [[UI-07]]", None).await.unwrap();
+    w.page.click(Some("#send"), None, None).await.unwrap();
+    let done = w.shows("PostgreSQL, as the team decided.").await && w.until("!!document.querySelector('#log .ev.ok')").await;
+    let prompt =
+        f.calls("cl").iter().filter_map(|x| x["prompt"].as_str().map(String::from)).find(|p| p.contains("[[UI-07]]")).unwrap_or_default();
+    c.text("assembled-context.txt", &prompt);
+    let id = decision["id"].as_str().unwrap_or("?");
+    c.check(
+        "reachesTheNextTask",
+        done && prompt.contains(id)
+            && prompt.contains(title2)
+            && prompt.contains("author=\"user\"")
+            && prompt.contains("util/src/lib.rs:5"),
+        format!("task done: {done}; {id} in its context with the author and source: {}", prompt.contains(id)),
+    );
+    c.check(
+        "privateStaysPrivate",
+        !prompt.is_empty() && !prompt.contains(canary),
+        format!("the private note in the context: {}", prompt.contains(canary)),
+    );
+    w.close(&mut c).await;
+    c.finish();
+}
+
+// ── UI-08 ───────────────────────────────────────────────────────────────────
+
+#[tokio::test(flavor = "multi_thread")]
+async fn ui_08_files_and_editor() {
+    let mut c = Case::start("UI-08", "T2");
+    c.real(&["dashboard server and web UI in a headless browser", "the workspace on disk", "git (the Changes panel)"]);
+    let f = Fermi::new(&c, &[account("cl", "claude", vec![])], "").unwrap();
+    let Some(mut c) = need_browser(c, &f) else { return };
+    let fx = fixture("F-CODE", &c.work.join("repo")).unwrap();
+    let w = Window::open(&c, f.engine.clone(), &fx.path).await;
+    assert!(w.ready().await, "the dashboard didn't open");
+
+    // Files: util → src → text.rs opens in the editor with what's on disk.
+    let path = fx.path.join("util/src/text.rs");
+    let disk = std::fs::read_to_string(&path).unwrap();
+    let walked = w.pick("#tree .node", "util").await && w.pick("#tree .node", "src").await && w.pick("#tree .node", "text.rs").await;
+    let opened = w
+        .until(&format!("!document.querySelector('#view-file').hidden && document.querySelector('#code').value === {}", json!(disk)))
+        .await;
+    c.check("opensFromTheTree", walked && opened, format!("walked the tree: {walked}; the editor holds the file: {opened}"));
+
+    // Edit and save: the file on disk is what was typed.
+    let edited = format!("{disk}\n/// Edited in the window.\npub fn shout(s: &str) -> String {{\n    s.to_uppercase()\n}}\n");
+    w.page.fill("#code", &edited, None).await.unwrap();
+    let dirty = w.js("!document.querySelector('#file-save').disabled").await == true;
+    w.page.click(Some("#file-save"), None, None).await.unwrap();
+    let toast = w.shows("Saved text.rs").await;
+    let now = std::fs::read_to_string(&path).unwrap_or_default();
+    let clean = w.js("document.querySelector('#file-save').disabled").await == true;
+    c.check(
+        "savedToDisk",
+        dirty && toast && now == edited && clean,
+        format!(
+            "Save enabled after typing: {dirty}; saved: {toast}; the file on disk is the edit: {}; Save disabled again: {clean}",
+            now == edited
+        ),
+    );
+
+    // Changes lists the edit; a contents search finds a line.
+    w.page.click(Some("#ptab-changes"), None, None).await.unwrap();
+    let listed = w.until("document.querySelector('#changes').innerText.includes('text.rs')").await;
+    w.page.click(Some("#ptab-files"), None, None).await.unwrap();
+    w.page.click(Some("#find-contents"), None, None).await.unwrap();
+    w.page.fill("#find", "to_lowercase", None).await.unwrap();
+    let found = w
+        .until("[...document.querySelectorAll('#tree .hit')].some(h => h.innerText.includes('lib.rs') && h.innerText.includes('6:'))")
+        .await;
+    let hits = w.js("document.querySelector('#tree').innerText").await;
+    c.json("search.json", &json!({ "query": "to_lowercase", "shown": hits }));
+    c.check(
+        "changesAndSearch",
+        listed && found,
+        format!("Changes lists text.rs: {listed}; the search finds util/src/lib.rs line 6: {found}"),
+    );
+
+    // The window's API writes only inside the workspaces.
+    let outside = c.work.join("outside.txt");
+    w.allow("/api/fs/write");
+    let refused = w
+        .js(&format!(
+            "api('/api/fs/write', {{ path: {}, text: 'x' }}).then(() => 'written', e => e.message)",
+            json!(outside.to_string_lossy())
+        ))
+        .await;
+    c.check(
+        "writesStayInTheWorkspace",
+        refused != "written" && !outside.exists(),
+        format!("a write outside the workspace: {refused}; the file exists: {}", outside.exists()),
     );
     w.close(&mut c).await;
     c.finish();
