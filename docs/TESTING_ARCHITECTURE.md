@@ -56,7 +56,7 @@ crates/acceptance-tests/
   src/workers.rs                # worker processes, Docker workers and an outage proxy (LR)
   tests/execution.rs            # LR-01 … LR-08 (LR-02/03 need Docker; blocked where it is missing)
   tests/end_to_end.rs           # E2E-01 … E2E-07, E2E-09, E2E-10 (E2E-08 is in cost.rs), through the dashboard's HTTP API
-  tests/dashboard.rs            # UI-01 … UI-05: the web UI in a headless browser (not catalog cases)
+  tests/dashboard.rs            # UI-01 … UI-08: the web UI in a headless browser (not catalog cases)
 xtask/src/main.rs               # acceptance runner
 tests/acceptance/systems.yaml   # registry of all 106 IDs, with test mappings and published status
 tests/acceptance/phase1_audit.py  # writes ACCEPTANCE_MATRIX.md (and the registry with --registry)
@@ -114,6 +114,9 @@ Controls: with the D-004 fix reverted AI-05 failed and the runner exited 1; with
 | UI-03 | Cancel on a running task: the task is cancelled, the conversation says so, the button goes |
 | UI-04 | Teams → New team run → Plan it → Approve and start; the merge conflict shows both patches and both choices; continuing before resolving is refused with the reason; after the user resolves it, "Checks passed: ready to merge" and the integrated file is the user's resolution, with no agent asked |
 | UI-05 | at phone width (375 px, touch) the page has no horizontal overflow and the prompt and Send are on screen and uncovered |
+| UI-06 | Code map: a symbol found by search shows the callers and the tests reaching it that the fixture's oracle (`references.json`) lists; its location opens the file in the editor; after an uncommitted change to `normalize`, **Impact of my changes** shows it changed, everything the oracle (`dependency-graph.json`) says it could break, and the tests to run; browsing leaves the repository as it was |
+| UI-07 | Memory: a decision with a source recorded from the form, a new version with its reason (version 1 kept in the history), a private note on the same topic, a search; the next task typed in the composer gets the decision with its author and source in its context, and never the private note |
+| UI-08 | Files: a file opened from the tree holds what's on disk; an edit saved from the editor is the file on disk; the Changes panel lists it; a contents search finds a line; a write through the window's API outside the workspaces is refused |
 
 Each case also records which parts of the page's own script ran: the browser's precise coverage (`Profiler.startPreciseCoverage` with block detail, started before the page loads and taken before every navigation and at the end), saved as `frontend-coverage.json` and checked as `frontendCoverageRecorded`. `xtask dashboard-report` then merges the cases against the inline `<script>` of `index.html` (as the browser parses it, CRLF read as LF), writes the run's `summary.json`, `frontend-coverage.json` (line, function and character totals, and the functions no case ran) and `frontend.lcov`, and refuses coverage taken from a different page than the checkout's. A line counts as run when any of its code ran, a function when it was called. The vendored terminal scripts aren't counted, and no threshold is enforced.
 
@@ -122,10 +125,12 @@ cargo test -p acceptance-tests --locked --test dashboard -- --test-threads=1
 cargo run --locked -p xtask -- dashboard-report --run-id <the same ACCEPTANCE_RUN_ID>
 ```
 
+On Windows, run them from a regular terminal (PowerShell or cmd). Inside the Claude desktop app's sandboxed Bash tool, Edge exits at start with code 0, so these cases and the browser-control cases (BA) fail to launch the browser; the same commands from PowerShell work.
+
 ## Not built yet
 
 - **Desktop shell tests**: the Tauri window around the same page has no automated tests.
-- **The rest of the web UI**: settings, accounts and profiles, files and editor, slides, code map, memory, plugins, evaluations, skills, import, trending and terminals are checked by hand only.
+- **The rest of the web UI**: settings, accounts and profiles, slides, plugins, evaluations, skills, import, trending and terminals are checked by hand only.
 
 ## Next
 

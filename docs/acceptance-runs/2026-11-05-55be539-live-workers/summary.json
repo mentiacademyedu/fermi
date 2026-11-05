@@ -1,0 +1,92 @@
+{
+  "cases": [
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "reason": "no Docker able to run Linux containers on this machine (the remote worker runs in one on Linux CI)",
+          "status": "blocked"
+        }
+      ],
+      "durationMs": 831,
+      "id": "LR-03",
+      "status": "blocked",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 10966,
+      "id": "LR-04",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 9334,
+      "id": "LR-05",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 19736,
+      "id": "LR-06",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 9445,
+      "id": "LR-07",
+      "status": "passed",
+      "system": "local-and-remote-execution"
+    },
+    {
+      "attempts": [
+        {
+          "attempt": "a1",
+          "exitCode": 0,
+          "reason": null,
+          "status": "passed"
+        }
+      ],
+      "durationMs": 12434,
+      "id": "E2E-06",
+      "status": "passed",
+      "system": "end-to-end"
+    }
+  ],
+  "commitSha": "55be5396c904562966f4b7ec69fb4154715902fe",
+  "dirtyTree": false,
+  "os": "windows",
+  "profile": "live",
+  "runId": "2026-11-05-55be539-live-workers"
+}

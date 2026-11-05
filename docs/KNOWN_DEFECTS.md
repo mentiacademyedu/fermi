@@ -131,6 +131,13 @@ Found and fixed while writing the tests; listed so the history is complete.
 | SE-01 | the fake CLI emulating Claude's read-deny rules matched the raw `file_path`, so a relative `../` path slipped past the rule, while Claude Code resolves it first; and identical deny rules group into one Blocked event, so counting events undercounted | resolve a Read's path against the working directory (and normalize Windows drives) before matching, as Claude does; assert the denial and the canary scan, and prove every path at the OS boundary |
 | SE security CI step | a `blocked` case (a runner without Landlock) failed the step | `xtask --allow-blocked` counts a blocked case as acceptable, not a pass, for that step |
 
+## Found while adding UI-06 … UI-08 (no open defects)
+
+| Kind | Issue | Fix |
+| --- | --- | --- |
+| Environment | inside the Claude desktop app's sandboxed Bash tool, Edge 156 exits at start with code 0, so every dashboard test and browser-control case (BA-01 failed this way) fails to launch the browser; the same commands from PowerShell, or a terminal, work | the published runs and the dashboard tests run from PowerShell; `TESTING_ARCHITECTURE.md` says so |
+| Test implementation | UI-06 and UI-07 read section headings with `innerText`, which applies the page's `text-transform: uppercase`, so "Called by" and "Earlier versions" never matched | headings and row names are read with `textContent` |
+
 ## Found while adding frontend coverage (no open defects)
 
 | Kind | Issue | Fix |

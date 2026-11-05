@@ -8,7 +8,7 @@
         "noPageErrors",
         "frontendCoverageRecorded"
       ],
-      "durationMs": 2215,
+      "durationMs": 2124,
       "id": "UI-01",
       "status": "passed"
     },
@@ -20,7 +20,7 @@
         "noPageErrors",
         "frontendCoverageRecorded"
       ],
-      "durationMs": 3403,
+      "durationMs": 3312,
       "id": "UI-02",
       "status": "passed"
     },
@@ -30,7 +30,7 @@
         "noPageErrors",
         "frontendCoverageRecorded"
       ],
-      "durationMs": 2515,
+      "durationMs": 2454,
       "id": "UI-03",
       "status": "passed"
     },
@@ -43,7 +43,7 @@
         "noPageErrors",
         "frontendCoverageRecorded"
       ],
-      "durationMs": 4751,
+      "durationMs": 4677,
       "id": "UI-04",
       "status": "passed"
     },
@@ -53,31 +53,71 @@
         "noPageErrors",
         "frontendCoverageRecorded"
       ],
-      "durationMs": 1830,
+      "durationMs": 1724,
       "id": "UI-05",
+      "status": "passed"
+    },
+    {
+      "checks": [
+        "callersAndTestsShown",
+        "opensTheDefinition",
+        "impactOfUncommittedChange",
+        "readOnly",
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 3911,
+      "id": "UI-06",
+      "status": "passed"
+    },
+    {
+      "checks": [
+        "recordedFromTheWindow",
+        "revisedWithHistory",
+        "storedAsShown",
+        "reachesTheNextTask",
+        "privateStaysPrivate",
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 5486,
+      "id": "UI-07",
+      "status": "passed"
+    },
+    {
+      "checks": [
+        "opensFromTheTree",
+        "savedToDisk",
+        "changesAndSearch",
+        "writesStayInTheWorkspace",
+        "noPageErrors",
+        "frontendCoverageRecorded"
+      ],
+      "durationMs": 4920,
+      "id": "UI-08",
       "status": "passed"
     }
   ],
-  "commitSha": "4e46727148be090c4ff187db19e4bf92a5c9c408",
+  "commitSha": "55be5396c904562966f4b7ec69fb4154715902fe",
   "dirtyTree": false,
   "frontendCoverage": {
     "codeCharacters": {
       "found": 201129,
-      "hit": 54181,
-      "percent": 26.9
+      "hit": 71424,
+      "percent": 35.5
     },
     "functions": {
-      "found": 545,
-      "hit": 163,
-      "percent": 29.9
+      "found": 587,
+      "hit": 240,
+      "percent": 40.9
     },
     "lines": {
       "found": 3976,
-      "hit": 1292,
-      "percent": 32.5
+      "hit": 1677,
+      "percent": 42.2
     }
   },
   "os": "linux",
-  "runId": "ci-40638282321-1-dashboard",
+  "runId": "ci-42095520073-1-dashboard",
   "suite": "dashboard (crates/acceptance-tests/tests/dashboard.rs)"
 }
